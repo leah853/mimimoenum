@@ -1001,10 +1001,13 @@ function processAllCS(){
     const cs=pg.cs;const sa=S.sas[pg.saId];
     if(cs.phase==='idle'){cs.phase='enrichment';cs.tick=S.tick;sa.aN.add('cs_trigger');sa.cN.add('cs_trigger');addNarr('workflow',`<b>⟳ CS WORKFLOW STARTED — PG #${pg.id}</b><div class="task-list"><div><b>Trigger:</b> PG moved from BOFU → Closed</div><div><b>SA:</b> ${sa.name}</div><div style="margin-top:4px"><b>CS Pipeline (6 stages):</b></div><div class="act">▸ 2.1 Persona Enrichment → 2.2 Signatures → 2.3 Rapport → 2.4 BAA → 2.5 EHR → 2.6 HH Onboarding</div><div style="margin-top:4px"><span class="outcome pending">STATUS: Starting with Persona Enrichment</span></div></div>`);}
     if(cs.phase==='complete'){sa.cN.add('cs_done');continue;}
+    // 1-3 steps/day × 5 days = up to 15 phase attempts per week
+    const csDailySteps=5*(1+Math.floor(rng()*3));
+    for(let csStep=0;csStep<csDailySteps&&cs.phase!=='complete'&&cs.phase!=='idle';csStep++){
     const csNode=CS_NODE_MAP[cs.phase];if(csNode)sa.aN.add(csNode);
     const phaseIdx=CS_PHASES.indexOf(cs.phase);
     CS_PHASES.slice(1,phaseIdx).forEach(p=>{const n=CS_NODE_MAP[p];if(n)sa.cN.add(n);});
-    if(cs.blocked){cs.blockTick++;if(rng()<V('retry_rate')){cs.blocked=false;addNarr('done',`<b>✅ PG #${pg.id} CS — RECOVERED</b><div class="task-list"><div class="pass">✓ Blocker "${cs.blockType.replace(/_/g,' ')}" resolved after ${cs.blockTick} week(s)</div><div class="pass">✓ Retry succeeded (rate: ${Math.round(V('retry_rate')*100)}%)</div><div><span class="outcome success">OUTCOME: Resuming CS workflow at ${CS_LABELS[cs.phase]}</span></div></div>`);cs.blockType=null;cs.blockTick=0;}else continue;}
+    if(cs.blocked){cs.blockTick++;if(rng()<V('retry_rate')){cs.blocked=false;addNarr('done',`<b>✅ PG #${pg.id} CS — RECOVERED</b><div class="task-list"><div class="pass">✓ Blocker "${cs.blockType.replace(/_/g,' ')}" resolved after ${cs.blockTick} week(s)</div><div class="pass">✓ Retry succeeded (rate: ${Math.round(V('retry_rate')*100)}%)</div><div><span class="outcome success">OUTCOME: Resuming CS workflow at ${CS_LABELS[cs.phase]}</span></div></div>`);cs.blockType=null;cs.blockTick=0;}else break;}
     switch(cs.phase){
       case'enrichment':
         if(rng()<V('cs_enrich')){cs.enrichDone=true;cs.phase='signatures';addNarr('workflow',`<b>PG #${pg.id} — CS 2.1: PERSONA ENRICHMENT</b><div class="task-list"><div class="pass">✓ Action: Identified required personas (physicians, NPPs, admin)</div><div class="pass">✓ Action: Created/enriched accounts with missing info</div><div class="pass">✓ Action: Flagged gaps for further research</div><div><span class="outcome success">OUTCOME: Enrichment complete (${Math.round(V('cs_enrich')*100)}% success rate) → Moving to Signatures</span></div></div>`);}
@@ -1056,6 +1059,7 @@ function processAllCS(){
           if(cs.phase==='complete')addNarr('done',`<b>✅ PG #${pg.id} — CS WORKFLOW COMPLETE</b><div class="task-list"><div class="pass">✓ CS 2.1: Persona Enrichment — Complete</div><div class="pass">✓ CS 2.2: Signature Collection — Complete</div><div class="pass">✓ CS 2.3: Rapport Building — Complete</div><div class="pass">✓ CS 2.4: BAA Handling — Approved</div><div class="pass">✓ CS 2.5: EHR Access — Granted (${cs.ehrType||'N/A'})</div><div class="pass">✓ CS 2.6: HH Onboarding — ${cs.hhOnboarded}/${cs.hhIdentified} onboarded</div><div style="margin-top:4px"><span class="outcome success">OUTCOME: All CS tasks complete for PG #${pg.id}</span></div></div>`);}
         break;
     }
+    } // end daily steps loop
   }
 }
 
