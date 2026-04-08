@@ -5,11 +5,12 @@ const AUTH_COOKIE = "mimimomentum_auth";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page, API routes, and static assets
+  // Allow login page, API routes, static assets, and orchestrator
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/")
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/orchestrator")
   ) {
     return NextResponse.next();
   }
@@ -39,6 +40,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|orchestrator|.*\\.(?:svg|png|jpg|jpeg|gif|webp|html)$).*)",
   ],
 };
