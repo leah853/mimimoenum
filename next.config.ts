@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/orchestrator",
-        destination: "/orchestrator/index.html",
+        destination: "/orchestrator.html",
       },
     ];
   },

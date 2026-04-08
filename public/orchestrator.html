@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eonexia - Market Growth & Workflow Simulation Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f7fa;--p:#ffffff;--c:#f0f4f8;--b:#e1e7ef;--t:#1a2332;--td:#3d4f65;--tm:#8494a7;
+  --o:#e8590c;--cy:#0891b2;--g:#059669;--pk:#d6336c;--y:#d9840d;--bl:#2563eb;--pu:#7c3aed;
+  --sidebar:260px;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 4px 12px rgba(0,0,0,.08);
+}
+body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-serif;height:100vh;overflow:hidden;font-size:13px;line-height:1.5}
+
+/* ── AUTH SCREEN ── */
+.auth-overlay{position:fixed;inset:0;z-index:1000;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;transition:opacity .4s}
+.auth-overlay.hidden{opacity:0;pointer-events:none}
+.auth-card{background:#fff;border-radius:20px;padding:48px 44px;width:420px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.auth-logo{text-align:center;margin-bottom:32px}
+.auth-logo h1{font-size:28px;font-weight:900;color:#1a2332;letter-spacing:-.5px}
+.auth-logo h1 span{color:var(--bl)}
+.auth-logo p{font-size:13px;color:var(--tm);margin-top:6px}
+.auth-tabs{display:flex;border-radius:10px;background:var(--c);padding:4px;margin-bottom:28px}
+.auth-tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;color:var(--tm);transition:all .2s}
+.auth-tab.active{background:#fff;color:var(--t);box-shadow:var(--shadow)}
+.auth-field{margin-bottom:18px}
+.auth-field label{display:block;font-size:12px;font-weight:600;color:var(--td);margin-bottom:6px;letter-spacing:.3px}
+.auth-field input{width:100%;padding:12px 16px;border:1.5px solid var(--b);border-radius:10px;font-size:14px;font-family:inherit;transition:border-color .2s;background:#fafbfc}
+.auth-field input:focus{outline:none;border-color:var(--bl);background:#fff}
+.auth-field .field-hint{font-size:11px;color:var(--tm);margin-top:4px}
+.auth-field .field-error{font-size:11px;color:var(--pk);margin-top:4px;display:none}
+.auth-btn{width:100%;padding:14px;border:none;border-radius:10px;background:var(--bl);color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .2s;margin-top:8px}
+.auth-btn:hover{background:#1d4ed8;transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.3)}
+.auth-msg{text-align:center;font-size:12px;margin-top:16px;min-height:20px}
+.auth-msg.error{color:var(--pk)}.auth-msg.success{color:var(--g)}
+
+/* ── APP LAYOUT ── */
+.app{display:flex;height:100vh;opacity:0;pointer-events:none;transition:opacity .4s}
+.app.visible{opacity:1;pointer-events:auto}
+
+/* Sidebar */
+.sidebar{width:var(--sidebar);background:#fff;border-right:1px solid var(--b);display:flex;flex-direction:column;flex-shrink:0;z-index:10}
+.sidebar-header{padding:20px 22px 16px;border-bottom:1px solid var(--b)}
+.sidebar-header h1{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.sidebar-header h1 span{color:var(--bl)}
+.sidebar-header .sub{font-size:11px;color:var(--tm);margin-top:2px}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tm);padding:12px 14px 6px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;color:var(--td);transition:all .15s;margin-bottom:2px}
+.nav-item:hover{background:var(--c);color:var(--t)}
+.nav-item.active{background:rgba(37,99,235,.08);color:var(--bl);font-weight:600}
+.nav-item .nav-icon{font-size:18px;width:24px;text-align:center}
+.nav-item .nav-badge{margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--c)}
+.nav-item.active .nav-badge{background:rgba(37,99,235,.12);color:var(--bl)}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--b)}
+.user-info{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.user-avatar{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--bl),var(--pu));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px}
+.user-name{font-size:12px;font-weight:600;color:var(--t)}
+.user-email{font-size:10px;color:var(--tm)}
+.logout-btn{width:100%;padding:8px;border:1px solid var(--b);border-radius:8px;background:#fff;color:var(--td);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s}
+.logout-btn:hover{border-color:var(--pk);color:var(--pk);background:rgba(214,51,108,.04)}
+
+/* Main content area */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+
+/* Top bar */
+.topbar{background:#fff;border-bottom:1px solid var(--b);padding:10px 24px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.topbar-badges{display:flex;gap:8px;align-items:center}
+.tbadge{padding:5px 14px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid}
+.topbar-summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1}
+.sum-group{display:flex;align-items:center;gap:6px}
+.sum-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tm)}
+.sum-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;background:var(--c);border:1px solid var(--b)}
+.sum-chip .cnt{font-variant-numeric:tabular-nums;font-weight:800}
+.sum-divider{width:1px;height:22px;background:var(--b)}
+.sum-sa{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--b)}
+
+/* View panels */
+.views{flex:1;position:relative;overflow:hidden;min-height:0}
+.vw{position:absolute;inset:0;overflow:hidden;background:var(--bg);visibility:hidden;pointer-events:none;z-index:0}
+.vw.on{visibility:visible;pointer-events:auto;z-index:1}
+
+/* ── SIMULATION VIEW ── */
+.sim-view{display:flex;flex-direction:column;overflow:hidden}
+.sim-toggle{display:flex;gap:8px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--b);flex-shrink:0}
+.sim-btn{padding:7px 18px;border-radius:8px;background:var(--c);border:1px solid var(--b);color:var(--td);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.sim-btn:hover{border-color:var(--td)}.sim-btn.on{background:var(--bl);color:#fff;border-color:var(--bl)}
+.sim-main{flex:1;display:grid;grid-template-columns:1fr 380px;gap:1px;background:var(--b);min-height:0;overflow:hidden}
+.sim-main>div{background:#fff;min-height:0}
+.sim-canvas-wrap{position:relative;overflow:hidden}
+.sim-canvas-wrap canvas{display:block}
+
+/* Narration panel */
+.narr-panel{display:flex;flex-direction:column;overflow-y:auto;padding:16px 18px}
+.narr-title{font-size:13px;font-weight:700;color:var(--bl);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.narr-entry{padding:14px 16px;margin-bottom:10px;border-radius:var(--radius);background:var(--c);border-left:4px solid var(--b);font-size:12px;color:var(--td);line-height:1.7}
+.narr-entry b{color:var(--t)}
+.narr-entry.highlight{border-left-color:var(--o);background:rgba(232,89,12,.03)}
+.narr-entry.trigger{border-left-color:var(--pk);background:rgba(214,51,108,.03)}
+.narr-entry.workflow{border-left-color:var(--cy);background:rgba(8,145,178,.03)}
+.narr-entry.done{border-left-color:var(--g);background:rgba(5,150,105,.03)}
+.narr-entry.blocked{border-left-color:var(--pk);background:rgba(214,51,108,.04)}
+.narr-entry .wk{font-size:10px;font-weight:700;color:var(--tm);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.narr-entry .outcome{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;margin-top:4px}
+.narr-entry .outcome.success{background:rgba(5,150,105,.1);color:var(--g)}
+.narr-entry .outcome.fail{background:rgba(214,51,108,.1);color:var(--pk)}
+.narr-entry .outcome.pending{background:rgba(217,132,13,.1);color:var(--y)}
+.narr-entry .task-list{margin:6px 0 2px;padding-left:4px}
+.narr-entry .task-list div{padding:2px 0;font-size:11px}
+.narr-entry .task-list .act{color:var(--cy)}.narr-entry .task-list .pass{color:var(--g)}.narr-entry .task-list .fail-item{color:var(--pk)}
+
+/* Bottom stats strip */
+.sim-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:var(--b);flex-shrink:0;max-height:150px}
+.sim-stats>div{background:#fff;padding:10px 14px;overflow-y:auto}
+.section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tm);margin:6px 0 4px}
+.section-title:first-child{margin-top:0}
+.fn-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.fn-lbl{font-size:11px;color:var(--td);width:60px;text-align:right;flex-shrink:0}
+.fn-bar{height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:width .5s ease;min-width:24px}
+.fn-bar span{font-size:11px;font-weight:700;color:#fff}
+.vert-row{display:flex;align-items:center;gap:6px;padding:2px 0}
+.vert-dot{width:8px;height:8px;border-radius:3px;flex-shrink:0}
+.vert-name{font-size:11px;color:var(--td);flex:1}
+.vert-count{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.growth-wrap canvas{height:40px;background:var(--c);border-radius:6px;display:block}
+.wf-chip-wrap{display:flex;gap:6px;flex-wrap:wrap}
+.wf-chip-sm{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:700;background:var(--c);border:1px solid var(--b)}
+.wf-chip-sm .dot{width:7px;height:7px;border-radius:50%}
+
+/* ── WORKFLOW DETAIL ── */
+.wfd-view{display:flex;flex-direction:column;overflow:hidden}
+.wfd-top{display:flex;gap:1px;background:var(--b);flex-shrink:0}
+.wfd-top>div{background:#fff;padding:12px 16px}
+.wfd-kpi{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.wfd-kpi-card{padding:10px 18px;border-radius:var(--radius);background:var(--c);border:1px solid var(--b);text-align:center;min-width:80px}
+.wfd-kpi-card .kv{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.wfd-kpi-card .kl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tm);margin-top:3px}
+.wfd-sa-cards{display:flex;gap:10px}
+.wfd-sa-card{flex:1;padding:12px 16px;border-radius:var(--radius);border:1.5px solid var(--b);background:var(--c);cursor:pointer;transition:all .15s}
+.wfd-sa-card:hover{border-color:var(--cy)}
+.wfd-sa-card .sa-name{font-size:13px;font-weight:700;margin-bottom:4px}
+.wfd-sa-card .sa-prog-bar{height:5px;background:rgba(0,0,0,.06);border-radius:3px;margin-top:6px}
+.wfd-sa-card .sa-prog-fill{height:100%;border-radius:3px;transition:width .3s}
+.wfd-graph-wrap{flex:1;position:relative;min-height:200px;border-bottom:1px solid var(--b)}
+.wfd-graph-wrap canvas{display:block}
+.wfd-bottom{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--b);flex-shrink:0;max-height:260px}
+.wfd-bottom>div{background:#fff;padding:12px 16px;overflow-y:auto}
+.wfd-instance-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.wfd-inst-chip{padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;background:var(--c);border:1px solid var(--b)}
+
+/* Tables */
+.hh-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.hh-tbl th{text-align:left;padding:8px 8px;color:var(--tm);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;border-bottom:2px solid var(--b);position:sticky;top:0;background:#fff;z-index:1}
+.hh-tbl td{padding:6px 8px;border-bottom:1px solid var(--b);color:var(--td);white-space:nowrap}
+.hh-tbl tr.stuck{background:rgba(214,51,108,.03)}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap}
+.status-badge.done{background:rgba(5,150,105,.08);color:var(--g)}
+.status-badge.active{background:rgba(8,145,178,.08);color:var(--cy)}
+.status-badge.stuck{background:rgba(214,51,108,.08);color:var(--pk)}
+.status-badge.delayed{background:rgba(217,132,13,.08);color:var(--y)}
+.status-badge.pending{background:var(--c);color:var(--tm)}
+.status-badge.no-locs{background:rgba(214,51,108,.08);color:var(--pk)}
+
+/* Task cards - expandable */
+.task-card{background:#fff;border-radius:var(--radius);padding:0;margin-bottom:8px;border:1px solid var(--b);overflow:hidden;transition:all .2s}
+.task-card.active{border-color:rgba(8,145,178,.4);box-shadow:0 0 0 3px rgba(8,145,178,.06)}
+.task-card.done{border-color:rgba(5,150,105,.3)}
+.task-header{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;transition:background .15s;user-select:none}
+.task-header:hover{background:var(--c)}
+.task-name{font-size:13px;font-weight:700;flex:1;display:flex;align-items:center;gap:6px}
+.task-summary{font-size:11px;color:var(--tm);font-weight:500}
+.task-chevron{font-size:14px;color:var(--tm);transition:transform .2s;width:20px;text-align:center}
+.task-card.expanded .task-chevron{transform:rotate(90deg)}
+.task-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.task-card.expanded .task-body{max-height:600px}
+.task-body-inner{padding:0 14px 14px;border-top:1px solid var(--b)}
+.task-item{font-size:12px;color:var(--tm);padding:4px 0 4px 14px;line-height:1.5;display:flex;align-items:flex-start;gap:6px}
+.task-item.done{color:var(--g)}.task-item.active{color:var(--cy)}
+.task-item .item-icon{flex-shrink:0;width:14px;text-align:center}
+.task-cond{font-size:11px;color:var(--pk);padding:3px 0 3px 14px;font-style:italic;line-height:1.4;display:flex;align-items:flex-start;gap:6px}
+.task-cond.yes{color:var(--g)}.task-cond.no{color:var(--pk)}
+.task-cond .item-icon{flex-shrink:0;width:14px;text-align:center}
+
+/* ── CONTROL TOWER ── */
+.ct-view{display:grid;grid-template-columns:400px 1fr;gap:1px;background:var(--b);overflow:hidden}
+.ct-view>div{background:#fff;overflow-y:auto;padding:16px}
+.ct-group{margin-bottom:14px}
+.ct-group-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--bl);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--b)}
+.ct-var{display:flex;align-items:center;gap:8px;padding:5px 0}
+.ct-var label{font-size:12px;color:var(--td);flex:1}
+.ct-var input{width:80px;padding:5px 8px;border:1.5px solid var(--b);border-radius:8px;font-size:12px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;background:var(--c);color:var(--t);font-family:inherit}
+.ct-var input:focus{outline:none;border-color:var(--bl);background:#fff}
+.ct-var .unit{font-size:10px;color:var(--tm);width:24px}
+.ct-reset-flag{display:inline-block;font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(232,89,12,.08);color:var(--o);font-weight:700;margin-left:4px}
+.ct-formula{font-size:11px;color:var(--td);padding:6px 10px;margin-bottom:4px;background:var(--c);border-radius:8px;font-family:'SF Mono',monospace;display:flex;justify-content:space-between}
+.ct-formula .fv{font-weight:700;color:var(--t)}
+.ct-metric{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.ct-card{padding:12px;border-radius:var(--radius);background:var(--c);border:1px solid var(--b);text-align:center}
+.ct-card .cv{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.ct-card .cl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tm);margin-top:2px}
+.ct-bar-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;color:var(--td)}
+.ct-bar-row .bl{width:80px;text-align:right;flex-shrink:0;font-size:11px}
+.ct-bar-row .bw{flex:1;height:7px;background:rgba(0,0,0,.04);border-radius:4px;overflow:hidden}
+.ct-bar-row .bf{height:100%;border-radius:4px;transition:width .3s}
+.ct-bar-row .bv{width:40px;font-weight:700;font-variant-numeric:tabular-nums}
+.ct-sa-card{padding:12px 14px;border-radius:var(--radius);background:var(--c);border:1px solid var(--b);margin-bottom:8px}
+.ct-sa-card .sa-hdr{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;margin-bottom:6px}
+.ct-checklist{font-size:11px;color:var(--td)}
+.ct-checklist div{padding:2px 0}
+
+/* ── FOOTER CONTROLS ── */
+.ftr{background:#fff;border-top:1px solid var(--b);padding:10px 24px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.ftr button{background:var(--c);color:var(--t);border:1.5px solid var(--b);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;font-family:inherit}
+.ftr button:hover{background:var(--bl);border-color:var(--bl);color:#fff}
+.ftr button.on{background:var(--bl);border-color:var(--bl);color:#fff}
+.ftr button.live-on{background:var(--g);border-color:var(--g);color:#fff}
+.ftr button:disabled{opacity:.35;cursor:default;pointer-events:none}
+.viewing-past .sim-canvas-wrap::after{content:'Viewing Week 'attr(data-vw);position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--o);color:#fff;padding:4px 16px;border-radius:10px;font-size:12px;font-weight:700;z-index:2;pointer-events:none}
+.speed-ctl{display:flex;align-items:center;gap:8px}
+.speed-ctl label{font-size:12px;color:var(--td);font-weight:500}
+input[type=range]{-webkit-appearance:none;width:90px;height:4px;background:var(--c);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--bl);cursor:pointer}
+.ftr .ftr-info{margin-left:auto;font-size:12px;color:var(--td)}.ftr .ftr-info b{color:var(--t);font-variant-numeric:tabular-nums}
+.ftr-sep{width:1px;height:24px;background:var(--b)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+canvas{display:block}
+
+/* ── GUIDED UX ── */
+.help-hint{font-size:11px;color:var(--tm);font-weight:400;font-style:italic;margin-top:2px;line-height:1.4}
+.section-title .hint{font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--tm);margin-left:6px;font-style:italic}
+.tooltip-wrap{position:relative;display:inline-flex;align-items:center;cursor:help}
+.tooltip-wrap .tip-icon{width:16px;height:16px;border-radius:50%;background:var(--c);border:1px solid var(--b);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--tm);margin-left:6px;flex-shrink:0}
+.tooltip-wrap .tip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a2332;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:400;font-style:normal;white-space:normal;width:240px;line-height:1.5;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.2);text-transform:none;letter-spacing:0}
+.tooltip-wrap:hover .tip-text{display:block}
+.tooltip-wrap .tip-text::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#1a2332}
+.nav-hint{font-size:10px;color:var(--tm);padding:4px 14px 8px;line-height:1.4;font-style:italic}
+.step-indicator{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:8px;background:rgba(37,99,235,.06);color:var(--bl);font-size:10px;font-weight:700;margin-bottom:6px}
+.why-box{background:rgba(37,99,235,.04);border:1px solid rgba(37,99,235,.12);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:11px;color:var(--td);line-height:1.5}
+.why-box b{color:var(--bl);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.guide-banner{background:linear-gradient(135deg,rgba(37,99,235,.06),rgba(124,58,237,.04));border:1px solid rgba(37,99,235,.12);border-radius:var(--radius);padding:12px 16px;margin-bottom:10px;font-size:12px;color:var(--td);line-height:1.6}
+.guide-banner b{color:var(--bl)}
+.guide-banner .analogy{font-style:italic;color:var(--tm);margin-top:4px;font-size:11px}
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div class="auth-overlay" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <h1>eon<span>exia</span></h1>
+      <p>Market Growth & Workflow Simulation Engine<br><span style="font-size:11px;color:#8494a7">See how doctor groups join your network, step by step</span></p>
+    </div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-mode="login">Sign In</div>
+      <div class="auth-tab" data-mode="signup">Sign Up</div>
+    </div>
+    <form id="authForm">
+      <div class="auth-field" id="nameField" style="display:none">
+        <label>Full Name</label>
+        <input type="text" id="authName" placeholder="Jane Doe" autocomplete="name">
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="authEmail" placeholder="you@eonexea.com" autocomplete="email">
+        <div class="field-hint" id="emailHint">Only @eonexea.com addresses are allowed</div>
+        <div class="field-error" id="emailError"></div>
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="authPass" placeholder="Enter your password" autocomplete="current-password">
+      </div>
+      <button type="submit" class="auth-btn" id="authBtn">Sign In</button>
+      <div class="auth-msg" id="authMsg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="appRoot">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>eon<span>exia</span></h1>
+      <div class="sub">Simulation Engine v2.0</div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Views</div>
+      <div class="nav-hint">Choose a view to explore different parts of the system</div>
+      <div class="nav-item active" data-v="sim">
+        <span class="nav-icon">📊</span>
+        <div>Simulation<div class="help-hint">Watch doctors join the network</div></div>
+        <span class="nav-badge" id="navWeek">W0</span>
+      </div>
+      <div class="nav-item" data-v="wfd">
+        <span class="nav-icon">🔧</span>
+        <div>Workflow Detail<div class="help-hint">See each step being worked on</div></div>
+      </div>
+      <div class="nav-item" data-v="orch">
+        <span class="nav-icon">🎯</span>
+        <div>Orchestrator<div class="help-hint">Overview of all running tasks</div></div>
+        <span class="nav-badge" id="navInstances">0</span>
+      </div>
+      <div class="nav-item" data-v="ct">
+        <span class="nav-icon">🏗</span>
+        <div>Control Tower<div class="help-hint">Adjust settings & see metrics</div></div>
+      </div>
+      <div class="nav-section" style="margin-top:16px">Statistical Areas <span style="font-weight:400;text-transform:none;letter-spacing:0">(metro regions)</span></div>
+      <div class="nav-hint">Click a region to see its details on the map</div>
+      <div id="navSAList"></div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div>
+          <div class="user-name" id="userName">User</div>
+          <div class="user-email" id="userEmail">user@eonexia.com</div>
+        </div>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Sign Out</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-badges">
+        <div class="tbadge" style="color:var(--bl);border-color:rgba(37,99,235,.2)" id="phaseBadge">Phase: National Acquisition</div>
+        <div class="tbadge" style="color:var(--g);border-color:rgba(5,150,105,.2)" id="weekBadge">Week 0</div>
+      </div>
+      <div class="topbar-summary" id="summaryBar"></div>
+    </div>
+    <div class="views">
+      <!-- SIMULATION VIEW -->
+      <div class="vw on sim-view" id="v-sim">
+        <div class="sim-toggle" id="simToggle"></div>
+        <div class="sim-main">
+          <div class="sim-canvas-wrap"><canvas id="mapCanvas"></canvas></div>
+          <div class="narr-panel" id="narrPanel"></div>
+        </div>
+        <div class="sim-stats">
+          <div>
+            <div class="section-title">Acquisition Funnel <span class="hint">(how doctors move through stages)</span></div>
+            <div id="funnelBox"></div>
+          </div>
+          <div>
+            <div class="section-title">Verticals <span class="hint">(types of doctor groups)</span></div>
+            <div id="vertBox"></div>
+          </div>
+          <div>
+            <div class="section-title">Growth <span class="hint">(progress over time)</span></div>
+            <div class="growth-wrap"><canvas id="growthCanvas"></canvas></div>
+          </div>
+          <div>
+            <div class="section-title">Workflow Status <span class="hint">(what's being processed)</span></div>
+            <div class="wf-chip-wrap" id="wfChips"></div>
+          </div>
+        </div>
+      </div>
+      <!-- WORKFLOW DETAIL VIEW -->
+      <div class="vw wfd-view" id="v-wfd">
+        <div class="wfd-top">
+          <div style="flex:1"><div class="wfd-sa-cards" id="wfdSaCards"></div></div>
+          <div><div class="wfd-kpi" id="wfdKpi"></div></div>
+        </div>
+        <div class="wfd-graph-wrap"><canvas id="wfdCanvas"></canvas></div>
+        <div class="wfd-bottom">
+          <div>
+            <div class="section-title">Running Instances <span class="hint">(each agency being analyzed right now)</span></div>
+            <div class="wfd-instance-chips" id="wfdInstChips"></div>
+            <table class="hh-tbl"><thead><tr><th>Home Health Agency</th><th>What's Happening</th><th>Status</th><th>Time Spent</th></tr></thead><tbody id="wfdTbody"></tbody></table>
+          </div>
+          <div>
+            <div class="section-title">Task Detail <span class="hint">(click any task to see its steps)</span></div>
+            <div id="wfdTaskPanel"></div>
+          </div>
+        </div>
+      </div>
+      <!-- ORCHESTRATOR VIEW -->
+      <div class="vw wfd-view" id="v-orch">
+        <div class="wfd-top">
+          <div style="flex:1">
+            <div class="guide-banner" id="orchGuide">
+              <b>Orchestrator</b> (the system that manages all tasks at once)<br>
+              Think of it like a school principal checking on every classroom. This view shows every task running across all areas — who's working, who's stuck, and who's done.
+              <div class="analogy">Analogy: Like a delivery app dashboard showing every driver, order, and delay at once.</div>
+            </div>
+            <div class="wfd-kpi" id="orchSnap"></div>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:12px 16px;min-height:0">
+          <div class="section-title">All Workflow Instances <span class="hint">(every task the system is tracking)</span></div>
+          <table class="hh-tbl"><thead><tr><th>Task ID</th><th>What Kind</th><th>Who / What</th><th>What's Happening Now</th><th>Status</th><th>Time</th></tr></thead><tbody id="orchTable"></tbody></table>
+        </div>
+        <div style="max-height:200px;overflow-y:auto;padding:12px 16px;border-top:1px solid var(--b)">
+          <div class="section-title">Intelligence & Bottlenecks <span class="hint">(what's slowing things down)</span></div>
+          <div id="orchIntel"></div>
+        </div>
+      </div>
+      <!-- CONTROL TOWER -->
+      <div class="vw ct-view" id="v-ct">
+        <div>
+          <div class="guide-banner">
+            <b>Control Tower</b> (your settings & dials)<br>
+            This is where you tune the simulation. Change any number on the left, and watch the results update on the right in real-time.
+            <div class="analogy">Analogy: Like adjusting difficulty settings in a game — change the rules and see what happens.</div>
+          </div>
+          <div class="section-title">Variable Registry <span class="hint">(the numbers you can change)</span></div>
+          <div id="ctVars"></div>
+          <div class="section-title" style="margin-top:14px">Formula Engine <span class="hint">(how the numbers are calculated)</span></div>
+          <div id="ctFormulas"></div>
+        </div>
+        <div>
+          <div class="section-title">Funnel Metrics <span class="hint">(how many doctors are at each stage)</span></div>
+          <div id="ctFunnel"></div>
+          <div class="section-title">Workflow Metrics <span class="hint">(how the analysis tasks are going)</span></div>
+          <div id="ctWorkflow"></div>
+          <div class="section-title">SA Metrics <span class="hint">(progress for each metro region)</span></div>
+          <div id="ctSA"></div>
+          <div class="section-title">System Metrics <span class="hint">(overall system health)</span></div>
+          <div id="ctSystem"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ftr">
+      <button id="btnPlay" title="Start or pause the simulation — it will run week by week automatically">&#9654; Play</button>
+      <button id="btnStep" title="Move forward by exactly one week — good for watching step by step">Step +1 Week</button>
+      <button id="btnReset" title="Start the entire simulation over from the beginning">Reset</button>
+      <div class="ftr-sep"></div>
+      <button id="btnPrev" title="Go back and look at what happened in a previous week">&#9664; Prev Week</button>
+      <span id="viewLabel" style="font-size:12px;font-weight:600;color:var(--td);min-width:120px;text-align:center">Week 0</span>
+      <button id="btnNext" title="Go forward to see the next week's results">Next Week &#9654;</button>
+      <button id="btnLive" title="Jump back to the current live week" style="font-size:11px">&#9679; LIVE</button>
+      <div class="ftr-sep"></div>
+      <div class="speed-ctl"><label title="How fast the simulation runs when playing">Speed</label><input type="range" id="speedSlider" min="1" max="10" value="3"><span id="speedVal" style="font-size:12px;color:var(--td)">3x</span></div>
+      <div class="ftr-info">Week <b id="weekNum">0</b> &middot; Regions <b id="sasDone">0/2</b> done</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AUTH SYSTEM ──
+const AUTH={
+  STORAGE_KEY:'eonexia_users',
+  SESSION_KEY:'eonexia_session',
+  DOMAIN:'eonexea.com',
+  getUsers(){try{return JSON.parse(localStorage.getItem(this.STORAGE_KEY))||[];}catch{return[];}},
+  saveUsers(u){localStorage.setItem(this.STORAGE_KEY,JSON.stringify(u));},
+  getSession(){try{return JSON.parse(localStorage.getItem(this.SESSION_KEY));}catch{return null;}},
+  saveSession(s){localStorage.setItem(this.SESSION_KEY,JSON.stringify(s));},
+  clearSession(){localStorage.removeItem(this.SESSION_KEY);},
+  signup(name,email,pass){
+    if(!email.endsWith('@'+this.DOMAIN))return{ok:false,msg:'Only @'+this.DOMAIN+' emails are allowed'};
+    if(pass.length<4)return{ok:false,msg:'Password must be at least 4 characters'};
+    if(!name.trim())return{ok:false,msg:'Please enter your name'};
+    const users=this.getUsers();
+    if(users.find(u=>u.email===email))return{ok:false,msg:'Account already exists. Please sign in.'};
+    const user={name:name.trim(),email,pass};
+    users.push(user);this.saveUsers(users);
+    this.saveSession({name:user.name,email:user.email});
+    return{ok:true,user};
+  },
+  login(email,pass){
+    const users=this.getUsers();
+    const user=users.find(u=>u.email===email&&u.pass===pass);
+    if(!user)return{ok:false,msg:'Invalid email or password'};
+    this.saveSession({name:user.name,email:user.email});
+    return{ok:true,user};
+  },
+  logout(){this.clearSession();}
+};
+
+let authMode='login';
+document.querySelectorAll('.auth-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    authMode=tab.dataset.mode;
+    document.querySelectorAll('.auth-tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===authMode));
+    document.getElementById('nameField').style.display=authMode==='signup'?'block':'none';
+    document.getElementById('authBtn').textContent=authMode==='login'?'Sign In':'Create Account';
+    document.getElementById('emailHint').style.display=authMode==='signup'?'block':'none';
+    document.getElementById('authMsg').textContent='';
+  });
+});
+document.getElementById('authForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const name=document.getElementById('authName').value;
+  const email=document.getElementById('authEmail').value;
+  const pass=document.getElementById('authPass').value;
+  const msgEl=document.getElementById('authMsg');
+  let result;
+  if(authMode==='signup') result=AUTH.signup(name,email,pass);
+  else result=AUTH.login(email,pass);
+  if(result.ok){
+    msgEl.className='auth-msg success';msgEl.textContent='Success! Loading...';
+    setTimeout(()=>enterApp(result.user||AUTH.getSession()),400);
+  } else {
+    msgEl.className='auth-msg error';msgEl.textContent=result.msg;
+  }
+});
+
+function enterApp(user){
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('appRoot').classList.add('visible');
+  if(user){
+    document.getElementById('userName').textContent=user.name||'User';
+    document.getElementById('userEmail').textContent=user.email||'';
+    document.getElementById('userAvatar').textContent=(user.name||'U').charAt(0).toUpperCase();
+  }
+  setTimeout(()=>{resizeAll();renderAll();},100);
+}
+document.getElementById('logoutBtn').addEventListener('click',()=>{
+  AUTH.logout();
+  document.getElementById('authScreen').classList.remove('hidden');
+  document.getElementById('appRoot').classList.remove('visible');
+  document.getElementById('authEmail').value='';document.getElementById('authPass').value='';document.getElementById('authName').value='';
+  document.getElementById('authMsg').textContent='';
+});
+// Auto-login check
+const existingSession=AUTH.getSession();
+if(existingSession)setTimeout(()=>enterApp(existingSession),200);
+
+// ── SIMULATION ENGINE ──
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+let rng=mulberry32(42);
+
+const FUNNELS=[
+  {key:'prospect',label:'Prospect',color:'#94a3b8',icon:'👤'},
+  {key:'target',label:'Target',color:'#64748b',icon:'🎯'},
+  {key:'tofu',label:'TOFU',color:'#6366f1',icon:'📢'},
+  {key:'mofu',label:'MOFU',color:'#2563eb',icon:'🤝'},
+  {key:'bofu',label:'BOFU',color:'#ea580c',icon:'🔥'},
+  {key:'closed',label:'Closed',color:'#059669',icon:'✅'},
+];
+const FWIDTHS=[1,.82,.62,.42,.28,.18];
+const RATES=[.25,.25,.60,.60,.80];
+const CHANNELS=['Website visits','Conference outreach','Email campaigns','Digital marketing','Brand awareness'];
+const VERTS=[
+  {key:'chc',name:'Community Health Center',color:'#2563eb',pct:.10,icon:'🏥'},
+  {key:'house',name:'Housecall Practice',color:'#ea580c',pct:.03,icon:'🏠'},
+  {key:'va',name:'VA Affiliated',color:'#059669',pct:.01,icon:'⚕️'},
+  {key:'indep',name:'Independent Practice',color:'#d6336c',pct:.20,icon:'🩺'},
+  {key:'other',name:'Other',color:'#7c3aed',pct:.66,icon:'📋'},
+];
+// Realistic MSA names matching populations
+const SA_DEFS=[
+  {name:'Dallas-Fort Worth-Arlington',abbr:'Dallas-FW',pop:0.5e6},
+  {name:'Chicago-Naperville-Elgin',abbr:'Chicago-NE',pop:1e6}
+];
+const HH_NAMES=['Sunrise Home Health','Comfort Care HH','Guardian Home Health','Heartland Home Health','Compassion Healthcare','Liberty Home Health','Harmony Home Health','Serenity Home Health'];
+const CORPS=['Independent','Member of Parent','Probable Affiliation','Unknown'];
+const CONFS=['High','Medium','Low'];
+const STEP_NAMES={0:'Pending',1:'Querying NPI Registry',2:'Filtering Entity Types',3:'Removing Duplicates',4:'Finding Locations',5:'Checking Locations',6:'No Locations Found',7:'Searching Data Sources',8:'Identifying Branches',9:'Standardizing Addresses',10:'Deduplicating Locations',11:'Identifying Parent Org',12:'Assessing Confidence',13:'Building Account Map',14:'Finding Key Contacts',15:'Complete'};
+const TASK_STEP_RANGES=[{min:1,max:3,name:'NPI Query'},{min:4,max:10,name:'Find Locations'},{min:11,max:12,name:'Corporate ID'},{min:13,max:15,name:'Account Map'}];
+const STAGE_COLORS=['#cbd5e1','#94a3b8','#6366f1','#2563eb','#ea580c','#059669'];
+
+// ── US MAP OUTLINE (simplified polygon, normalized 0-1) ──
+const US_OUTLINE=[
+  [.18,.12],[.25,.10],[.34,.08],[.42,.07],[.48,.06],[.55,.08],[.62,.07],[.70,.08],[.78,.10],[.82,.12],[.85,.10],[.88,.14],
+  [.90,.18],[.92,.22],[.93,.28],[.92,.32],[.94,.36],[.93,.40],[.91,.42],[.90,.38],[.88,.42],[.86,.48],
+  [.84,.52],[.80,.50],[.78,.54],[.76,.56],[.74,.58],[.72,.60],[.70,.56],[.68,.60],[.66,.64],[.64,.66],
+  [.60,.68],[.56,.70],[.52,.72],[.50,.76],[.48,.80],[.44,.78],[.42,.76],[.38,.78],[.36,.82],[.32,.80],
+  [.28,.78],[.24,.76],[.22,.72],[.20,.68],[.18,.64],[.16,.60],[.14,.56],[.12,.50],[.10,.46],[.08,.40],
+  [.10,.34],[.12,.28],[.14,.22],[.16,.16],
+];
+
+// MSA shapes (simplified geographic outlines, normalized 0-1 within their canvas region)
+const MSA_SHAPES={
+  'Dallas-FW':[
+    [.30,.20],[.40,.15],[.55,.12],[.70,.15],[.78,.22],[.82,.35],[.80,.48],[.75,.58],[.68,.65],
+    [.55,.70],[.42,.72],[.30,.68],[.22,.58],[.18,.45],[.20,.32],[.25,.24]
+  ],
+  'Chicago-NE':[
+    [.55,.08],[.62,.05],[.68,.08],[.72,.15],[.75,.25],[.78,.35],[.80,.45],[.78,.55],
+    [.72,.65],[.65,.72],[.55,.75],[.45,.72],[.38,.65],[.32,.55],[.28,.42],
+    [.30,.30],[.35,.20],[.42,.12],[.50,.08]
+  ]
+};
+
+// SA geographic positions on US map (normalized)
+const SA_POS={0:{x:.42,y:.58},1:{x:.58,y:.28}};
+
+// Unified workflow nodes
+const WN={
+  // PHASE 1: SA MARKET ANALYSIS
+  trigger:{x:.01,y:.20,w:.07,h:.05,label:'PG → BOFU\nTrigger',shape:'dashed',color:'#d9840d',bg:'rgba(217,132,13,.08)'},
+  market:{x:.10,y:.20,w:.06,h:.05,label:'Market\nAnalysis',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.08)'},
+  cultural:{x:.18,y:.03,w:.09,h:.04,label:'Cultural\nAnalysis',shape:'rounded',color:'#7c3aed',bg:'rgba(124,58,237,.06)'},
+  pg_analysis:{x:.18,y:.15,w:.09,h:.04,label:'PG Market\nAnalysis',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.06)'},
+  hhah_analysis:{x:.18,y:.28,w:.09,h:.04,label:'Home Health\nAnalysis',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.06)'},
+  get_hhahs:{x:.30,y:.28,w:.07,h:.04,label:'GET All\nHH',shape:'cylinder',color:'#0891b2',bg:'rgba(8,145,178,.06)'},
+  npi_query:{x:.30,y:.05,w:.08,h:.03,label:'Query NPI',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.05)'},
+  npi_filter:{x:.30,y:.10,w:.08,h:.03,label:'Filter Type',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.03)'},
+  npi_dedup:{x:.30,y:.15,w:.08,h:.03,label:'Dedup NPIs',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.03)'},
+  find_locs:{x:.30,y:.20,w:.08,h:.03,label:'Find Locs',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.05)'},
+  decision:{x:.41,y:.17,w:.05,h:.07,label:'Locs?',shape:'diamond',color:'#d6336c',bg:'rgba(214,51,108,.05)'},
+  no_loc:{x:.41,y:.03,w:.06,h:.04,label:'No Locs',shape:'rect-pink',color:'#d6336c',bg:'rgba(214,51,108,.06)'},
+  search_fp:{x:.41,y:.27,w:.07,h:.03,label:'Search\nSources',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  id_branches:{x:.41,y:.32,w:.07,h:.03,label:'ID Branches',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  std_addr:{x:.41,y:.37,w:.07,h:.03,label:'Std Addr',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  dedup_loc:{x:.41,y:.42,w:.07,h:.03,label:'Dedup Locs',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  corp_id:{x:.51,y:.15,w:.07,h:.04,label:'ID Parent\nOrg',shape:'rounded',color:'#7c3aed',bg:'rgba(124,58,237,.05)'},
+  corp_conf:{x:.51,y:.22,w:.07,h:.03,label:'Assess\nConfidence',shape:'rounded',color:'#7c3aed',bg:'rgba(124,58,237,.03)'},
+  corp_dec:{x:.51,y:.28,w:.05,h:.06,label:'Parent?',shape:'diamond',color:'#7c3aed',bg:'rgba(124,58,237,.03)'},
+  acct_map:{x:.59,y:.15,w:.07,h:.04,label:'Build Acct\nMap',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.05)'},
+  acct_cont:{x:.59,y:.22,w:.07,h:.03,label:'Find\nContacts',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  acct_dec:{x:.59,y:.28,w:.05,h:.06,label:'Found?',shape:'diamond',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  partial:{x:.59,y:.37,w:.06,h:.03,label:'Partial Map',shape:'rounded',color:'#d9840d',bg:'rgba(217,132,13,.03)'},
+  loop:{x:.30,y:.46,w:.08,h:.03,label:'Next HH',shape:'dashed',color:'#475569',bg:'rgba(71,85,105,.03)'},
+  output:{x:.68,y:.20,w:.05,h:.04,label:'HH\nDone ✓',shape:'rounded',color:'#059669',bg:'rgba(5,150,105,.06)'},
+  // PHASE 2: CUSTOMER SUCCESS
+  cs_trigger:{x:.01,y:.58,w:.07,h:.05,label:'PG Closed\n→ CS Start',shape:'dashed',color:'#059669',bg:'rgba(5,150,105,.06)'},
+  cs_enrich:{x:.10,y:.55,w:.07,h:.05,label:'2.1 Persona\nEnrichment',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.05)'},
+  cs_sig:{x:.19,y:.55,w:.07,h:.05,label:'2.2 Signature\nCollection',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.05)'},
+  cs_sig_follow:{x:.19,y:.65,w:.07,h:.03,label:'Follow-up\nMobile Links',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  cs_rapport:{x:.28,y:.55,w:.07,h:.05,label:'2.3 Rapport\nBuilding',shape:'rounded',color:'#7c3aed',bg:'rgba(124,58,237,.05)'},
+  cs_baa:{x:.37,y:.55,w:.07,h:.05,label:'2.4 BAA\nHandling',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.05)'},
+  cs_baa_dec:{x:.37,y:.65,w:.05,h:.06,label:'BAA\nSigned?',shape:'diamond',color:'#ea580c',bg:'rgba(234,88,12,.03)'},
+  cs_baa_route:{x:.37,y:.74,w:.07,h:.03,label:'Route HIPAA\nOfficer/CTO',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.03)'},
+  cs_ehr:{x:.46,y:.55,w:.07,h:.05,label:'2.5 EHR\nAccess',shape:'rounded',color:'#0891b2',bg:'rgba(8,145,178,.05)'},
+  cs_ehr_dec:{x:.46,y:.65,w:.05,h:.06,label:'Access\nGranted?',shape:'diamond',color:'#0891b2',bg:'rgba(8,145,178,.03)'},
+  cs_ehr_type:{x:.46,y:.74,w:.07,h:.03,label:'Web or\nAPI Access',shape:'rounded',color:'#0891b2',bg:'rgba(8,145,178,.03)'},
+  cs_ehr_deny:{x:.53,y:.74,w:.07,h:.03,label:'Denied →\nFollow-up',shape:'rounded',color:'#d6336c',bg:'rgba(214,51,108,.04)'},
+  cs_hh_id:{x:.55,y:.55,w:.07,h:.05,label:'2.6 Identify\nHH Shared Pts',shape:'rounded',color:'#ea580c',bg:'rgba(234,88,12,.05)'},
+  cs_hh_dec:{x:.55,y:.65,w:.05,h:.06,label:'Shared\nPatients?',shape:'diamond',color:'#ea580c',bg:'rgba(234,88,12,.03)'},
+  cs_no_hh:{x:.55,y:.74,w:.07,h:.03,label:'No Shared →\nSkip HH',shape:'rounded',color:'#94a3b8',bg:'rgba(148,163,184,.04)'},
+  cs_hh_comm:{x:.64,y:.55,w:.07,h:.05,label:'2.6.2 Define\nComm Path',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.05)'},
+  cs_hh_out:{x:.73,y:.55,w:.07,h:.05,label:'2.6.3 Baseline\nOutreach',shape:'rounded',color:'#2563eb',bg:'rgba(37,99,235,.05)'},
+  cs_hh_resp:{x:.73,y:.65,w:.05,h:.06,label:'Response\nReceived?',shape:'diamond',color:'#2563eb',bg:'rgba(37,99,235,.03)'},
+  cs_hh_cat:{x:.73,y:.74,w:.07,h:.03,label:'2.6.4 Categorize\nResponse',shape:'rounded',color:'#7c3aed',bg:'rgba(124,58,237,.03)'},
+  cs_hh_ready:{x:.82,y:.55,w:.07,h:.04,label:'Ready to\nOnboard',shape:'rounded',color:'#059669',bg:'rgba(5,150,105,.05)'},
+  cs_hh_block:{x:.82,y:.65,w:.07,h:.05,label:'2.6.5 Blocker\nResolution',shape:'rounded',color:'#d6336c',bg:'rgba(214,51,108,.05)'},
+  cs_hh_block_dec:{x:.82,y:.74,w:.05,h:.05,label:'Resolved?',shape:'diamond',color:'#d6336c',bg:'rgba(214,51,108,.03)'},
+  cs_hh_strat:{x:.82,y:.82,w:.07,h:.03,label:'PG Strategy\nEscalation',shape:'rounded',color:'#d9840d',bg:'rgba(217,132,13,.04)'},
+  cs_hh_no_resp:{x:.73,y:.82,w:.07,h:.03,label:'Follow-up\nLoop',shape:'rounded',color:'#94a3b8',bg:'rgba(148,163,184,.04)'},
+  cs_hh_onb:{x:.91,y:.55,w:.06,h:.04,label:'HH\nOnboarded',shape:'rounded',color:'#059669',bg:'rgba(5,150,105,.05)'},
+  cs_done:{x:.91,y:.65,w:.06,h:.04,label:'CS\nComplete ✓',shape:'rounded',color:'#059669',bg:'rgba(5,150,105,.08)'},
+};
+const WARROWS=[
+  {f:'trigger',t:'market'},{f:'market',t:'cultural'},{f:'market',t:'pg_analysis'},{f:'market',t:'hhah_analysis'},
+  {f:'hhah_analysis',t:'get_hhahs'},{f:'get_hhahs',t:'npi_query',curve:'up'},
+  {f:'npi_query',t:'npi_filter'},{f:'npi_filter',t:'npi_dedup'},{f:'npi_dedup',t:'find_locs'},
+  {f:'find_locs',t:'decision'},{f:'decision',t:'no_loc',label:'No',curve:'up'},
+  {f:'decision',t:'search_fp',label:'Yes'},{f:'search_fp',t:'id_branches'},{f:'id_branches',t:'std_addr'},{f:'std_addr',t:'dedup_loc'},
+  {f:'dedup_loc',t:'corp_id',curve:'up-right'},{f:'corp_id',t:'corp_conf'},{f:'corp_conf',t:'corp_dec'},
+  {f:'corp_dec',t:'acct_map',label:'Yes'},{f:'corp_dec',t:'acct_map',label:'No'},
+  {f:'acct_map',t:'acct_cont'},{f:'acct_cont',t:'acct_dec'},
+  {f:'acct_dec',t:'output',label:'Found'},{f:'acct_dec',t:'partial',label:'None'},
+  {f:'partial',t:'output'},{f:'loop',t:'get_hhahs',style:'dashed',curve:'left-up'},
+  {f:'output',t:'cs_trigger',label:'PG Closed'},
+  {f:'cs_trigger',t:'cs_enrich'},{f:'cs_enrich',t:'cs_sig'},
+  {f:'cs_sig',t:'cs_sig_follow',label:'15%'},{f:'cs_sig',t:'cs_rapport',label:'85%'},
+  {f:'cs_sig_follow',t:'cs_rapport'},{f:'cs_rapport',t:'cs_baa'},
+  {f:'cs_baa',t:'cs_baa_dec'},{f:'cs_baa_dec',t:'cs_ehr',label:'80%'},
+  {f:'cs_baa_dec',t:'cs_baa_route',label:'20%'},{f:'cs_baa_route',t:'cs_ehr'},
+  {f:'cs_ehr',t:'cs_ehr_dec'},{f:'cs_ehr_dec',t:'cs_hh_id',label:'60%'},
+  {f:'cs_ehr_dec',t:'cs_ehr_deny',label:'40%'},{f:'cs_ehr_deny',t:'cs_ehr',style:'dashed'},
+  {f:'cs_ehr_dec',t:'cs_ehr_type',label:'Type'},
+  {f:'cs_hh_id',t:'cs_hh_dec'},{f:'cs_hh_dec',t:'cs_hh_comm',label:'65%'},{f:'cs_hh_dec',t:'cs_no_hh',label:'35%'},
+  {f:'cs_no_hh',t:'cs_done'},{f:'cs_hh_comm',t:'cs_hh_out'},
+  {f:'cs_hh_out',t:'cs_hh_resp'},{f:'cs_hh_resp',t:'cs_hh_cat',label:'50%'},
+  {f:'cs_hh_resp',t:'cs_hh_no_resp',label:'No'},{f:'cs_hh_no_resp',t:'cs_hh_out',style:'dashed'},
+  {f:'cs_hh_cat',t:'cs_hh_ready',label:'40%'},{f:'cs_hh_cat',t:'cs_hh_block',label:'35%'},
+  {f:'cs_hh_ready',t:'cs_hh_onb'},{f:'cs_hh_onb',t:'cs_done'},
+  {f:'cs_hh_block',t:'cs_hh_block_dec'},{f:'cs_hh_block_dec',t:'cs_hh_ready',label:'Yes'},
+  {f:'cs_hh_block_dec',t:'cs_hh_strat',label:'No'},{f:'cs_hh_strat',t:'cs_done'},
+];
+const TASKS_DEF=[
+  {id:'npi',name:'Task 1: Find All Home Healths',items:['Query NPI registry for HH entities in MSA','Filter to Home Health Agency entity type','Remove duplicates → unique list'],conds:[]},
+  {id:'loc',name:'Task 2: Find All Locations',items:['Search source data / web for location footprint','Identify branches, offices, service locations','Standardize addresses (USPS format)','Deduplicate locations'],conds:[{text:'IF no locations → mark "no_confirmed_locations"',type:'no'},{text:'IF multiple locations → standardize & dedup',type:'yes'}]},
+  {id:'corp',name:'Task 3: Corporate Structure',items:['Query corporate registries for parent entity','Identify known family chains / affiliations','Assess confidence level (High / Medium / Low)'],conds:[{text:'IF parent confirmed → "Member of Parent"',type:'yes'},{text:'IF probable → "Probable Affiliation"',type:'no'},{text:'IF none found → "Independent" or "Unknown"',type:'no'}]},
+  {id:'acct',name:'Task 4: Account Mapping',items:['Search LinkedIn for corporate & regional leaders','Build hierarchical org chart (parent → locations)','Inreach: gather contact info for key personnel'],conds:[{text:'IF corporate parent → comprehensive multi-location map',type:'yes'},{text:'IF no contacts → mark account map "Partial"',type:'no'}]},
+  {id:'cs_enrich',name:'CS 2.1: Persona Enrichment',items:['Identify required personas (physicians, NPPs, admin)','Create or enrich accounts with missing info','Flag gaps for further research'],conds:[{text:'90% PGs have complete persona info',type:'yes'},{text:'10% require significant enrichment',type:'no'}]},
+  {id:'cs_sig',name:'CS 2.2: Signature Collection',items:['Determine signature requirements per persona','Send signature requests via platform','Follow-up with mobile links if incomplete','Track completion status'],conds:[{text:'85% complete on first attempt',type:'yes'},{text:'15% require follow-ups',type:'no'}]},
+  {id:'cs_rapport',name:'CS 2.3: Rapport Building',items:['Schedule onboarding sessions (individual/group)','Conduct onboarding conversations','Capture notes and feedback'],conds:[{text:'95% respond positively',type:'yes'},{text:'5% need additional follow-up',type:'no'}]},
+  {id:'cs_baa',name:'CS 2.4: BAA Handling',items:['Present BAA for review','Capture signed BAA or accept uploaded BAA','Route to HIPAA officer / CTO for final approval'],conds:[{text:'80% sign promptly',type:'yes'},{text:'20% require follow-up',type:'no'},{text:'Mark onboarding complete once BAA approved',type:'yes'}]},
+  {id:'cs_ehr',name:'CS 2.5: EHR Access',items:['Determine access type (Web or API)','Obtain EHR access permissions from PG','Retrieve patient data via API or web interface'],conds:[{text:'60% grant access',type:'yes'},{text:'40% deny → follow-up and retry',type:'no'},{text:'IF granted → distinguish Web vs API access',type:'yes'}]},
+  {id:'cs_hh',name:'CS 2.6: HH Onboarding (Shared Patients)',items:['Extract patient data post-EHR access','Identify PG ↔ HH relationships via shared patients','Define communication path & onboarding needs','Baseline outreach (email/phone/fax)','Track response: 50% in SLA, 30% delayed, 20% no response','Categorize: 40% ready, 35% blockers, 25% no response'],conds:[{text:'65% PGs have shared patients with ≥1 HH',type:'yes'},{text:'35% no shared patients → skip HH workflow',type:'no'},{text:'IF blockers → Security(40%) / Bureaucracy(35%) / Resistance(25%)',type:'no'},{text:'IF resolved → Ready to Onboard',type:'yes'},{text:'IF persistent → Escalate to PG Strategy',type:'no'}]},
+];
+
+// ── VARIABLE REGISTRY ──
+const VAR_REGISTRY=[
+  {id:'pop_dallas',name:'Dallas-FW Population',value:500000,group:'Population',min:100000,max:5000000,step:50000,structural:true},
+  {id:'pop_chicago',name:'Chicago-NE Population',value:1000000,group:'Population',min:100000,max:5000000,step:50000,structural:true},
+  {id:'pg_per_million',name:'PGs per 1M pop',value:500,group:'Ratios',min:50,max:2000,step:50,structural:true},
+  {id:'hh_per_million',name:'Home Healths per 1M pop',value:5,group:'Ratios',min:1,max:50,step:1,structural:true},
+  {id:'physicians_per_1000',name:'Physicians per 1,000 patients',value:3,group:'Ratios',min:1,max:10,step:0.5,structural:false},
+  {id:'rate_prospect_target',name:'Prospect → Target',value:0.25,group:'Conversion',min:0,max:1,step:0.05,structural:false},
+  {id:'rate_target_tofu',name:'Target → TOFU',value:0.25,group:'Conversion',min:0,max:1,step:0.05,structural:false},
+  {id:'rate_tofu_mofu',name:'TOFU → MOFU',value:0.60,group:'Conversion',min:0,max:1,step:0.05,structural:false},
+  {id:'rate_mofu_bofu',name:'MOFU → BOFU',value:0.60,group:'Conversion',min:0,max:1,step:0.05,structural:false},
+  {id:'rate_bofu_close',name:'BOFU → Close',value:0.80,group:'Conversion',min:0,max:1,step:0.05,structural:false},
+  {id:'p_block_data',name:'P(data missing)',value:0.15,group:'Blocking',min:0,max:1,step:0.05,structural:false},
+  {id:'p_block_structure',name:'P(structure uncertain)',value:0.20,group:'Blocking',min:0,max:1,step:0.05,structural:false},
+  {id:'p_block_contacts',name:'P(no contacts)',value:0.10,group:'Blocking',min:0,max:1,step:0.05,structural:false},
+  {id:'retry_rate',name:'Retry success rate',value:0.30,group:'Blocking',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_enrich',name:'Enrichment success',value:0.90,group:'Customer Success',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_sig',name:'Signature 1st attempt',value:0.85,group:'Customer Success',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_rapport',name:'Rapport success',value:0.95,group:'Customer Success',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_baa',name:'BAA sign rate',value:0.80,group:'Customer Success',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_ehr',name:'EHR access granted',value:0.60,group:'Customer Success',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_hh_shared',name:'PGs with shared patients',value:0.65,group:'CS Home Health',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_hh_resp',name:'HH response in SLA',value:0.50,group:'CS Home Health',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_hh_ready',name:'HH ready to onboard',value:0.40,group:'CS Home Health',min:0,max:1,step:0.05,structural:false},
+  {id:'cs_hh_resolve',name:'Blocker resolve rate',value:0.40,group:'CS Home Health',min:0,max:1,step:0.05,structural:false},
+];
+function V(id){return VAR_REGISTRY.find(v=>v.id===id).value;}
+function getRates(){return[V('rate_prospect_target'),V('rate_target_tofu'),V('rate_tofu_mofu'),V('rate_mofu_bofu'),V('rate_bofu_close')];}
+let needsReset=false;
+
+let S={},selSA=0,simView='national',curView='sim';
+let snapshots=[];
+let viewWeek=-1;
+
+function initSim(){
+  rng=mulberry32(42);needsReset=false;
+  const pops=[V('pop_dallas'),V('pop_chicago')];
+  const sas=SA_DEFS.map((d,i)=>{
+    const pop=pops[i]||d.pop;
+    const pgC=Math.round(pop/1e6*V('pg_per_million'));
+    const numHH=Math.max(2,Math.round(pop/1e6*V('hh_per_million')));
+    const hhs=[];
+    for(let h=0;h<numHH;h++){
+      const npi='18'+String(Math.floor(rng()*99999999)).padStart(8,'0');
+      const lc=rng()<.15?0:1+Math.floor(rng()*4);
+      const ci=rng()<.4?1:rng()<.55?0:rng()<.8?2:3;
+      hhs.push({id:`h${i}_${h}`,name:HH_NAMES[h%HH_NAMES.length],npi,locs:lc,
+        corp:CORPS[ci],conf:CONFS[Math.floor(rng()*3)],
+        wfStep:0,started:false,done:false,stepTicks:0,totalTicks:0,
+        blocked:false,blockType:null,blockTick:0});
+    }
+    const displayPGs=Math.round(numHH*3);
+    return{id:i,name:d.name,abbr:d.abbr,pop:pop,totalPGs:displayPGs,totalHHs:numHH,
+      verts:Object.fromEntries(VERTS.map(v=>[v.key,Math.round(displayPGs*v.pct)])),
+      status:'not_started',hhs,subWf:{cultural:0,pg:0,hhah:0},
+      wfPhase:'idle',wfCur:-1,wfT:0,
+      aN:new Set(),cN:new Set(),particles:[],pgsClosed:0,done:false};
+  });
+  const pgs=[];let pid=0;
+  for(const sa of sas){
+    const cnt=Math.round(sa.hhs.length*3);
+    for(let p=0;p<cnt;p++){
+      let vt='other',cm=0;const r=rng();
+      for(const v of VERTS){cm+=v.pct;if(r<cm){vt=v.key;break;}}
+      pgs.push({id:pid++,saId:sa.id,vert:vt,stage:0,patients:50+Math.floor(rng()*300),linkedHHs:[],
+        cs:{phase:'idle',tick:0,enrichDone:false,sigDone:false,sigAttempts:0,rapportDone:false,baaDone:false,baaRouting:false,
+          ehrDone:false,ehrGranted:false,ehrType:null,
+          hhPhase:'idle',hhIdentified:0,hhOutreached:0,hhResponded:0,hhOnboarded:0,hhBlocked:0,hhDone:false,
+          blocked:false,blockType:null,blockTick:0}});
+    }
+  }
+  for(const pg of pgs){
+    const saHHs=sas[pg.saId].hhs;
+    const n=1+Math.floor(rng()*Math.min(2,saHHs.length));
+    const used=new Set();
+    for(let l=0;l<n;l++){let idx=Math.floor(rng()*saHHs.length);while(used.has(idx))idx=(idx+1)%saHHs.length;used.add(idx);pg.linkedHHs.push(idx);}
+  }
+  S={tick:0,running:false,speed:3,sas,pgs,events:[],wfRuns:0,narration:[],
+    growthHist:[{tick:0,...Object.fromEntries(FUNNELS.map(f=>[f.key,f.key==='prospect'?pgs.length:0]))}]};
+  addNarr('highlight',`<b>Simulation ready!</b> Think of this like a <i>sports recruitment game</i> — we're trying to sign up <b>${pgs.length} doctor groups (PGs)</b> across ${sas.length} regions.<br><br><div class="why-box"><b>How it works:</b> Doctor groups move through a pipeline, like a funnel. They start as <b>Prospects</b> [we just know about them], then become <b>Targets</b> [we want them], move through <b>TOFU</b> [first contact], <b>MOFU</b> [getting interested], <b>BOFU</b> [almost ready], and finally <b>Closed</b> [they signed up!].</div><br><b>Our regions:</b> ${sas.map(s=>s.name+' — '+(s.pop/1e6).toFixed(1)+'M people, '+s.totalPGs+' doctor groups, '+s.totalHHs+' home health agencies').join('; ')}.<br><br><b>How we find them:</b> Website, Conferences, Emails, Marketing, Branding.<br><b>Success rates:</b> About 60% move from TOFU→MOFU, 60% from MOFU→BOFU, and 80% from BOFU→Closed.<br><b>What happens next:</b> When a doctor group reaches BOFU [almost ready], it triggers research tasks — analyzing home health agencies, other doctor groups, and the local culture of each area.<br><br>Press <b>Play</b> to start watching it happen!`);
+}
+
+let narrDirty=true,lastNarrCount=0;
+function addNarr(type,text){S.narration.push({tick:S.tick,type,text});narrDirty=true;}
+
+function simTick(){
+  S.tick++;
+  const channel=CHANNELS[S.tick%CHANNELS.length];
+  let promoted=[];
+  for(const pg of S.pgs){
+    if(pg.stage>=5)continue;
+    if(rng()<getRates()[pg.stage]){
+      const from=pg.stage;pg.stage++;promoted.push({pg,from,to:pg.stage});
+      if(pg.stage===4){
+        const sa=S.sas[pg.saId];
+        if(sa.status==='not_started'){sa.status='in_progress';startWF(sa);
+          addNarr('trigger',`<b>🔥 SA WORKFLOW TRIGGERED</b><div class="task-list"><div><b>Trigger:</b> PG #${pg.id} (${VERTS.find(v=>v.key===pg.vert).name}) reached <b>BOFU</b> via ${channel}</div><div><b>SA:</b> ${sa.name} (${(sa.pop/1e6).toFixed(1)}M pop, ${sa.totalHHs} home healths)</div><div style="margin-top:4px"><b>Tasks Activated:</b></div><div class="act">▸ Task 1: Home Health Market Analysis — identify all ${sa.totalHHs} HH agencies</div><div class="act">▸ Task 2: PG Market Analysis — map physician group density & coverage</div><div class="act">▸ Task 3: Cultural Market Analysis — assess regional adoption factors</div><div style="margin-top:4px"><span class="outcome pending">All 3 tasks running in parallel</span></div></div>`);
+        }
+      }
+      if(pg.stage===5){S.sas[pg.saId].pgsClosed++;
+        addNarr('done',`<b>✅ PG #${pg.id} — CLOSED</b><div class="task-list"><div class="pass">✓ Vertical: ${VERTS.find(v=>v.key===pg.vert).name}</div><div class="pass">✓ SA: ${S.sas[pg.saId].name}</div><div class="pass">✓ Funnel complete: Prospect → Target → TOFU → MOFU → BOFU → Closed</div><div class="pass">✓ Conversion channel: ${channel}</div><div class="pass">✓ Linked Home Healths: ${pg.linkedHHs.length}</div><div style="margin-top:4px"><span class="outcome success">OUTCOME: Acquisition complete — CS workflow will trigger</span></div></div>`);
+      }
+    }
+  }
+
+  const pgCounts=Array(6).fill(0);S.pgs.forEach(p=>pgCounts[p.stage]++);
+  const byStage={};promoted.forEach(p=>{const k=FUNNELS[p.to].label;byStage[k]=(byStage[k]||0)+1;});
+
+  // ── Detailed weekly summary with tasks/actions/outcomes ──
+  let weekSummary=`<b>📋 WEEKLY REPORT — Week ${S.tick}</b>`;
+  weekSummary+=`<div class="task-list">`;
+
+  // Funnel state
+  weekSummary+=`<div><b>Funnel State:</b> ${FUNNELS.map((f,i)=>`${f.icon} ${f.label}: <b>${pgCounts[i]}</b>`).join(' · ')}</div>`;
+
+  // PG movements with detail
+  if(promoted.length){
+    weekSummary+=`<div style="margin-top:4px"><b>PG Movements This Week</b> (via ${channel}):</div>`;
+    promoted.forEach(p=>{
+      const fromLabel=FUNNELS[p.from].label,toLabel=FUNNELS[p.to].label;
+      const saName=S.sas[p.pg.saId].abbr;
+      const vertName=VERTS.find(v=>v.key===p.pg.vert).name;
+      if(p.to===4){
+        weekSummary+=`<div class="act">▸ PG #${p.pg.id} (${vertName}, ${saName}): ${fromLabel} → <b>${toLabel}</b> <span class="outcome pending">BOFU — Triggers SA Workflow</span></div>`;
+      } else if(p.to===5){
+        weekSummary+=`<div class="pass">✓ PG #${p.pg.id} (${vertName}, ${saName}): ${fromLabel} → <b>${toLabel}</b> <span class="outcome success">CLOSED — Triggers CS Workflow</span></div>`;
+      } else {
+        weekSummary+=`<div>→ PG #${p.pg.id} (${vertName}, ${saName}): ${fromLabel} → <b>${toLabel}</b></div>`;
+      }
+    });
+  } else {
+    weekSummary+=`<div style="margin-top:4px;color:var(--tm)">No PG stage changes this week. Nurturing continues via ${channel}.</div>`;
+  }
+
+  // SA workflow status
+  S.sas.forEach(sa=>{
+    if(sa.status==='in_progress'){
+      const hd=sa.hhs.filter(h=>h.done).length;
+      const hb=sa.hhs.filter(h=>h.blocked).length;
+      const ha=sa.hhs.filter(h=>h.started&&!h.done&&!h.blocked).length;
+      const pct=sa.hhs.length?Math.round(hd/sa.hhs.length*100):0;
+      weekSummary+=`<div style="margin-top:4px"><b>${sa.abbr} SA Workflow:</b> Phase: ${sa.wfPhase}</div>`;
+      weekSummary+=`<div class="act">▸ HH Agencies: ${hd}/${sa.hhs.length} done (${pct}%) · ${ha} active · ${hb} blocked</div>`;
+      weekSummary+=`<div>▸ Cultural Analysis: ${sa.subWf.cultural===2?'<span class="outcome success">Complete</span>':sa.subWf.cultural===1?'<span class="outcome pending">Running</span>':'○ Pending'} · PG Analysis: ${sa.subWf.pg===2?'<span class="outcome success">Complete</span>':sa.subWf.pg===1?'<span class="outcome pending">Running</span>':'○ Pending'}</div>`;
+    } else if(sa.status==='completed'){
+      weekSummary+=`<div style="margin-top:4px" class="pass"><b>${sa.abbr}:</b> <span class="outcome success">✅ Complete — all agencies analyzed</span></div>`;
+    }
+  });
+
+  // CS workflow summary
+  const csActive=S.pgs.filter(p=>p.stage>=5&&p.cs.phase!=='idle'&&p.cs.phase!=='complete');
+  const csDone=S.pgs.filter(p=>p.cs.phase==='complete');
+  const csBlocked=S.pgs.filter(p=>p.stage>=5&&p.cs.blocked);
+  if(csActive.length||csDone.length){
+    weekSummary+=`<div style="margin-top:4px"><b>Customer Success:</b> ${csActive.length} active · ${csDone.length} complete · ${csBlocked.length} blocked</div>`;
+    csActive.forEach(p=>{
+      weekSummary+=`<div class="act">▸ PG #${p.id}: ${CS_LABELS[p.cs.phase]}${p.cs.blocked?' <span class="outcome fail">BLOCKED: '+p.cs.blockType.replace(/_/g,' ')+'</span>':''}</div>`;
+    });
+  }
+
+  weekSummary+=`</div>`;
+  addNarr('highlight',weekSummary);
+
+  for(const sa of S.sas)if(sa.status==='in_progress')processWF(sa);
+  for(const sa of S.sas)for(const h of sa.hhs)if(h.started&&!h.done){h.stepTicks++;h.totalTicks++;}
+  processAllCS();
+
+  if(S.tick%2===0){
+    const c={tick:S.tick};FUNNELS.forEach(f=>c[f.key]=0);S.pgs.forEach(p=>c[FUNNELS[p.stage].key]++);
+    S.growthHist.push(c);if(S.growthHist.length>120)S.growthHist.shift();
+  }
+  saveSnapshot();
+}
+
+function saveSnapshot(){
+  const snap={
+    tick:S.tick,
+    pgs:S.pgs.map(p=>({...p,linkedHHs:[...p.linkedHHs],cs:{...p.cs}})),
+    sas:S.sas.map(sa=>({
+      ...sa,
+      hhs:sa.hhs.map(h=>({...h})),
+      aN:new Set(sa.aN),cN:new Set(sa.cN),particles:[...sa.particles.map(p=>({...p}))],
+      verts:{...sa.verts},subWf:{...sa.subWf}
+    })),
+    narration:S.narration.filter(n=>n.tick<=S.tick),
+    growthHist:S.growthHist.map(g=>({...g})),
+    wfRuns:S.wfRuns,
+  };
+  snapshots[S.tick]=snap;
+}
+function getViewState(){
+  if(viewWeek<0||viewWeek>=S.tick||!snapshots[viewWeek])return S;
+  return snapshots[viewWeek];
+}
+
+function startWF(sa){
+  sa.wfPhase='branch_start';sa.wfT=0;
+  sa.aN=new Set(['trigger']);sa.cN=new Set();sa.particles=[];
+  sa.subWf={cultural:0,pg:0,hhah:0};sa.wfCur=-1;
+  sa.hhs.forEach(h=>{h.wfStep=0;h.started=false;h.done=false;h.stepTicks=0;h.totalTicks=0;h.blocked=false;h.blockType=null;h.blockTick=0;});
+  addP(sa,'trigger','market');
+}
+function processWF(sa){
+  sa.wfT++;
+  for(let i=sa.particles.length-1;i>=0;i--){sa.particles[i].t+=sa.particles[i].spd;if(sa.particles[i].t>=1)sa.particles.splice(i,1);}
+  switch(sa.wfPhase){
+    case 'branch_start':
+      sa.aN.add('market');
+      if(sa.wfT>=2){sa.subWf.cultural=1;sa.subWf.pg=1;sa.subWf.hhah=1;
+        ['cultural','pg_analysis','hhah_analysis'].forEach(n=>{sa.aN.add(n);addP(sa,'market',n);});
+        addNarr('workflow',`<b>⟳ ${sa.name} — MARKET ANALYSIS STARTED</b><div class="task-list"><div><b>Actions Executing (Parallel):</b></div><div class="act">▸ Cultural Analysis: Assessing regional adoption factors, cultural dynamics, local market nuances</div><div class="act">▸ PG Market Analysis: Mapping physician group density, coverage gaps, saturation analysis</div><div class="act">▸ HH Market Analysis: Identifying all ${sa.totalHHs} home health agencies in metro area</div><div style="margin-top:4px"><b>Expected Duration:</b> Cultural ~3 weeks, PG ~4 weeks, HH varies by agency count</div><div><span class="outcome pending">STATUS: All 3 sub-workflows running</span></div></div>`);
+        sa.wfPhase='branches';sa.wfT=0;}
+      break;
+    case 'branches':
+      if(sa.subWf.cultural===1&&sa.wfT>=3){sa.subWf.cultural=2;sa.aN.delete('cultural');sa.cN.add('cultural');}
+      if(sa.subWf.pg===1&&sa.wfT>=4){sa.subWf.pg=2;sa.aN.delete('pg_analysis');sa.cN.add('pg_analysis');}
+      if(sa.subWf.hhah===1&&sa.wfT>=3){sa.subWf.hhah=2;sa.aN.delete('hhah_analysis');sa.cN.add('hhah_analysis');
+        sa.aN.add('get_hhahs');addP(sa,'hhah_analysis','get_hhahs');
+        addNarr('workflow',`<b>${sa.name} — HH ANALYSIS COMPLETE</b><div class="task-list"><div class="pass">✓ Home Health Market Analysis: Found <b>${sa.hhs.length} agencies</b> in metro area</div><div class="act">▸ Next: Querying NPI registry for each agency — starting Task 1 (Find All Home Healths)</div><div><b>Actions:</b> Query NPI → Filter entity types → Remove duplicates → Find locations</div><div><span class="outcome success">OUTCOME: ${sa.hhs.length} agencies queued for processing</span></div></div>`);
+        sa.wfPhase='get';sa.wfT=0;}
+      break;
+    case 'get':
+      if(sa.wfT>=1){sa.aN.delete('get_hhahs');sa.cN.add('get_hhahs');sa.aN.add('npi_query');addP(sa,'get_hhahs','npi_query');
+        sa.wfPhase='loop';sa.wfCur=0;sa.wfT=0;}
+      break;
+    case 'loop':hhLoop(sa);break;
+    case 'waiting_recovery':
+      sa.hhs.filter(h=>h.blocked).forEach(h=>{
+        h.blockTick++;
+        if(rng()<V('retry_rate')){
+          h.blocked=false;h.done=true;
+          addNarr('done',`<b>✅ ${h.name} — RECOVERED</b><div class="task-list"><div class="pass">✓ Blocker "${h.blockType.replace(/_/g,' ')}" resolved after ${h.blockTick} week(s) of retry</div><div class="pass">✓ Retry succeeded (rate: ${Math.round(V('retry_rate')*100)}%)</div><div><span class="outcome success">OUTCOME: Recovered — marked complete</span></div></div>`);
+          h.blockType=null;h.blockTick=0;
+        }
+      });
+      if(sa.hhs.every(h=>h.done)&&sa.subWf.pg===2&&sa.subWf.cultural===2){
+        sa.wfPhase='complete';sa.wfT=0;
+      }
+      break;
+    case 'complete':
+      if(sa.wfT>=1){sa.status='completed';sa.done=true;S.wfRuns++;
+        const noLocs=sa.hhs.filter(h=>h.wfStep===6).length;const analyzed=sa.hhs.length-noLocs;
+        addNarr('done',`<b>✅ ${sa.name} — SA WORKFLOW COMPLETE</b><div class="task-list"><div class="pass">✓ Home Health Coverage: ${sa.hhs.length}/${sa.hhs.length} agencies processed (100%)</div><div class="pass">✓ Successfully analyzed: ${analyzed} agencies</div>${noLocs?`<div class="fail-item">✗ No locations found: ${noLocs} agencies</div>`:''}<div class="pass">✓ PG Market Analysis: Complete</div><div class="pass">✓ Cultural Market Analysis: Complete</div><div style="margin-top:4px"><span class="outcome success">OUTCOME: All SA tasks complete — ready for CS workflows</span></div></div>`);}
+      break;
+  }
+}
+function hhLoop(sa){
+  const i=sa.wfCur;
+  if(i>=sa.hhs.length){
+    ['npi_query','npi_filter','npi_dedup','find_locs','decision','search_fp','id_branches','std_addr','dedup_loc','corp_id','corp_conf','corp_dec','acct_map','acct_cont','acct_dec','partial','loop'].forEach(n=>sa.aN.delete(n));
+    ['npi_query','find_locs','loop','output'].forEach(n=>sa.cN.add(n));
+    sa.aN.add('output');addP(sa,'loop','output');
+    const anyBlocked=sa.hhs.some(h=>h.blocked);
+    if(anyBlocked){const blockedHHs=sa.hhs.filter(h=>h.blocked);sa.wfPhase='waiting_recovery';sa.wfT=0;addNarr('blocked',`<b>⏳ ${sa.name} — WAITING FOR RECOVERY</b><div class="task-list"><div>All ${sa.hhs.length} agencies attempted. <b>${blockedHHs.length}</b> still blocked:</div>${blockedHHs.map(h=>`<div class="fail-item">✗ ${h.name}: blocked at "${h.blockType.replace(/_/g,' ')}" (${h.blockTick} week(s))</div>`).join('')}<div style="margin-top:4px"><b>Recovery:</b> Retrying each week with ${Math.round(V('retry_rate')*100)}% success rate per attempt</div><div><span class="outcome fail">OUTCOME: ${blockedHHs.length} agencies require resolution before SA can complete</span></div></div>`);}
+    else{sa.wfPhase='complete';sa.wfT=0;}
+    return;
+  }
+  const h=sa.hhs[i];
+  if(h.blocked){
+    h.blockTick++;
+    if(rng()<V('retry_rate')){
+      h.blocked=false;
+      addNarr('done',`<b>✅ ${h.name} — RECOVERED</b><div class="task-list"><div class="pass">✓ Blocker "${h.blockType.replace(/_/g,' ')}" resolved after ${h.blockTick} week(s)</div><div><span class="outcome success">OUTCOME: Resuming workflow</span></div></div>`);
+      h.blockType=null;h.blockTick=0;
+    } else return;
+  }
+  if(!h.started){h.started=true;h.wfStep=1;h.stepTicks=0;sa.wfT=0;sa.aN.add('npi_query');
+    addNarr('workflow',`<b>⟳ ${sa.name} — AGENCY ${i+1}/${sa.hhs.length}: ${h.name}</b><div class="task-list"><div><b>Task 1: Find All Home Healths</b></div><div class="act">▸ Action: Query NPI registry for home health entity</div><div class="act">▸ Action: Filter to Home Health Agency entity type</div><div class="act">▸ Action: Remove duplicates → produce unique list</div><div>NPI: ${h.npi}</div><div><span class="outcome pending">STATUS: Processing started</span></div></div>`);
+  }
+  if(sa.wfT>=1){
+    sa.wfT=0;
+    const stepsToAdvance=2;
+    for(let s=0;s<stepsToAdvance&&h.wfStep<15&&!h.done;s++){
+      h.wfStep++;h.stepTicks=0;
+      const nodeMap={2:'npi_filter',3:'npi_dedup',4:'find_locs',5:'decision',7:'search_fp',8:'id_branches',9:'std_addr',10:'dedup_loc',11:'corp_id',12:'corp_conf',13:'acct_map',14:'acct_cont'};
+      const prevMap={2:'npi_query',3:'npi_filter',4:'npi_dedup',5:'find_locs',7:'decision',8:'search_fp',9:'id_branches',10:'std_addr',11:'dedup_loc',12:'corp_id',13:'corp_conf',14:'acct_map'};
+      if(h.wfStep===4&&rng()<V('p_block_data')){
+        h.blocked=true;h.blockType='data_missing';h.blockTick=0;
+        addNarr('blocked',`<b>⚠ ${h.name} — BLOCKED at Task 2: Find Locations</b><div class="task-list"><div class="fail-item">✗ Action Failed: Search source data / web for location footprint</div><div class="fail-item">✗ Reason: Missing source data — no location records found in primary databases</div><div>Condition: IF no locations → mark "no_confirmed_locations"</div><div style="margin-top:4px"><b>Recovery:</b> Will retry each week with ${Math.round(V('retry_rate')*100)}% success rate</div><div><span class="outcome fail">OUTCOME: BLOCKED — data_missing</span></div></div>`);return;
+      }
+      if(h.wfStep===11&&rng()<V('p_block_structure')){
+        h.blocked=true;h.blockType='structure_uncertain';h.blockTick=0;
+        addNarr('blocked',`<b>⚠ ${h.name} — BLOCKED at Task 3: Corporate Structure</b><div class="task-list"><div class="fail-item">✗ Action Failed: Query corporate registries for parent entity</div><div class="fail-item">✗ Reason: Corporate structure unclear — insufficient registry data</div><div>Condition: Unable to determine "Member of Parent" vs "Independent"</div><div style="margin-top:4px"><b>Recovery:</b> Will retry each week with ${Math.round(V('retry_rate')*100)}% success rate</div><div><span class="outcome fail">OUTCOME: BLOCKED — structure_uncertain</span></div></div>`);return;
+      }
+      if(h.wfStep===13&&rng()<V('p_block_contacts')){
+        h.blocked=true;h.blockType='no_contacts';h.blockTick=0;
+        addNarr('blocked',`<b>⚠ ${h.name} — BLOCKED at Task 4: Account Mapping</b><div class="task-list"><div class="fail-item">✗ Action Failed: Search LinkedIn for corporate & regional leaders</div><div class="fail-item">✗ Reason: Unable to find key contacts for account mapping</div><div>Condition: IF no contacts → mark account map "Partial"</div><div style="margin-top:4px"><b>Recovery:</b> Will retry each week with ${Math.round(V('retry_rate')*100)}% success rate</div><div><span class="outcome fail">OUTCOME: BLOCKED — no_contacts</span></div></div>`);return;
+      }
+      if(h.wfStep===5){
+        sa.aN.delete('find_locs');sa.aN.add('decision');addP(sa,'find_locs','decision');
+        if(h.locs===0){h.wfStep=6;h.done=true;sa.aN.add('no_loc');addP(sa,'decision','no_loc');
+          addNarr('blocked',`<b>${h.name} — Task 2 DECISION: No Locations</b><div class="task-list"><div class="fail-item">✗ Task 2: Find All Locations — no confirmed office locations found</div><div class="fail-item">✗ Actions completed: Searched source data, web, NPI registry — 0 results</div><div>Condition met: IF no locations → mark "no_confirmed_locations"</div><div class="fail-item">✗ Skipping Task 3 (Corporate Structure) and Task 4 (Account Mapping)</div><div><span class="outcome fail">OUTCOME: Marked no_confirmed_locations — moving to next agency</span></div></div>`);
+          setTimeout(()=>{sa.aN.delete('no_loc');sa.aN.delete('decision');},500);sa.wfCur++;sa.wfT=0;return;}
+        else{addP(sa,'decision','search_fp');}
+      } else if(h.wfStep===15){
+        h.done=true;['acct_cont','acct_dec','partial','corp_dec','corp_id','corp_conf','acct_map','decision'].forEach(n=>sa.aN.delete(n));
+        addP(sa,'acct_cont','output');
+        const corpDetail=h.corp==='Member of Parent'?'Confirmed parent org — multi-location map built.':h.corp==='Probable Affiliation'?'Probable affiliation — mapped at regional level.':h.corp==='Independent'?'No parent found — mapped at location level.':'Corporate structure unknown.';
+        addNarr('done',`<b>✅ ${h.name} — ALL TASKS COMPLETE</b><div class="task-list"><div class="pass">✓ Task 1: Find All Home Healths — NPI queried, filtered, deduplicated</div><div class="pass">✓ Task 2: Find All Locations — ${h.locs} office(s) found, addresses standardized (USPS), deduplicated</div><div class="pass">✓ Task 3: Corporate Structure — ${h.corp} (${h.conf} confidence). ${corpDetail}</div><div class="pass">✓ Task 4: Account Map — ${h.locs>2?'Key contacts identified: corporate leaders, market leaders via LinkedIn':'Contacts mapped at location level'}</div><div style="margin-top:4px"><span class="outcome success">OUTCOME: Agency fully analyzed — all 4 tasks passed</span></div></div>`);
+        sa.wfCur++;sa.wfT=0;if(sa.wfCur<sa.hhs.length){sa.aN.add('loop');addP(sa,'loop','get_hhahs');}return;
+      } else if(nodeMap[h.wfStep]){
+        if(prevMap[h.wfStep])sa.aN.delete(prevMap[h.wfStep]);sa.aN.add(nodeMap[h.wfStep]);
+        if(prevMap[h.wfStep])addP(sa,prevMap[h.wfStep],nodeMap[h.wfStep]);
+      }
+    }
+  }
+}
+function addP(sa,f,t){sa.particles.push({from:f,to:t,t:0,spd:.03+rng()*.02});}
+function addLog(type,msg){S.events.unshift({tick:S.tick,type,msg});if(S.events.length>300)S.events.length=300;}
+
+// ── CUSTOMER SUCCESS WORKFLOW ──
+const CS_PHASES=['idle','enrichment','signatures','rapport','baa','ehr','hh_identify','hh_outreach','hh_resolve','complete'];
+const CS_LABELS={idle:'Not Started',enrichment:'Persona Enrichment',signatures:'Signature Collection',rapport:'Rapport Building',baa:'BAA Handling',ehr:'EHR Access',hh_identify:'HH Identification',hh_outreach:'HH Outreach',hh_resolve:'HH Blocker Resolution',complete:'Complete'};
+const CS_NODE_MAP={enrichment:'cs_enrich',signatures:'cs_sig',rapport:'cs_rapport',baa:'cs_baa',ehr:'cs_ehr',hh_identify:'cs_hh_id',hh_outreach:'cs_hh_out',hh_resolve:'cs_hh_block',complete:'cs_done'};
+
+function processAllCS(){
+  S.sas.forEach(sa=>Object.values(CS_NODE_MAP).forEach(n=>{sa.aN.delete(n);}));
+  for(const pg of S.pgs){
+    if(pg.stage<5)continue;
+    const cs=pg.cs;const sa=S.sas[pg.saId];
+    if(cs.phase==='idle'){cs.phase='enrichment';cs.tick=S.tick;sa.aN.add('cs_trigger');sa.cN.add('cs_trigger');addNarr('workflow',`<b>⟳ CS WORKFLOW STARTED — PG #${pg.id}</b><div class="task-list"><div><b>Trigger:</b> PG moved from BOFU → Closed</div><div><b>SA:</b> ${sa.name}</div><div style="margin-top:4px"><b>CS Pipeline (6 stages):</b></div><div class="act">▸ 2.1 Persona Enrichment → 2.2 Signatures → 2.3 Rapport → 2.4 BAA → 2.5 EHR → 2.6 HH Onboarding</div><div style="margin-top:4px"><span class="outcome pending">STATUS: Starting with Persona Enrichment</span></div></div>`);}
+    if(cs.phase==='complete'){sa.cN.add('cs_done');continue;}
+    const csNode=CS_NODE_MAP[cs.phase];if(csNode)sa.aN.add(csNode);
+    const phaseIdx=CS_PHASES.indexOf(cs.phase);
+    CS_PHASES.slice(1,phaseIdx).forEach(p=>{const n=CS_NODE_MAP[p];if(n)sa.cN.add(n);});
+    if(cs.blocked){cs.blockTick++;if(rng()<V('retry_rate')){cs.blocked=false;addNarr('done',`<b>✅ PG #${pg.id} CS — RECOVERED</b><div class="task-list"><div class="pass">✓ Blocker "${cs.blockType.replace(/_/g,' ')}" resolved after ${cs.blockTick} week(s)</div><div class="pass">✓ Retry succeeded (rate: ${Math.round(V('retry_rate')*100)}%)</div><div><span class="outcome success">OUTCOME: Resuming CS workflow at ${CS_LABELS[cs.phase]}</span></div></div>`);cs.blockType=null;cs.blockTick=0;}else continue;}
+    switch(cs.phase){
+      case'enrichment':
+        if(rng()<V('cs_enrich')){cs.enrichDone=true;cs.phase='signatures';addNarr('workflow',`<b>PG #${pg.id} — CS 2.1: PERSONA ENRICHMENT</b><div class="task-list"><div class="pass">✓ Action: Identified required personas (physicians, NPPs, admin)</div><div class="pass">✓ Action: Created/enriched accounts with missing info</div><div class="pass">✓ Action: Flagged gaps for further research</div><div><span class="outcome success">OUTCOME: Enrichment complete (${Math.round(V('cs_enrich')*100)}% success rate) → Moving to Signatures</span></div></div>`);}
+        else addNarr('blocked',`<b>PG #${pg.id} — CS 2.1: PERSONA ENRICHMENT</b><div class="task-list"><div class="fail-item">✗ Action: Enrichment requires additional data gathering</div><div>Condition: Falls in ${Math.round((1-V('cs_enrich'))*100)}% requiring significant enrichment</div><div><span class="outcome fail">OUTCOME: Incomplete — retrying next week</span></div></div>`);
+        break;
+      case'signatures':
+        cs.sigAttempts++;
+        if(rng()<V('cs_sig')){cs.sigDone=true;cs.phase='rapport';addNarr('workflow',`<b>PG #${pg.id} — CS 2.2: SIGNATURE COLLECTION</b><div class="task-list"><div class="pass">✓ Action: Determined signature requirements per persona</div><div class="pass">✓ Action: Sent signature requests via platform</div><div class="pass">✓ Action: Tracked completion status</div><div>Attempt: ${cs.sigAttempts} · Condition met: ${Math.round(V('cs_sig')*100)}% complete on first attempt</div><div><span class="outcome success">OUTCOME: All signatures collected → Moving to Rapport Building</span></div></div>`);}
+        else addNarr('blocked',`<b>PG #${pg.id} — CS 2.2: SIGNATURE COLLECTION</b><div class="task-list"><div class="fail-item">✗ Action: Signatures incomplete (attempt ${cs.sigAttempts})</div><div class="act">▸ Action: Sending follow-up with mobile links</div><div>Condition: Falls in ${Math.round((1-V('cs_sig'))*100)}% requiring follow-ups</div><div><span class="outcome fail">OUTCOME: Follow-up needed — retrying next week</span></div></div>`);
+        break;
+      case'rapport':
+        if(rng()<V('cs_rapport')){cs.rapportDone=true;cs.phase='baa';addNarr('workflow',`<b>PG #${pg.id} — CS 2.3: RAPPORT BUILDING</b><div class="task-list"><div class="pass">✓ Action: Scheduled onboarding session</div><div class="pass">✓ Action: Conducted onboarding conversation</div><div class="pass">✓ Action: Captured notes and feedback</div><div>Condition met: ${Math.round(V('cs_rapport')*100)}% respond positively</div><div><span class="outcome success">OUTCOME: Rapport built successfully → Moving to BAA</span></div></div>`);}
+        else addNarr('blocked',`<b>PG #${pg.id} — CS 2.3: RAPPORT BUILDING</b><div class="task-list"><div class="fail-item">✗ Action: Additional follow-up needed</div><div>Condition: Falls in ${Math.round((1-V('cs_rapport'))*100)}% needing additional follow-up</div><div><span class="outcome fail">OUTCOME: Retrying next week</span></div></div>`);
+        break;
+      case'baa':
+        if(cs.baaRouting){cs.baaDone=true;cs.phase='ehr';cs.baaRouting=false;addNarr('done',`<b>PG #${pg.id} — CS 2.4: BAA HANDLING — APPROVED</b><div class="task-list"><div class="pass">✓ Action: BAA reviewed and signed by PG</div><div class="pass">✓ Action: Routed to HIPAA officer / CTO</div><div class="pass">✓ Action: Final approval received</div><div>Condition met: Mark onboarding complete once BAA approved</div><div><span class="outcome success">OUTCOME: BAA approved → Moving to EHR Access</span></div></div>`);}
+        else if(rng()<V('cs_baa')){cs.baaRouting=true;addNarr('workflow',`<b>PG #${pg.id} — CS 2.4: BAA HANDLING</b><div class="task-list"><div class="pass">✓ Action: BAA presented for review</div><div class="pass">✓ Action: BAA signed by PG (${Math.round(V('cs_baa')*100)}% sign promptly)</div><div class="act">▸ Action: Routing to HIPAA officer / CTO for final approval</div><div><span class="outcome pending">STATUS: Awaiting HIPAA officer approval (next week)</span></div></div>`);}
+        else{cs.blocked=true;cs.blockType='baa_followup';cs.blockTick=0;addNarr('blocked',`<b>PG #${pg.id} — CS 2.4: BAA HANDLING — BLOCKED</b><div class="task-list"><div class="fail-item">✗ Action: BAA not signed — PG has not responded</div><div>Condition: Falls in ${Math.round((1-V('cs_baa'))*100)}% requiring follow-up</div><div><span class="outcome fail">OUTCOME: BLOCKED — baa_followup. Retrying with ${Math.round(V('retry_rate')*100)}% success rate</span></div></div>`);}
+        break;
+      case'ehr':
+        if(rng()<V('cs_ehr')){cs.ehrDone=true;cs.ehrGranted=true;cs.ehrType=rng()<.5?'API':'Web';
+          cs.phase=rng()<V('cs_hh_shared')?'hh_identify':'complete';
+          addNarr('done',`<b>PG #${pg.id} — CS 2.5: EHR ACCESS — GRANTED</b><div class="task-list"><div class="pass">✓ Action: Determined access type: <b>${cs.ehrType}</b></div><div class="pass">✓ Action: Obtained EHR access permissions from PG</div><div class="pass">✓ Action: ${cs.ehrType==='API'?'API credentials received — can retrieve patient data programmatically':'Web portal access granted — manual data retrieval available'}</div>${cs.phase==='hh_identify'?`<div class="act">▸ Condition: ${Math.round(V('cs_hh_shared')*100)}% PGs have shared patients → proceeding to HH identification</div><div><span class="outcome success">OUTCOME: EHR access granted (${cs.ehrType}) → Starting HH Onboarding</span></div>`:`<div>Condition: ${Math.round((1-V('cs_hh_shared'))*100)}% no shared patients → skip HH workflow</div><div><span class="outcome success">OUTCOME: EHR access granted — no shared patients. CS complete</span></div>`}</div>`);}
+        else{cs.blocked=true;cs.blockType='ehr_denied';cs.blockTick=0;addNarr('blocked',`<b>PG #${pg.id} — CS 2.5: EHR ACCESS — DENIED</b><div class="task-list"><div class="fail-item">✗ Action: EHR access request denied by PG</div><div>Condition: Falls in ${Math.round((1-V('cs_ehr'))*100)}% that deny access</div><div class="act">▸ Follow-up: Will retry (${Math.round(V('retry_rate')*100)}% success rate)</div><div><span class="outcome fail">OUTCOME: BLOCKED — ehr_denied</span></div></div>`);}
+        break;
+      case'hh_identify':
+        {const sa2=S.sas[pg.saId];const linked=pg.linkedHHs.length;
+        cs.hhIdentified=linked;cs.phase=linked>0?'hh_outreach':'complete';
+        if(linked>0){
+          const hhNames=pg.linkedHHs.map(idx=>sa2.hhs[idx]?sa2.hhs[idx].name:'HH').join(', ');
+          addNarr('workflow',`<b>PG #${pg.id} — CS 2.6: IDENTIFY SHARED PATIENTS</b><div class="task-list"><div class="pass">✓ Action: Extracted patient data post-EHR access</div><div class="pass">✓ Action: Identified PG ↔ HH relationships via shared patients</div><div class="pass">✓ Found: <b>${linked}</b> home health(s) with shared patients</div><div>HH Agencies: ${hhNames}</div><div><span class="outcome success">OUTCOME: ${linked} HHs identified → Starting baseline outreach</span></div></div>`);
+        } else {
+          addNarr('workflow',`<b>PG #${pg.id} — CS 2.6: IDENTIFY SHARED PATIENTS</b><div class="task-list"><div class="pass">✓ Action: Extracted patient data post-EHR access</div><div>Condition: No shared patients found with any HH agencies</div><div><span class="outcome pending">OUTCOME: No shared HHs — CS workflow complete</span></div></div>`);
+        }}
+        break;
+      case'hh_outreach':
+        if(cs.hhOutreached<cs.hhIdentified){cs.hhOutreached++;
+          const roll=rng();
+          if(roll<V('cs_hh_resp')){cs.hhResponded++;
+            if(rng()<V('cs_hh_ready')){cs.hhOnboarded++;addNarr('done',`<b>PG #${pg.id} — CS 2.6.3: HH ${cs.hhOutreached} OUTREACH — READY</b><div class="task-list"><div class="pass">✓ Action: Baseline outreach sent (email/phone/fax)</div><div class="pass">✓ Action: Response received within SLA</div><div class="pass">✓ Categorized: Ready to Onboard (${Math.round(V('cs_hh_ready')*100)}% rate)</div><div>Progress: ${cs.hhOnboarded}/${cs.hhIdentified} onboarded</div><div><span class="outcome success">OUTCOME: HH ready — proceeding to onboarding</span></div></div>`);}
+            else{cs.hhBlocked++;cs.phase='hh_resolve';addNarr('blocked',`<b>PG #${pg.id} — CS 2.6.3: HH ${cs.hhOutreached} OUTREACH — BLOCKERS</b><div class="task-list"><div class="pass">✓ Action: Response received</div><div class="fail-item">✗ Categorized: Blockers present (Security/Bureaucracy/Resistance)</div><div class="act">▸ Entering CS 2.6.5: Blocker Resolution</div><div>Progress: ${cs.hhOnboarded}/${cs.hhIdentified} onboarded, ${cs.hhBlocked} blocked</div><div><span class="outcome fail">OUTCOME: Blockers detected — entering resolution</span></div></div>`);}
+          } else addNarr('workflow',`<b>PG #${pg.id} — CS 2.6.3: HH ${cs.hhOutreached} OUTREACH</b><div class="task-list"><div class="act">▸ Action: Baseline outreach sent (email/phone/fax)</div><div>Awaiting response — no reply yet this week</div><div>Progress: ${cs.hhOutreached}/${cs.hhIdentified} contacted, ${cs.hhOnboarded} onboarded</div><div><span class="outcome pending">STATUS: Awaiting response</span></div></div>`);
+        } else{cs.phase=cs.hhBlocked>0?'hh_resolve':'complete';
+          if(cs.phase==='complete')addNarr('done',`<b>PG #${pg.id} — CS 2.6: HH ONBOARDING COMPLETE</b><div class="task-list"><div class="pass">✓ All ${cs.hhIdentified} HH agencies contacted</div><div class="pass">✓ ${cs.hhOnboarded}/${cs.hhIdentified} successfully onboarded</div><div class="pass">✓ ${cs.hhResponded} responded, ${cs.hhIdentified-cs.hhResponded} no response</div><div><span class="outcome success">OUTCOME: HH outreach complete — CS workflow finished</span></div></div>`);}
+        break;
+      case'hh_resolve':
+        if(cs.hhBlocked>0&&rng()<V('cs_hh_resolve')){cs.hhBlocked--;cs.hhOnboarded++;addNarr('done',`<b>PG #${pg.id} — CS 2.6.5: BLOCKER RESOLVED</b><div class="task-list"><div class="pass">✓ Action: Blocker identified and addressed</div><div class="pass">✓ Resolution: Successfully resolved (${Math.round(V('cs_hh_resolve')*100)}% resolve rate)</div><div>Progress: ${cs.hhOnboarded}/${cs.hhIdentified} onboarded, ${cs.hhBlocked} remaining blockers</div><div><span class="outcome success">OUTCOME: HH moved to Ready to Onboard</span></div></div>`);}
+        if(cs.hhBlocked<=0){cs.phase=cs.hhOutreached<cs.hhIdentified?'hh_outreach':'complete';
+          if(cs.phase==='complete')addNarr('done',`<b>✅ PG #${pg.id} — CS WORKFLOW COMPLETE</b><div class="task-list"><div class="pass">✓ CS 2.1: Persona Enrichment — Complete</div><div class="pass">✓ CS 2.2: Signature Collection — Complete</div><div class="pass">✓ CS 2.3: Rapport Building — Complete</div><div class="pass">✓ CS 2.4: BAA Handling — Approved</div><div class="pass">✓ CS 2.5: EHR Access — Granted (${cs.ehrType||'N/A'})</div><div class="pass">✓ CS 2.6: HH Onboarding — ${cs.hhOnboarded}/${cs.hhIdentified} onboarded</div><div style="margin-top:4px"><span class="outcome success">OUTCOME: All CS tasks complete for PG #${pg.id}</span></div></div>`);}
+        break;
+    }
+  }
+}
+
+// ── RENDERING ──
+let mapC,mapX,grC,grX,wfdC,wfdX;
+function initRendering(){
+  mapC=document.getElementById('mapCanvas');mapX=mapC.getContext('2d');
+  grC=document.getElementById('growthCanvas');grX=grC.getContext('2d');
+  wfdC=document.getElementById('wfdCanvas');wfdX=wfdC.getContext('2d');
+  buildFunnel();buildVerts();buildSimToggle();buildNavSA();
+  resizeAll();window.addEventListener('resize',resizeAll);
+}
+function resizeAll(){
+  const dpr=window.devicePixelRatio||1;
+  [[mapC,'.sim-canvas-wrap'],[grC,null],[wfdC,'.wfd-graph-wrap']].forEach(([c,sel])=>{
+    const el=sel?document.querySelector(sel):c.parentElement;if(!el)return;
+    const r=el.getBoundingClientRect();if(r.width<1||r.height<1)return;
+    c.width=r.width*dpr;c.height=r.height*dpr;c.style.width=r.width+'px';c.style.height=r.height+'px';
+    c.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+  });
+}
+function buildNavSA(){
+  const el=document.getElementById('navSAList');
+  el.innerHTML=SA_DEFS.map((d,i)=>`<div class="nav-item" data-sa="${i}" onclick="selSA=${i};simView='sa${i}';buildSimToggle();renderAll()"><span class="nav-icon">${i===0?'🏙':'🌆'}</span>${d.abbr}<span class="nav-badge" id="navSA${i}">○</span></div>`).join('');
+}
+function buildSimToggle(){
+  const box=document.getElementById('simToggle');
+  box.innerHTML=`<div class="sim-btn ${simView==='national'?'on':''}" data-v="national">🇺🇸 National</div>`;
+  SA_DEFS.forEach((d,i)=>{box.innerHTML+=`<div class="sim-btn ${simView==='sa'+i?'on':''}" data-v="sa${i}">${d.abbr}</div>`;});
+  box.querySelectorAll('.sim-btn').forEach(b=>b.addEventListener('click',()=>{
+    simView=b.dataset.v;box.querySelectorAll('.sim-btn').forEach(x=>x.classList.toggle('on',x.dataset.v===simView));setTimeout(resizeAll,20);
+  }));
+}
+function buildFunnel(){
+  const box=document.getElementById('funnelBox');box.innerHTML='';
+  FUNNELS.forEach((f,i)=>{box.innerHTML+=`<div class="fn-row"><div class="fn-lbl">${f.icon} ${f.label}</div><div class="fn-bar" id="fb${i}" style="background:${f.color};width:${FWIDTHS[i]*100}%"><span id="fc${i}">0</span></div></div>`;});
+}
+function updateFunnel(VS){
+  VS=VS||S;const c=Array(6).fill(0);VS.pgs.forEach(p=>c[p.stage]++);
+  for(let i=0;i<6;i++){document.getElementById('fc'+i).textContent=c[i];document.getElementById('fb'+i).style.width=Math.max(FWIDTHS[i]*15,FWIDTHS[i]*(c[i]>0?100:15))+'%';}
+}
+function buildVerts(){
+  const box=document.getElementById('vertBox');box.innerHTML='';
+  VERTS.forEach(v=>{box.innerHTML+=`<div class="vert-row"><div class="vert-dot" style="background:${v.color}"></div><div class="vert-name">${v.name}</div><div class="vert-count" id="vc_${v.key}" style="color:${v.color}">0</div></div>`;});
+}
+function updateVerts(VS){
+  VS=VS||S;const c={};VERTS.forEach(v=>c[v.key]=0);VS.pgs.forEach(p=>{if(p.stage>=1)c[p.vert]++;});
+  VERTS.forEach(v=>{const el=document.getElementById('vc_'+v.key);if(el)el.textContent=c[v.key];});
+}
+function updateSummaryBar(VS){
+  VS=VS||S;const pgC=Array(6).fill(0);VS.pgs.forEach(p=>pgC[p.stage]++);
+  let hhD=0,hhA=0,hhP=0,hhT=0,hhB=0;
+  VS.sas.forEach(sa=>sa.hhs.forEach(h=>{hhT++;if(h.done)hhD++;else if(h.blocked)hhB++;else if(h.started)hhA++;else hhP++;}));
+  document.getElementById('summaryBar').innerHTML=`
+    <div class="sum-group"><span class="sum-label">PGs [Doctor Groups]</span>${FUNNELS.map((f,i)=>`<span class="sum-chip" style="border-color:${f.color}30">${f.icon} <span class="cnt" style="color:${f.color}">${pgC[i]}</span></span>`).join('')}</div>
+    <div class="sum-divider"></div>
+    <div class="sum-group"><span class="sum-label">HH [Home Health]</span>
+      <span class="sum-chip"><span class="cnt">${hhT}</span> Total</span>
+      <span class="sum-chip" style="border-color:rgba(5,150,105,.3)"><span class="cnt" style="color:var(--g)">${hhD}</span> Done</span>
+      <span class="sum-chip" style="border-color:rgba(8,145,178,.3)"><span class="cnt" style="color:var(--cy)">${hhA}</span> Active</span>
+      ${hhB?`<span class="sum-chip" style="border-color:rgba(214,51,108,.3)"><span class="cnt" style="color:var(--pk)">${hhB}</span> Stuck</span>`:''}
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-group"><span class="sum-label">SAs [Service Areas]</span>${VS.sas.map(sa=>{
+      const col=sa.status==='completed'?'var(--g)':sa.status==='in_progress'?'var(--cy)':'var(--tm)';
+      const ic=sa.status==='completed'?'✅':sa.status==='in_progress'?'⟳':'○';
+      return`<span class="sum-sa" style="color:${col}">${ic} ${sa.abbr}</span>`;
+    }).join('')}</div>`;
+}
+
+// ── Draw helpers ──
+function drawCross(ctx,x,y,sz,color,alpha){
+  ctx.globalAlpha=alpha;ctx.fillStyle=color;const t=Math.max(sz*.35,1.5);
+  ctx.fillRect(x-sz,y-t/2,sz*2,t);ctx.fillRect(x-t/2,y-sz,t,sz*2);ctx.globalAlpha=1;
+}
+function drawHouse(ctx,x,y,sz,color,alpha){
+  ctx.globalAlpha=alpha;ctx.fillStyle=color;ctx.beginPath();
+  ctx.moveTo(x,y-sz);ctx.lineTo(x+sz,y-sz*.3);ctx.lineTo(x+sz*.6,y-sz*.3);
+  ctx.lineTo(x+sz*.6,y+sz*.5);ctx.lineTo(x-sz*.6,y+sz*.5);
+  ctx.lineTo(x-sz*.6,y-sz*.3);ctx.lineTo(x-sz,y-sz*.3);ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+}
+function drawPolygon(ctx,points,ox,oy,w,h,fillStyle,strokeStyle,lineWidth){
+  ctx.beginPath();
+  points.forEach((p,i)=>{const x=ox+p[0]*w,y=oy+p[1]*h;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.closePath();
+  if(fillStyle){ctx.fillStyle=fillStyle;ctx.fill();}
+  if(strokeStyle){ctx.strokeStyle=strokeStyle;ctx.lineWidth=lineWidth||1.5;ctx.stroke();}
+}
+
+function renderMap(VS){
+  VS=VS||S;const ctx=mapX,dpr=window.devicePixelRatio||1;
+  const W=mapC.width/dpr,H=mapC.height/dpr;
+  ctx.clearRect(0,0,W,H);
+  const vColors={chc:'#2563eb',house:'#ea580c',va:'#059669',indep:'#d6336c',other:'#7c3aed'};
+  const isSingle=simView!=='national';
+
+  if(!isSingle){
+    // ── National view: draw US outline with MSAs placed geographically ──
+    const mapPad=40;const mw=W-mapPad*2;const mh=H-mapPad*2;
+    // US outline
+    drawPolygon(ctx,US_OUTLINE,mapPad,mapPad,mw,mh,'rgba(37,99,235,.03)','rgba(37,99,235,.15)',2);
+
+    // Title
+    ctx.font='bold 14px Inter,system-ui';ctx.fillStyle='#1a2332';ctx.textAlign='center';
+    ctx.fillText('United States — Doctor Group Recruitment Map',W/2,24);
+
+    // Draw each SA at its geographic position
+    VS.sas.forEach((sa,si)=>{
+      const pos=SA_POS[si];
+      const cx=mapPad+pos.x*mw;
+      const cy=mapPad+pos.y*mh;
+      const radius=Math.min(mw*.14,mh*.18);
+
+      // MSA shape outline
+      const shape=MSA_SHAPES[sa.abbr];
+      if(shape){
+        drawPolygon(ctx,shape,cx-radius,cy-radius,radius*2,radius*2,
+          sa.status==='completed'?'rgba(5,150,105,.06)':sa.status==='in_progress'?'rgba(8,145,178,.06)':'rgba(100,116,139,.03)',
+          sa.status==='completed'?'rgba(5,150,105,.4)':sa.status==='in_progress'?'rgba(8,145,178,.35)':'rgba(100,116,139,.15)',2);
+      }
+
+      // SA label
+      ctx.font='bold 13px Inter,system-ui';
+      ctx.fillStyle=sa.status==='completed'?'#059669':sa.status==='in_progress'?'#0891b2':'#3d4f65';
+      ctx.textAlign='center';ctx.fillText(sa.abbr,cx,cy-radius-12);
+      ctx.font='11px Inter,system-ui';ctx.fillStyle='#8494a7';
+      ctx.fillText(`${(sa.pop/1e6).toFixed(1)}M · ${sa.totalPGs} PGs · ${sa.totalHHs} HHs`,cx,cy-radius+2);
+
+      const saPGs=VS.pgs.filter(p=>p.saId===sa.id);
+      // Draw PGs in rings
+      for(let stg=0;stg<6;stg++){
+        const group=saPGs.filter(p=>p.stage===stg);
+        if(!group.length)continue;
+        const ringR=radius*(.15+stg*.14);
+        ctx.beginPath();ctx.arc(cx,cy,ringR,0,Math.PI*2);
+        ctx.strokeStyle=FUNNELS[stg].color+'30';ctx.lineWidth=1;ctx.stroke();
+        const sz=stg===0?3:stg<4?4:stg<5?6:7;
+        group.forEach((pg,gi)=>{
+          const ang=(gi/Math.max(group.length,1))*Math.PI*2-Math.PI/2;
+          const px=cx+Math.cos(ang)*ringR,py=cy+Math.sin(ang)*ringR;
+          drawCross(ctx,px,py,sz,STAGE_COLORS[stg],stg===0?.25:.6);
+        });
+      }
+      // HHAHs
+      sa.hhs.forEach((hh,hi)=>{
+        const ang=(hi/sa.hhs.length)*Math.PI*2-Math.PI/4;
+        const hr=radius*.88;
+        const hx=cx+Math.cos(ang)*hr,hy=cy+Math.sin(ang)*hr;
+        const col=hh.done?(hh.wfStep===6?'#d6336c':'#059669'):hh.started?'#0891b2':'#94a3b8';
+        drawHouse(ctx,hx,hy,7,col,hh.done?.9:hh.started?.8:.35);
+      });
+    });
+
+    // Legend
+    const ly=H-18;ctx.font='11px Inter,system-ui';ctx.textAlign='left';let lx=16;
+    drawCross(ctx,lx,ly,5,'#3d4f65',1);ctx.fillStyle='#3d4f65';ctx.fillText('Physician Group',lx+12,ly+4);lx+=120;
+    drawHouse(ctx,lx,ly,6,'#3d4f65',.7);ctx.fillStyle='#3d4f65';ctx.fillText('Home Health Agency',lx+12,ly+4);
+  } else {
+    // ── Single MSA view ──
+    const saIdx=parseInt(simView.slice(2));
+    const sa=VS.sas[saIdx];if(!sa)return;
+    const cx=W*.5,cy=H*.5;
+    const radius=Math.min(W*.38,H*.42);
+    const shape=MSA_SHAPES[sa.abbr];
+
+    // Draw MSA shape
+    if(shape){
+      drawPolygon(ctx,shape,cx-radius,cy-radius,radius*2,radius*2,
+        sa.status==='completed'?'rgba(5,150,105,.05)':sa.status==='in_progress'?'rgba(8,145,178,.05)':'rgba(100,116,139,.02)',
+        sa.status==='completed'?'rgba(5,150,105,.3)':sa.status==='in_progress'?'rgba(8,145,178,.25)':'rgba(100,116,139,.12)',2);
+    }
+
+    // SA label
+    ctx.font='bold 16px Inter,system-ui';
+    ctx.fillStyle=sa.status==='completed'?'#059669':sa.status==='in_progress'?'#0891b2':'#3d4f65';
+    ctx.textAlign='center';ctx.fillText(sa.name,cx,cy-radius-20);
+    ctx.font='12px Inter,system-ui';ctx.fillStyle='#8494a7';
+    ctx.fillText(`${(sa.pop/1e6).toFixed(1)}M pop · ${sa.totalPGs} PGs · ${sa.totalHHs} Home Healths`,cx,cy-radius-4);
+
+    const saPGs=VS.pgs.filter(p=>p.saId===sa.id);
+    const stageGroups=[[],[],[],[],[],[]];
+    saPGs.forEach(pg=>stageGroups[pg.stage].push(pg));
+
+    // Stage rings
+    for(let stg=0;stg<6;stg++){
+      const ringR=radius*(.12+stg*.15);
+      ctx.beginPath();ctx.arc(cx,cy,ringR,0,Math.PI*2);
+      ctx.strokeStyle=FUNNELS[stg].color+'40';ctx.lineWidth=1.5;ctx.stroke();
+      if(stg<5){
+        const nextR=radius*(.12+(stg+1)*.15);
+        ctx.beginPath();ctx.arc(cx,cy,ringR,0,Math.PI*2);ctx.arc(cx,cy,nextR,0,Math.PI*2,true);
+        ctx.fillStyle=FUNNELS[stg].color+'08';ctx.fill();
+      }
+      ctx.font='bold 10px Inter,system-ui';ctx.fillStyle=FUNNELS[stg].color;ctx.textAlign='left';
+      ctx.fillText(FUNNELS[stg].label,cx+ringR+8,cy+4);
+    }
+
+    // HHAHs
+    const hhPos=[];
+    sa.hhs.forEach((hh,hi)=>{
+      const ang=(hi/sa.hhs.length)*Math.PI*2-Math.PI/4;
+      const hr=radius*.92;
+      const hx=cx+Math.cos(ang)*hr,hy=cy+Math.sin(ang)*hr;
+      hhPos.push({x:hx,y:hy});
+      const sz=10;
+      const col=hh.done?(hh.wfStep===6?'#d6336c':'#059669'):hh.started?'#0891b2':'#94a3b8';
+      drawHouse(ctx,hx,hy,sz,col,hh.done?.9:hh.started?.8:.35);
+      ctx.font='9px Inter,system-ui';ctx.fillStyle='#3d4f65';ctx.textAlign='center';
+      ctx.fillText(hh.name.replace(' Home Health','').replace(' HH',''),hx,hy+sz+10);
+      if(hh.started&&!hh.done){
+        ctx.fillStyle='#0891b2';ctx.font='bold 8px Inter,system-ui';
+        ctx.fillText('⟳ '+STEP_NAMES[hh.wfStep],hx,hy+sz+20);
+      }
+    });
+
+    // PGs with connections
+    stageGroups.forEach((group,stg)=>{
+      if(!group.length)return;
+      const ringR=radius*(.12+stg*.15);
+      const sz=stg===0?4:stg<4?6:stg<5?8:10;
+      group.forEach((pg,gi)=>{
+        const ang=(gi/Math.max(group.length,1))*Math.PI*2-Math.PI/2;
+        const px=cx+Math.cos(ang)*ringR,py=cy+Math.sin(ang)*ringR;
+        if(stg>=2&&pg.linkedHHs){
+          ctx.setLineDash([2,3]);ctx.lineWidth=.8;
+          pg.linkedHHs.forEach(idx=>{
+            if(idx<hhPos.length){ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(hhPos[idx].x,hhPos[idx].y);
+              ctx.strokeStyle=(vColors[pg.vert]||'#7c3aed')+'25';ctx.stroke();}
+          });ctx.setLineDash([]);
+        }
+        if(stg>=4){ctx.beginPath();ctx.arc(px,py,sz+4,0,Math.PI*2);ctx.fillStyle=stg===5?'rgba(5,150,105,.12)':'rgba(232,89,12,.12)';ctx.fill();}
+        drawCross(ctx,px,py,sz,STAGE_COLORS[stg],stg===0?.3:stg===1?.45:stg<4?.7:stg<5?.9:1);
+        if(stg>=2){ctx.font='8px Inter,system-ui';ctx.fillStyle='#64748b';ctx.textAlign='center';ctx.fillText('PG'+pg.id,px,py-sz-4);}
+      });
+    });
+
+    // Legend
+    const ly=H-18;ctx.font='11px Inter,system-ui';ctx.textAlign='left';let lx=16;
+    drawCross(ctx,lx,ly,5,'#3d4f65',1);ctx.fillStyle='#3d4f65';ctx.fillText('Physician Group',lx+12,ly+4);lx+=130;
+    drawHouse(ctx,lx,ly,6,'#3d4f65',.7);ctx.fillStyle='#3d4f65';ctx.fillText('Home Health Agency',lx+12,ly+4);
+  }
+}
+
+function renderGrowth(VS){
+  VS=VS||S;const ctx=grX,dpr=window.devicePixelRatio||1,W=grC.width/dpr,H=grC.height/dpr;
+  ctx.clearRect(0,0,W,H);if(VS.growthHist.length<2)return;
+  const data=VS.growthHist,max=Math.max(1,...data.map(d=>FUNNELS.reduce((s,f)=>s+d[f.key],0)));
+  const keys=['closed','bofu','mofu','tofu','target','prospect'],cols=['#059669','#ea580c','#2563eb','#6366f1','#64748b','#94a3b8'];
+  keys.forEach((k,ki)=>{ctx.beginPath();ctx.moveTo(0,H);
+    data.forEach((d,i)=>{const x=(i/(data.length-1))*W;let cm=0;for(let j=0;j<=ki;j++)cm+=d[keys[j]];ctx.lineTo(x,H-(cm/max)*H);});
+    ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=cols[ki]+'30';ctx.fill();});
+}
+
+function renderNarration(focusWeek){
+  if(!narrDirty&&lastNarrCount===S.narration.length)return;
+  const el=document.getElementById('narrPanel');
+  const isLive=viewWeek<0;
+  const fw=typeof focusWeek==='number'?focusWeek:S.tick;
+  const byWeek={};
+  S.narration.forEach(n=>{if(!byWeek[n.tick])byWeek[n.tick]=[];byWeek[n.tick].push(n);});
+  const weeks=Object.keys(byWeek).map(Number).sort((a,b)=>b-a);
+  el.innerHTML=`<div class="narr-title">📋 ${isLive?'Activity Log [What happened each week] — Week 0 to '+S.tick:'Week '+fw+' Detail'}</div>`+
+    weeks.map(w=>{
+      const entries=byWeek[w];
+      const isFocused=w===fw;
+      return entries.map(n=>
+        `<div class="narr-entry ${n.type}" style="${isFocused?'border-width:4px;':''}${!isLive&&w!==fw?'opacity:.3;':''}" ${isFocused?'data-focused="1"':''}><span class="wk">Week ${w}</span>${n.text}</div>`
+      ).join('');
+    }).join('');
+  const focused=el.querySelector('[data-focused="1"]');
+  if(focused&&!isLive){focused.scrollIntoView({block:'start',behavior:'instant'});el.scrollTop-=30;}
+  else if(isLive)el.scrollTop=0;
+  narrDirty=false;lastNarrCount=S.narration.length;
+}
+
+function updateWFChips(VS){
+  VS=VS||S;let done=0,active=0,pending=0;
+  const sa=VS.sas[selSA];if(!sa)return;
+  sa.hhs.forEach(h=>{if(h.done)done++;else if(h.started)active++;else pending++;});
+  document.getElementById('wfChips').innerHTML=`
+    <div style="font-size:12px;font-weight:600;color:var(--td);margin-bottom:6px">${sa.name}</div>
+    <span class="wf-chip-sm"><span class="dot" style="background:var(--g)"></span>${done} Finished</span>
+    <span class="wf-chip-sm"><span class="dot" style="background:var(--cy)"></span>${active} Working</span>
+    <span class="wf-chip-sm"><span class="dot" style="background:var(--tm)"></span>${pending} Waiting</span>
+    <div style="font-size:11px;color:var(--tm);margin-top:6px">Status: ${sa.status==='completed'?'✅ All done':sa.status==='in_progress'?'⟳ Working on it':'○ Not started yet'}</div>`;
+}
+
+// ── WF Graph (shared) ──
+function renderWFGraph(ctx,canvas,sa){
+  const dpr=window.devicePixelRatio||1,W=canvas.width/dpr,H=canvas.height/dpr;
+  if(W<10||H<10)return;ctx.clearRect(0,0,W,H);
+  const pad=14,gw=W-pad*2,gh=H-pad*2,tx=n=>pad+n*gw,ty=n=>pad+n*gh;
+  WARROWS.forEach(a=>{
+    const fn=WN[a.f],tn=WN[a.t];if(!fn||!tn)return;
+    const fx=tx(fn.x+fn.w/2),fy=ty(fn.y+fn.h/2),ex=tx(tn.x+tn.w/2),ey=ty(tn.y+tn.h/2);
+    ctx.beginPath();ctx.strokeStyle=sa.cN.has(a.f)?'rgba(5,150,105,.3)':sa.aN.has(a.f)?'rgba(8,145,178,.5)':'rgba(100,116,139,.12)';
+    ctx.lineWidth=1.2;if(a.style==='dashed')ctx.setLineDash([3,3]);else ctx.setLineDash([]);
+    if(a.curve==='up'){const m=Math.min(fy,ey)-12;ctx.moveTo(fx,fy);ctx.quadraticCurveTo(fx,m,ex,ey);}
+    else if(a.curve==='left-up'){ctx.moveTo(fx,fy);ctx.lineTo(tx(tn.x),fy);ctx.lineTo(tx(tn.x),ey);}
+    else if(a.curve==='up-right'){ctx.moveTo(fx,fy);ctx.lineTo(fx,ey);ctx.lineTo(ex,ey);}
+    else{ctx.moveTo(fx,fy);ctx.lineTo(ex,ey);}
+    ctx.stroke();ctx.setLineDash([]);
+    const ang=Math.atan2(ey-fy,ex-fx);ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-5*Math.cos(ang-.3),ey-5*Math.sin(ang-.3));ctx.lineTo(ex-5*Math.cos(ang+.3),ey-5*Math.sin(ang+.3));ctx.closePath();ctx.fillStyle=ctx.strokeStyle;ctx.fill();
+    if(a.label){ctx.font='bold 8px Inter,system-ui';ctx.fillStyle=a.label==='No'||a.label==='None'?'rgba(214,51,108,.6)':'rgba(5,150,105,.6)';ctx.textAlign='center';ctx.fillText(a.label,(fx+ex)/2,(fy+ey)/2-4);}
+  });
+  sa.particles.forEach(p=>{
+    const fn=WN[p.from],tn=WN[p.to];if(!fn||!tn)return;
+    const px=tx(fn.x+fn.w/2)+(tx(tn.x+tn.w/2)-tx(fn.x+fn.w/2))*p.t;
+    const py=ty(fn.y+fn.h/2)+(ty(tn.y+tn.h/2)-ty(fn.y+fn.h/2))*p.t;
+    ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fillStyle=`rgba(8,145,178,${.3+.5*Math.sin(p.t*Math.PI)})`;ctx.fill();
+  });
+  Object.entries(WN).forEach(([id,n])=>{
+    const x=tx(n.x),y=ty(n.y),w=n.w*gw,h=n.h*gh;
+    const act=sa.aN.has(id),dn=sa.cN.has(id);
+    if(act){ctx.shadowColor=n.color;ctx.shadowBlur=10;}
+    ctx.beginPath();
+    if(n.shape==='diamond'){const cx2=x+w/2,cy2=y+h/2;ctx.moveTo(cx2,y);ctx.lineTo(x+w,cy2);ctx.lineTo(cx2,y+h);ctx.lineTo(x,cy2);ctx.closePath();}
+    else if(n.shape==='cylinder'){const ry=3;rRect(ctx,x,y+ry,w,h-ry*2,4);ctx.moveTo(x,y+ry);ctx.ellipse(x+w/2,y+ry,w/2,ry,0,Math.PI,0);ctx.moveTo(x+w,y+h-ry);ctx.ellipse(x+w/2,y+h-ry,w/2,ry,0,0,Math.PI);}
+    else rRect(ctx,x,y,w,h,n.shape==='dashed'||n.shape==='rect-pink'?4:6);
+    ctx.fillStyle=dn?'rgba(5,150,105,.05)':act?n.bg.replace(/[\d.]+\)$/,'.15)'):n.bg;ctx.fill();
+    ctx.strokeStyle=dn?'rgba(5,150,105,.4)':act?n.color:'rgba(100,116,139,.15)';ctx.lineWidth=act?2:1;
+    if(n.shape==='dashed')ctx.setLineDash([4,2]);ctx.stroke();ctx.setLineDash([]);
+    ctx.shadowColor='transparent';ctx.shadowBlur=0;
+    ctx.fillStyle=dn?'#059669':act?n.color:'#8494a7';ctx.font=(act?'bold ':'')+'8px Inter,system-ui';ctx.textAlign='center';
+    n.label.split('\n').forEach((l,li,a)=>ctx.fillText(l,x+w/2,y+h/2-(a.length-1)*4.5+li*10));
+    if(dn){ctx.fillStyle='#059669';ctx.font='bold 9px system-ui';ctx.fillText('✓',x+w-5,y+7);}
+  });
+  // Phase labels
+  ctx.setLineDash([5,5]);ctx.strokeStyle='rgba(100,116,139,.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad,ty(.50));ctx.lineTo(gw+pad,ty(.50));ctx.stroke();ctx.setLineDash([]);
+  ctx.font='bold 9px Inter,system-ui';ctx.fillStyle='#ea580c';ctx.textAlign='left';
+  ctx.fillText('PHASE 1: Research [studying the market — home health agencies, doctor groups, local culture]',pad+4,ty(.01));
+  ctx.fillStyle='#059669';
+  ctx.fillText('PHASE 2: Onboarding [getting new partners set up and connected]',pad+4,ty(.53));
+}
+function rRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+
+function getHHStatus(h){
+  if(h.done)return h.wfStep===6?{cls:'no-locs',label:'No Locs',icon:'✗'}:{cls:'done',label:'Done',icon:'✓'};
+  if(h.blocked)return{cls:'stuck',label:'Blocked',icon:'⊘'};
+  if(h.started)return{cls:'active',label:'Active',icon:'▸'};
+  return{cls:'pending',label:'Pending',icon:'○'};
+}
+
+// ── WFD: Workflow Detail with expandable task cards ──
+let expandedTasks=new Set();
+function renderWFDetail(VS){
+  VS=VS||S;const sa=VS.sas[selSA];if(!sa)return;
+  document.getElementById('wfdSaCards').innerHTML=VS.sas.map(s=>{
+    const hd=s.hhs.filter(h=>h.done).length,pct=s.hhs.length?Math.round(hd/s.hhs.length*100):0;
+    const col=s.status==='completed'?'var(--g)':s.status==='in_progress'?'var(--cy)':'var(--tm)';
+    return`<div class="wfd-sa-card" onclick="selSA=${s.id}" style="${s.id===selSA?'border-color:var(--cy)':''}"><div class="sa-name">${s.name}</div><div style="font-size:12px;color:var(--td)">${hd}/${s.hhs.length} finished · <span style="color:${col}">${s.status==='completed'?'✅ All done':s.status==='in_progress'?'⟳ Working on it':'○ Not started yet'}</span></div><div class="sa-prog-bar"><div class="sa-prog-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
+  }).join('');
+  let done=0,active=0,pending=0;
+  sa.hhs.forEach(h=>{const st=getHHStatus(h);if(st.cls==='done'||st.cls==='no-locs')done++;else if(st.cls==='active'||st.cls==='stuck')active++;else pending++;});
+  document.getElementById('wfdKpi').innerHTML=`
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--cy)">${active}</div><div class="kl">Working Now</div></div>
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--g)">${done}</div><div class="kl">Finished</div></div>
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--tm)">${pending}</div><div class="kl">Waiting</div></div>`;
+  const taskCounts=[0,0,0,0];
+  sa.hhs.forEach(h=>{if(h.started&&!h.done)TASK_STEP_RANGES.forEach((r,ti)=>{if(h.wfStep>=r.min&&h.wfStep<=r.max)taskCounts[ti]++;});});
+  document.getElementById('wfdInstChips').innerHTML=TASK_STEP_RANGES.map((r,ti)=>
+    `<span class="wfd-inst-chip" style="${taskCounts[ti]?'border-color:var(--cy);color:var(--cy)':''}">${r.name}: <b>${taskCounts[ti]}</b></span>`).join('');
+  const rows=sa.hhs.filter(h=>h.started);
+  document.getElementById('wfdTbody').innerHTML=(rows.length?rows:sa.hhs.slice(0,5)).map(h=>{
+    const st=getHHStatus(h);
+    return`<tr><td style="font-weight:600;color:var(--t)">${h.name.replace(' Home Health','')}</td><td>${h.started?STEP_NAMES[h.wfStep]:'—'}</td><td><span class="status-badge ${st.cls}">${st.icon} ${st.label}</span></td><td style="font-variant-numeric:tabular-nums" title="Time spent on current step">${h.started?(h.done?h.totalTicks+' weeks total':h.stepTicks+' weeks so far'):'—'}</td></tr>`;
+  }).join('');
+
+  const curHH=sa.wfCur>=0&&sa.wfCur<sa.hhs.length?sa.hhs[sa.wfCur]:null;
+  const step=curHH?curHH.wfStep:0;
+  const taskRanges=[{min:1,max:3},{min:4,max:10},{min:11,max:12},{min:13,max:15}];
+  const csPhaseOrder=['enrichment','signatures','rapport','baa','ehr','hh_identify'];
+  const csPGs=VS.pgs.filter(p=>p.saId===sa.id&&p.stage>=5&&p.cs.phase!=='idle');
+  const activeCS=csPGs.length?csPGs.find(p=>p.cs.phase!=='complete')||csPGs[0]:null;
+  const csIdx=activeCS?csPhaseOrder.indexOf(activeCS.cs.phase):-1;
+
+  // Build expandable task cards
+  let taskHTML='';
+  // SA tasks
+  TASKS_DEF.slice(0,4).forEach((task,ti)=>{
+    const range=taskRanges[ti],isActive=step>=range.min&&step<=range.max,isDone=step>range.max;
+    const cls=isActive?'active':isDone?'done':'';
+    const icon=isDone?'<span style="color:var(--g)">✓</span>':isActive?'<span style="color:var(--cy)">▸</span>':'<span style="color:var(--tm)">○</span>';
+    const isExpanded=expandedTasks.has('sa_'+ti)||isActive;
+    const doneCount=task.items.filter((_,ii)=>step>range.min+ii).length;
+    const summary=isDone?`${task.items.length}/${task.items.length} finished`:isActive?`${doneCount}/${task.items.length} working on it`:`0/${task.items.length} not started`;
+    taskHTML+=`<div class="task-card ${cls} ${isExpanded?'expanded':''}" data-task-id="sa_${ti}">
+      <div class="task-header" onclick="toggleTask('sa_${ti}')">
+        <div class="task-name">${icon} ${task.name}</div>
+        <span class="task-summary">${summary}</span>
+        <span class="task-chevron">▶</span>
+      </div>
+      <div class="task-body"><div class="task-body-inner">
+        ${task.items.map((it,ii)=>{const d=step>range.min+ii,a=step===range.min+ii;return`<div class="task-item ${d?'done':a?'active':''}"><span class="item-icon">${d?'✓':a?'▸':'·'}</span>${it}</div>`;}).join('')}
+        ${task.conds.length?'<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--b)">'+task.conds.map(c=>`<div class="task-cond ${c.type}"><span class="item-icon">${c.type==='yes'?'✓':'✗'}</span>${c.text}</div>`).join('')+'</div>':''}
+      </div></div></div>`;
+  });
+  // CS tasks
+  TASKS_DEF.slice(4).forEach((task,ti)=>{
+    const isDone=csIdx>ti||(!activeCS&&csPGs.some(p=>p.cs.phase==='complete'));
+    const isActive=csIdx===ti;
+    const cls=isActive?'active':isDone?'done':'';
+    const icon=isDone?'<span style="color:var(--g)">✓</span>':isActive?'<span style="color:var(--cy)">▸</span>':'<span style="color:var(--tm)">○</span>';
+    const isExpanded=expandedTasks.has('cs_'+ti)||isActive;
+    const summary=isDone?'Finished':isActive?'Working on it':'Not started';
+    taskHTML+=`<div class="task-card ${cls} ${isExpanded?'expanded':''}" data-task-id="cs_${ti}">
+      <div class="task-header" onclick="toggleTask('cs_${ti}')">
+        <div class="task-name">${icon} ${task.name}</div>
+        <span class="task-summary">${summary}</span>
+        <span class="task-chevron">▶</span>
+      </div>
+      <div class="task-body"><div class="task-body-inner">
+        ${task.items.map(it=>`<div class="task-item ${isDone?'done':isActive?'active':''}"><span class="item-icon">${isDone?'✓':isActive?'▸':'·'}</span>${it}</div>`).join('')}
+        ${task.conds.length?'<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--b)">'+task.conds.map(c=>`<div class="task-cond ${c.type}"><span class="item-icon">${c.type==='yes'?'✓':'✗'}</span>${c.text}</div>`).join('')+'</div>':''}
+      </div></div></div>`;
+  });
+  document.getElementById('wfdTaskPanel').innerHTML=taskHTML;
+}
+function toggleTask(id){
+  if(expandedTasks.has(id))expandedTasks.delete(id);else expandedTasks.add(id);
+  renderWFDetail();
+}
+
+// ── ORCHESTRATOR ──
+function renderOrchestrator(VS){
+  VS=VS||S;
+  const instances=[];
+  VS.sas.forEach(sa=>sa.hhs.forEach((h,hi)=>{
+    const st=getHHStatus(h);
+    instances.push({id:`SA-${sa.abbr}-HH${hi+1}`,type:'SA: Home Health',entity:h.name.replace(' Home Health',''),action:h.started?STEP_NAMES[h.wfStep]:'—',
+      status:st.cls,statusLabel:st.label,statusIcon:st.icon,time:h.started?(h.done?h.totalTicks:h.stepTicks):0,
+      bottleneck:h.blocked?h.blockType:''});
+  }));
+  VS.pgs.forEach(pg=>{
+    if(pg.stage<5)return;
+    const cs=pg.cs;if(cs.phase==='idle')return;
+    const isDone=cs.phase==='complete';const isBlocked=cs.blocked;
+    const cls=isDone?'done':isBlocked?'stuck':'active';
+    const label=isDone?'Done':isBlocked?'Blocked':'Active';
+    const icon=isDone?'✓':isBlocked?'⊘':'▸';
+    instances.push({id:`CS-PG${pg.id}`,type:'CS: PG Onboarding',entity:`PG #${pg.id}`,action:CS_LABELS[cs.phase]||cs.phase,
+      status:cls,statusLabel:label,statusIcon:icon,time:S.tick-cs.tick,bottleneck:isBlocked?cs.blockType:''});
+    if(cs.hhPhase!=='idle'&&cs.hhIdentified>0){
+      instances.push({id:`CS-PG${pg.id}-HH`,type:'CS: HH Outreach',entity:`PG #${pg.id} HHs`,
+        action:`${cs.hhOnboarded}/${cs.hhIdentified} onboarded`,
+        status:cs.hhDone||cs.phase==='complete'?'done':cs.hhBlocked>0?'stuck':'active',
+        statusLabel:cs.hhDone||cs.phase==='complete'?'Done':cs.hhBlocked>0?'Blocked':'Active',
+        statusIcon:cs.hhDone||cs.phase==='complete'?'✓':cs.hhBlocked>0?'⊘':'▸',
+        time:0,bottleneck:cs.hhBlocked>0?'hh_blocker':''});
+    }
+  });
+  let running=0,completed=0,blocked=0,pending2=0;
+  instances.forEach(i=>{if(i.status==='done')completed++;else if(i.status==='stuck')blocked++;else if(i.status==='active')running++;else pending2++;});
+  const total=instances.length||1;
+  document.getElementById('orchSnap').innerHTML=`
+    <div class="wfd-kpi-card"><div class="kv">${instances.length}</div><div class="kl">Total Tasks</div></div>
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--cy)">${running}</div><div class="kl">Working Now</div></div>
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--g)">${completed}</div><div class="kl">Finished</div></div>
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--pk)">${blocked}</div><div class="kl">Stuck [needs help]</div></div>
+    <div class="wfd-kpi-card"><div class="kv" style="color:var(--g)">${Math.round(completed/total*100)}%</div><div class="kl">Progress</div></div>`;
+  document.getElementById('orchTable').innerHTML=instances.map(i=>
+    `<tr class="${i.status==='stuck'?'stuck':''}"><td style="font-weight:600;font-size:11px">${i.id}</td><td style="font-size:11px">${i.type}</td><td>${i.entity}</td><td>${i.action}</td><td><span class="status-badge ${i.status}">${i.statusIcon} ${i.statusLabel}</span></td><td style="font-variant-numeric:tabular-nums">${i.time?i.time+'w':'—'}</td></tr>`
+  ).join('');
+  const bottlenecks={};instances.forEach(i=>{if(i.bottleneck){bottlenecks[i.bottleneck]=(bottlenecks[i.bottleneck]||0)+1;}});
+  const sorted=Object.entries(bottlenecks).sort((a,b)=>b[1]-a[1]);
+  const typeCount={};instances.forEach(i=>{typeCount[i.type]=(typeCount[i.type]||0)+1;});
+  document.getElementById('orchIntel').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--pk);margin-bottom:6px">Top Blockers [what's slowing things down]</div>
+        ${sorted.length?sorted.map(([k,v])=>`<div class="ct-bar-row"><span class="bl">${k.replace(/_/g,' ')}</span><div class="bw"><div class="bf" style="width:${v/Math.max(blocked,1)*100}%;background:var(--pk)"></div></div><span class="bv">${v}</span></div>`).join(''):'<div style="font-size:11px;color:var(--tm)">Nothing is stuck right now!</div>'}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--bl);margin-bottom:6px">Task Breakdown [how work is split up]</div>
+        ${Object.entries(typeCount).map(([k,v])=>`<div class="ct-bar-row"><span class="bl">${k}</span><div class="bw"><div class="bf" style="width:${v/total*100}%;background:var(--bl)"></div></div><span class="bv">${v}</span></div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--td)">What's Happening [insights & next steps]</div>
+    <div style="font-size:11px;color:var(--td);line-height:1.6">
+      ${blocked>0?`<div>• <b>${blocked}</b> task(s) are stuck. ${sorted[0]?'Biggest reason: <b>'+sorted[0][0].replace(/_/g,' ')+'</b> (affecting '+sorted[0][1]+' tasks).':''}</div>`:''}
+      ${running>0?`<div>• <b>${running}</b> task(s) are being worked on. Speed: ${VS.tick>0?(completed/VS.tick).toFixed(1):'0'} finished per week.</div>`:''}
+      ${completed===total&&total>0?'<div>• Everything is done! No action needed.</div>':''}
+      ${total===0?'<div>• No tasks running yet. Waiting for doctor groups to move through the pipeline [reach BOFU stage].</div>':''}
+    </div>`;
+}
+
+// ── CONTROL TOWER ──
+function buildCTVars(){
+  const el=document.getElementById('ctVars');
+  const groups={};VAR_REGISTRY.forEach((v,i)=>{if(!groups[v.group])groups[v.group]=[];groups[v.group].push({...v,idx:i});});
+  el.innerHTML=Object.entries(groups).map(([g,vars])=>
+    `<div class="ct-group"><div class="ct-group-title">${g}</div>${vars.map(v=>
+      `<div class="ct-var"><label>${v.name}${v.structural?'<span class="ct-reset-flag" style="display:none" id="rf_${v.idx}">Reset needed</span>':''}</label><input type="number" value="${v.value}" min="${v.min}" max="${v.max}" step="${v.step}" data-idx="${v.idx}"><span class="unit">${v.step<1?'%':''}</span></div>`
+    ).join('')}</div>`
+  ).join('');
+  el.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('change',e=>{
+      const idx=+e.target.dataset.idx;const v=VAR_REGISTRY[idx];
+      v.value=+e.target.value;
+      if(v.structural){needsReset=true;const rf=document.getElementById('rf_'+idx);if(rf)rf.style.display='inline';}
+      narrDirty=true;buildCTFormulas();renderAll();
+    });
+  });
+}
+function buildCTFormulas(){
+  const el=document.getElementById('ctFormulas');if(!el)return;
+  const pops=[V('pop_dallas'),V('pop_chicago')];
+  const formulas=[];
+  SA_DEFS.forEach((d,i)=>{
+    const p=pops[i];const phys=p*(V('physicians_per_1000')/1000);const pgs=p*(V('pg_per_million')/1e6);const hhs=p*(V('hh_per_million')/1e6);
+    formulas.push({f:`Physicians (${d.abbr}) = ${(p/1e6).toFixed(1)}M × ${V('physicians_per_1000')}/1000`,v:Math.round(phys)});
+    formulas.push({f:`PGs (${d.abbr}) = ${(p/1e6).toFixed(1)}M × ${V('pg_per_million')}/1M`,v:Math.round(pgs)});
+    formulas.push({f:`Home Healths (${d.abbr}) = ${(p/1e6).toFixed(1)}M × ${V('hh_per_million')}/1M`,v:Math.round(hhs)});
+  });
+  formulas.push({f:'CHC = PGs × 10%',v:'10%'},{f:'Housecall = PGs × 3%',v:'3%'},{f:'VA = PGs × 1%',v:'1%'},{f:'Independent = PGs × 20%',v:'20%'});
+  const rates=getRates();
+  FUNNELS.slice(0,5).forEach((f,i)=>{formulas.push({f:`${f.label} → ${FUNNELS[i+1].label} = ${Math.round(rates[i]*100)}%/week`,v:(rates[i]*100).toFixed(0)+'%'});});
+  formulas.push({f:'NextStage(t+1) = CurrentStage(t) × ConversionRate',v:'—'},{f:'DropOff = CurrentStage - NextStage',v:'—'},{f:'Coverage = Completed / Total',v:'—'},{f:'SuccessRate = Completed / TotalInstances',v:'—'});
+  el.innerHTML=formulas.map(f=>`<div class="ct-formula"><span>${f.f}</span><span class="fv">${f.v}</span></div>`).join('');
+}
+
+function renderCT(VS){
+  VS=VS||S;
+  const pgC=Array(6).fill(0);VS.pgs.forEach(p=>pgC[p.stage]++);
+  const rates=getRates();
+  document.getElementById('ctFunnel').innerHTML=`
+    <div class="ct-metric">${FUNNELS.map((f,i)=>`<div class="ct-card"><div class="cv" style="color:${f.color}">${pgC[i]}</div><div class="cl">${f.icon} ${f.label}</div></div>`).join('')}</div>
+    <div class="section-title" style="font-size:9px">Conversion Rates [% that move to next stage each week]</div>
+    ${FUNNELS.slice(0,5).map((f,i)=>`<div class="ct-bar-row"><span class="bl">${f.label} → ${FUNNELS[i+1].label}</span><div class="bw"><div class="bf" style="width:${rates[i]*100}%;background:${f.color}"></div></div><span class="bv">${Math.round(rates[i]*100)}%</span></div>`).join('')}
+    <div class="section-title" style="font-size:9px;margin-top:8px">Drop-offs [those who didn't make it]</div>
+    ${FUNNELS.slice(0,5).map((f,i)=>{const drop=pgC[i]>0?pgC[i]-Math.round(pgC[i]*rates[i]):0;
+      return`<div class="ct-bar-row"><span class="bl">${f.label}</span><div class="bw"><div class="bf" style="width:${pgC[i]>0?(drop/pgC[i]*100):0}%;background:var(--pk)"></div></div><span class="bv">${drop}</span></div>`;
+    }).join('')}`;
+
+  let wDone=0,wActive=0,wBlocked=0,wPending=0,wNoLocs=0,blockTypes={data_missing:0,structure_uncertain:0,no_contacts:0};
+  VS.sas.forEach(sa=>sa.hhs.forEach(h=>{
+    if(h.done){h.wfStep===6?wNoLocs++:wDone++;}
+    else if(h.blocked){wBlocked++;if(blockTypes[h.blockType]!==undefined)blockTypes[h.blockType]++;}
+    else if(h.started)wActive++;else wPending++;
+  }));
+  const totalInst=wDone+wActive+wBlocked+wPending+wNoLocs;
+  const successRate=totalInst>0?((wDone/(totalInst-wPending))*100||0):0;
+  document.getElementById('ctWorkflow').innerHTML=`
+    <div class="ct-metric">
+      <div class="ct-card"><div class="cv" style="color:var(--cy)">${wActive}</div><div class="cl">Working Now</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--pk)">${wBlocked}</div><div class="cl">Stuck</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--g)">${wDone}</div><div class="cl">Finished</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--tm)">${wPending}</div><div class="cl">Waiting</div></div>
+    </div>
+    ${wBlocked?`<div class="section-title" style="font-size:9px">Why Tasks Are Stuck [block reasons]</div>
+      ${Object.entries(blockTypes).filter(([,v])=>v>0).map(([k,v])=>`<div class="ct-bar-row"><span class="bl">${k.replace(/_/g,' ')}</span><div class="bw"><div class="bf" style="width:${(v/Math.max(wBlocked,1))*100}%;background:var(--pk)"></div></div><span class="bv">${v}</span></div>`).join('')}`:''}
+    <div class="ct-bar-row" style="margin-top:8px"><span class="bl">Success Rate [% completed successfully]</span><div class="bw"><div class="bf" style="width:${Math.min(successRate,100)}%;background:var(--g)"></div></div><span class="bv">${Math.round(successRate)}%</span></div>`;
+
+  document.getElementById('ctSA').innerHTML=VS.sas.map(sa=>{
+    const hd=sa.hhs.filter(h=>h.done).length;const pct=sa.hhs.length?Math.round(hd/sa.hhs.length*100):0;
+    const col=sa.status==='completed'?'var(--g)':sa.status==='in_progress'?'var(--cy)':'var(--tm)';
+    return`<div class="ct-sa-card"><div class="sa-hdr"><span>${sa.name}</span><span style="color:${col};font-size:11px">${sa.status==='completed'?'✅ All done':sa.status==='in_progress'?'⟳ Working on it':'○ Not started yet'}</span></div>
+      <div class="sa-prog-bar" style="height:5px;background:rgba(0,0,0,.06);border-radius:3px;margin:6px 0"><div class="sa-prog-fill" style="width:${pct}%;background:${col};height:100%;border-radius:3px"></div></div>
+      <div class="ct-checklist">
+        <div>${sa.hhs.every(h=>h.done)?'✅':'○'} Home Health Coverage: ${hd}/${sa.hhs.length} (${pct}%)</div>
+        <div>${sa.subWf.pg===2?'✅':'○'} PG Market Analysis</div>
+        <div>${sa.subWf.cultural===2?'✅':'○'} Cultural Market Analysis</div>
+      </div></div>`;
+  }).join('');
+
+  const totalHH=VS.sas.reduce((s,sa)=>s+sa.hhs.length,0);
+  const doneHH=VS.sas.reduce((s,sa)=>s+sa.hhs.filter(h=>h.done).length,0);
+  const coverage=totalHH>0?Math.round(doneHH/totalHH*100):0;
+  const throughput=VS.tick>0?(doneHH/VS.tick).toFixed(1):'0';
+  const bottleneck=Object.entries(blockTypes).sort((a,b)=>b[1]-a[1])[0];
+  const sasDone=VS.sas.filter(s=>s.status==='completed').length;
+  document.getElementById('ctSystem').innerHTML=`
+    <div class="ct-metric">
+      <div class="ct-card"><div class="cv" style="color:var(--bl)">${throughput}</div><div class="cl">HH Finished/Week</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--g)">${coverage}%</div><div class="cl">Coverage [% done]</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--o)">${sasDone}/${VS.sas.length}</div><div class="cl">Areas Done</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--pk)">${bottleneck&&bottleneck[1]>0?bottleneck[1]:'0'}</div><div class="cl">${bottleneck&&bottleneck[1]>0?bottleneck[0].replace(/_/g,' '):'Nothing stuck'}</div></div>
+    </div>`;
+}
+
+// ── CONTROLS ──
+function initControls(){
+  document.getElementById('btnPlay').onclick=()=>{
+    S.running=!S.running;
+    if(S.running)viewWeek=-1;
+    document.getElementById('btnPlay').innerHTML=S.running?'&#9646;&#9646; Pause':'&#9654; Play';
+    document.getElementById('btnPlay').classList.toggle('on',S.running);
+  };
+  document.getElementById('btnStep').onclick=()=>{
+    if(!S.running){viewWeek=-1;simTick();renderAll();}
+  };
+  document.getElementById('btnReset').onclick=()=>{
+    S.running=false;viewWeek=-1;snapshots=[];
+    document.getElementById('btnPlay').innerHTML='&#9654; Play';document.getElementById('btnPlay').classList.remove('on');
+    initSim();buildFunnel();buildVerts();saveSnapshot();renderAll();
+  };
+  document.getElementById('btnPrev').onclick=()=>{
+    if(S.running)return;
+    const maxW=S.tick;
+    if(viewWeek<0)viewWeek=maxW;
+    if(viewWeek>0)viewWeek--;
+    narrDirty=true;renderAll();
+  };
+  document.getElementById('btnNext').onclick=()=>{
+    if(S.running)return;
+    if(viewWeek<0)return;
+    if(viewWeek<S.tick){viewWeek++;if(viewWeek>=S.tick)viewWeek=-1;}
+    narrDirty=true;renderAll();
+  };
+  document.getElementById('btnLive').onclick=()=>{viewWeek=-1;narrDirty=true;renderAll();};
+  document.getElementById('speedSlider').oninput=e=>{S.speed=+e.target.value;document.getElementById('speedVal').textContent=S.speed+'x';};
+  document.querySelectorAll('.nav-item[data-v]').forEach(t=>t.addEventListener('click',()=>switchView(t.dataset.v)));
+}
+function switchView(v){
+  curView=v;
+  document.querySelectorAll('.nav-item[data-v]').forEach(t=>t.classList.toggle('active',t.dataset.v===v));
+  document.querySelectorAll('.vw').forEach(el=>el.classList.remove('on'));
+  document.getElementById('v-'+v).classList.add('on');
+  setTimeout(resizeAll,20);
+}
+function renderAll(){
+  const isLive=viewWeek<0;
+  const VS=getViewState();
+  const vw=isLive?S.tick:viewWeek;
+
+  document.getElementById('weekNum').textContent=S.tick;document.getElementById('weekBadge').textContent='Week '+S.tick;
+  document.getElementById('sasDone').textContent=S.sas.filter(s=>s.status==='completed').length+'/2';
+  document.getElementById('navWeek').textContent='W'+S.tick;
+  const anyIP=S.sas.some(s=>s.status==='in_progress'),allDone=S.sas.every(s=>s.status==='completed');
+  document.getElementById('phaseBadge').textContent=allDone?'All done!':anyIP?'Tasks are running':'Finding doctor groups';
+
+  // Update sidebar SA badges
+  VS.sas.forEach((sa,i)=>{
+    const el=document.getElementById('navSA'+i);
+    if(el)el.innerHTML=sa.status==='completed'?'✅':sa.status==='in_progress'?'⟳':'○';
+  });
+
+  // Orchestrator instance count
+  let instCount=0;
+  VS.sas.forEach(sa=>instCount+=sa.hhs.length);
+  VS.pgs.forEach(pg=>{if(pg.stage>=5&&pg.cs.phase!=='idle')instCount++;});
+  const navInst=document.getElementById('navInstances');if(navInst)navInst.textContent=instCount;
+
+  document.getElementById('viewLabel').textContent=isLive?`Week ${S.tick} (LIVE — watching in real time)`:`Looking at Week ${viewWeek} of ${S.tick} [past data]`;
+  document.getElementById('viewLabel').style.color=isLive?'var(--g)':'var(--o)';
+  document.getElementById('btnPrev').disabled=S.running||(viewWeek===0);
+  document.getElementById('btnNext').disabled=S.running||isLive;
+  document.getElementById('btnLive').classList.toggle('live-on',isLive);
+  document.querySelector('.sim-canvas-wrap').classList.toggle('viewing-past',!isLive);
+  document.querySelector('.sim-canvas-wrap').setAttribute('data-vw',viewWeek);
+
+  updateSummaryBar(VS);
+  if(curView==='sim'){updateFunnel(VS);updateVerts(VS);renderMap(VS);renderGrowth(VS);renderNarration(vw);updateWFChips(VS);}
+  else if(curView==='wfd'){renderWFDetail(VS);renderWFGraph(wfdX,wfdC,VS.sas[selSA]);}
+  else if(curView==='orch'){renderOrchestrator(VS);}
+  else if(curView==='ct'){renderCT(VS);}
+}
+let lastFrame=0;
+function gameLoop(ts){if(S.running){const interval=1000/S.speed;if(ts-lastFrame>=interval){simTick();lastFrame=ts;}}renderAll();requestAnimationFrame(gameLoop);}
+initSim();saveSnapshot();initRendering();initControls();buildCTVars();buildCTFormulas();renderAll();requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
