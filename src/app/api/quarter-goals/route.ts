@@ -1,0 +1,35 @@
+import { NextRequest } from "next/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { ok, err, validate } from "@/lib/api-helpers";
+
+export async function GET(request: NextRequest) {
+  const sb = createServiceClient();
+  const quarterId = new URL(request.url).searchParams.get("quarter_id");
+
+  let query = sb.from("quarter_goals").select("*").order("category").order("sort_order");
+  if (quarterId) query = query.eq("quarter_id", quarterId);
+
+  const { data, error } = await query;
+  if (error) return err(error.message, 500);
+  return ok(data);
+}
+
+export async function POST(request: NextRequest) {
+  const sb = createServiceClient();
+  const body = await request.json();
+  const missing = validate(body, ["quarter_id", "category", "goal"]);
+  if (missing) return err(missing);
+
+  const { data, error } = await sb.from("quarter_goals").insert(body).select().single();
+  if (error) return err(error.message, 400);
+  return ok(data, 201);
+}
+
+export async function DELETE(request: NextRequest) {
+  const sb = createServiceClient();
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return err("id required");
+  const { error } = await sb.from("quarter_goals").delete().eq("id", id);
+  if (error) return err(error.message, 400);
+  return ok({ deleted: true });
+}
