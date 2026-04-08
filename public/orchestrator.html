@@ -1119,7 +1119,7 @@ function updateSummaryBar(VS){
       ${hhB?`<span class="sum-chip" style="border-color:rgba(214,51,108,.3)"><span class="cnt" style="color:var(--pk)">${hhB}</span> Stuck</span>`:''}
     </div>
     <div class="sum-divider"></div>
-    <div class="sum-group"><span class="sum-label">SAs [Service Areas]</span>${VS.sas.map(sa=>{
+    <div class="sum-group"><span class="sum-label">SAs [Statistical Areas]</span>${VS.sas.map(sa=>{
       const col=sa.status==='completed'?'var(--g)':sa.status==='in_progress'?'var(--cy)':'var(--tm)';
       const ic=sa.status==='completed'?'✅':sa.status==='in_progress'?'⟳':'○';
       return`<span class="sum-sa" style="color:${col}">${ic} ${sa.abbr}</span>`;
