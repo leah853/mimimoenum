@@ -254,7 +254,7 @@ canvas{display:block}
   <div class="auth-card">
     <div class="auth-logo">
       <h1>eon<span>exia</span></h1>
-      <p>Market Growth & Workflow Simulation Engine<br><span style="font-size:11px;color:#8494a7">See how doctor groups join your network, step by step</span></p>
+      <p>Market Growth & Workflow Simulation Engine<br><span style="font-size:11px;color:#8494a7">See how physician groups join your network, step by step</span></p>
     </div>
     <div class="auth-tabs">
       <div class="auth-tab active" data-mode="login">Sign In</div>
@@ -346,7 +346,7 @@ canvas{display:block}
             <div id="funnelBox"></div>
           </div>
           <div>
-            <div class="section-title">Verticals <span class="hint">(types of doctor groups)</span></div>
+            <div class="section-title">Verticals <span class="hint">(types of physician groups)</span></div>
             <div id="vertBox"></div>
           </div>
           <div>
@@ -758,7 +758,7 @@ function initSim(){
   }
   S={tick:0,running:false,speed:3,sas,pgs,events:[],wfRuns:0,narration:[],
     growthHist:[{tick:0,...Object.fromEntries(FUNNELS.map(f=>[f.key,f.key==='prospect'?pgs.length:0]))}]};
-  addNarr('highlight',`<b>Simulation ready!</b> Think of this like a <i>sports recruitment game</i> — we're trying to sign up <b>${pgs.length} doctor groups (PGs)</b> across ${sas.length} regions.<br><br><div class="why-box"><b>How it works:</b> Doctor groups move through a pipeline, like a funnel. They start as <b>Prospects</b> [we just know about them], then become <b>Targets</b> [we want them], move through <b>TOFU</b> [first contact], <b>MOFU</b> [getting interested], <b>BOFU</b> [almost ready], and finally <b>Closed</b> [they signed up!].</div><br><b>Our regions:</b> ${sas.map(s=>s.name+' — '+(s.pop/1e6).toFixed(1)+'M people, '+s.totalPGs+' doctor groups, '+s.totalHHs+' home health agencies').join('; ')}.<br><br><b>How we find them:</b> Website, Conferences, Emails, Marketing, Branding.<br><b>Success rates:</b> About 60% move from TOFU→MOFU, 60% from MOFU→BOFU, and 80% from BOFU→Closed.<br><b>What happens next:</b> When a doctor group reaches BOFU [almost ready], it triggers research tasks — analyzing home health agencies, other doctor groups, and the local culture of each area.<br><br>Press <b>Play</b> to start watching it happen!`);
+  addNarr('highlight',`<b>Simulation ready!</b> Think of this like a <i>sports recruitment game</i> — we're trying to sign up <b>${pgs.length} physician groups (PGs)</b> across ${sas.length} regions.<br><br><div class="why-box"><b>How it works:</b> Doctor groups move through a pipeline, like a funnel. They start as <b>Prospects</b> [we just know about them], then become <b>Targets</b> [we want them], move through <b>TOFU</b> [first contact], <b>MOFU</b> [getting interested], <b>BOFU</b> [almost ready], and finally <b>Closed</b> [they signed up!].</div><br><b>Our regions:</b> ${sas.map(s=>s.name+' — '+(s.pop/1e6).toFixed(1)+'M people, '+s.totalPGs+' physician groups, '+s.totalHHs+' home health agencies').join('; ')}.<br><br><b>How we find them:</b> Website, Conferences, Emails, Marketing, Branding.<br><b>Success rates:</b> About 60% move from TOFU→MOFU, 60% from MOFU→BOFU, and 80% from BOFU→Closed.<br><b>What happens next:</b> When a physician group reaches BOFU [almost ready], it triggers research tasks — analyzing home health agencies, other physician groups, and the local culture of each area.<br><br>Press <b>Play</b> to start watching it happen!`);
 }
 
 let narrDirty=true,lastNarrCount=0;
@@ -1110,7 +1110,7 @@ function updateSummaryBar(VS){
   let hhD=0,hhA=0,hhP=0,hhT=0,hhB=0;
   VS.sas.forEach(sa=>sa.hhs.forEach(h=>{hhT++;if(h.done)hhD++;else if(h.blocked)hhB++;else if(h.started)hhA++;else hhP++;}));
   document.getElementById('summaryBar').innerHTML=`
-    <div class="sum-group"><span class="sum-label">PGs [Doctor Groups]</span>${FUNNELS.map((f,i)=>`<span class="sum-chip" style="border-color:${f.color}30">${f.icon} <span class="cnt" style="color:${f.color}">${pgC[i]}</span></span>`).join('')}</div>
+    <div class="sum-group"><span class="sum-label">PGs [Physician Groups]</span>${FUNNELS.map((f,i)=>`<span class="sum-chip" style="border-color:${f.color}30">${f.icon} <span class="cnt" style="color:${f.color}">${pgC[i]}</span></span>`).join('')}</div>
     <div class="sum-divider"></div>
     <div class="sum-group"><span class="sum-label">HH [Home Health]</span>
       <span class="sum-chip"><span class="cnt">${hhT}</span> Total</span>
@@ -1160,7 +1160,7 @@ function renderMap(VS){
 
     // Title
     ctx.font='bold 14px Inter,system-ui';ctx.fillStyle='#1a2332';ctx.textAlign='center';
-    ctx.fillText('United States — Doctor Group Recruitment Map',W/2,24);
+    ctx.fillText('United States — National PG Acquisition Map',W/2,24);
 
     // Draw each SA at its geographic position
     VS.sas.forEach((sa,si)=>{
@@ -1387,7 +1387,7 @@ function renderWFGraph(ctx,canvas,sa){
   ctx.setLineDash([5,5]);ctx.strokeStyle='rgba(100,116,139,.1)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(pad,ty(.50));ctx.lineTo(gw+pad,ty(.50));ctx.stroke();ctx.setLineDash([]);
   ctx.font='bold 9px Inter,system-ui';ctx.fillStyle='#ea580c';ctx.textAlign='left';
-  ctx.fillText('PHASE 1: Research [studying the market — home health agencies, doctor groups, local culture]',pad+4,ty(.01));
+  ctx.fillText('PHASE 1: Research [studying the market — home health agencies, physician groups, local culture]',pad+4,ty(.01));
   ctx.fillStyle='#059669';
   ctx.fillText('PHASE 2: Onboarding [getting new partners set up and connected]',pad+4,ty(.53));
 }
@@ -1539,7 +1539,7 @@ function renderOrchestrator(VS){
       ${blocked>0?`<div>• <b>${blocked}</b> task(s) are stuck. ${sorted[0]?'Biggest reason: <b>'+sorted[0][0].replace(/_/g,' ')+'</b> (affecting '+sorted[0][1]+' tasks).':''}</div>`:''}
       ${running>0?`<div>• <b>${running}</b> task(s) are being worked on. Speed: ${VS.tick>0?(completed/VS.tick).toFixed(1):'0'} finished per week.</div>`:''}
       ${completed===total&&total>0?'<div>• Everything is done! No action needed.</div>':''}
-      ${total===0?'<div>• No tasks running yet. Waiting for doctor groups to move through the pipeline [reach BOFU stage].</div>':''}
+      ${total===0?'<div>• No tasks running yet. Waiting for physician groups (PGs) to move through the pipeline [reach BOFU stage].</div>':''}
     </div>`;
 }
 
@@ -1632,7 +1632,7 @@ function renderCT(VS){
     <div class="ct-metric">
       <div class="ct-card"><div class="cv" style="color:var(--bl)">${throughput}</div><div class="cl">HH Finished/Week</div></div>
       <div class="ct-card"><div class="cv" style="color:var(--g)">${coverage}%</div><div class="cl">Coverage [% done]</div></div>
-      <div class="ct-card"><div class="cv" style="color:var(--o)">${sasDone}/${VS.sas.length}</div><div class="cl">Areas Done</div></div>
+      <div class="ct-card"><div class="cv" style="color:var(--o)">${sasDone}/${VS.sas.length}</div><div class="cl">SAs Done</div></div>
       <div class="ct-card"><div class="cv" style="color:var(--pk)">${bottleneck&&bottleneck[1]>0?bottleneck[1]:'0'}</div><div class="cl">${bottleneck&&bottleneck[1]>0?bottleneck[0].replace(/_/g,' '):'Nothing stuck'}</div></div>
     </div>`;
 }
@@ -1686,7 +1686,7 @@ function renderAll(){
   document.getElementById('sasDone').textContent=S.sas.filter(s=>s.status==='completed').length+'/2';
   document.getElementById('navWeek').textContent='W'+S.tick;
   const anyIP=S.sas.some(s=>s.status==='in_progress'),allDone=S.sas.every(s=>s.status==='completed');
-  document.getElementById('phaseBadge').textContent=allDone?'All done!':anyIP?'Tasks are running':'Finding doctor groups';
+  document.getElementById('phaseBadge').textContent=allDone?'All done!':anyIP?'Tasks are running':'PG Acquisition Active';
 
   // Update sidebar SA badges
   VS.sas.forEach((sa,i)=>{
