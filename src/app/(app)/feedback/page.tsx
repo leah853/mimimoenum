@@ -39,6 +39,8 @@ export default function FeedbackTrailPage() {
   const [chatMsg, setChatMsg] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
+  const [editingChat, setEditingChat] = useState<string | null>(null);
+  const [editChatText, setEditChatText] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const chatMessages = chatData || [];
@@ -67,7 +69,7 @@ export default function FeedbackTrailPage() {
 
   // Stats
   const totalThreads = threads.length;
-  const totalFeedback = threads.reduce((s, t) => s + t.feedbacks.length, 0);
+  const totalFeedback = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.comment?.startsWith("↩️") && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
   const unacknowledged = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.acknowledged && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
   const awaitingReviewTasks = all.filter((t) => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length));
   const tasksWithDeliverables = awaitingReviewTasks.length;
@@ -159,6 +161,23 @@ export default function FeedbackTrailPage() {
       await refetchChat();
     } catch {}
     setChatSending(false);
+  }
+
+  async function updateChatMsg(msgId: string) {
+    if (!editChatText.trim()) return;
+    try {
+      await apiPatch(`/api/chat/${msgId}`, { message: editChatText });
+      setEditingChat(null); setEditChatText("");
+      await refetchChat();
+    } catch {}
+  }
+
+  async function deleteChatMsg(msgId: string) {
+    if (!confirm("Delete this message?")) return;
+    try {
+      await apiDelete(`/api/chat/${msgId}`);
+      await refetchChat();
+    } catch {}
   }
 
   // Counts for sidebar badge
@@ -258,7 +277,7 @@ export default function FeedbackTrailPage() {
               ) : chatMessages.map((msg) => {
                 const isMe = msg.user_id === dbUser?.id;
                 return (
-                  <div key={msg.id} className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                  <div key={msg.id} className={`group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}>
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${isMe ? "bg-gradient-to-br from-indigo-500 to-violet-500" : "bg-gradient-to-br from-gray-400 to-gray-500"}`}>
                       {msg.user?.full_name?.[0] || "?"}
                     </div>
@@ -266,10 +285,28 @@ export default function FeedbackTrailPage() {
                       <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
                         <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
                         <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
+                        {isMe && editingChat !== msg.id && (
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+                            <button onClick={() => { setEditingChat(msg.id); setEditChatText(msg.message); }} className="text-[9px] text-gray-400 hover:text-indigo-500">Edit</button>
+                            <button onClick={() => deleteChatMsg(msg.id)} className="text-[9px] text-gray-400 hover:text-red-500">Delete</button>
+                          </span>
+                        )}
                       </div>
-                      <div className={`inline-block px-3 py-2 rounded-xl text-sm ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
-                        {renderMentions(msg.message)}
-                      </div>
+                      {editingChat === msg.id ? (
+                        <div className="space-y-1">
+                          <input value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
+                            onKeyDown={(e) => { if (e.key === "Enter") updateChatMsg(msg.id); if (e.key === "Escape") setEditingChat(null); }}
+                            className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                          <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                            <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
+                            <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                          {renderMentions(msg.message)}
+                        </div>
+                      )}
                       {(msg.mentions?.length || 0) > 0 && (
                         <div className="flex gap-1 mt-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
                           {msg.mentions!.map((m, i) => (
@@ -288,7 +325,7 @@ export default function FeedbackTrailPage() {
             <div className="px-5 py-3 border-t border-gray-200/60 dark:border-gray-800/60">
               {/* Mentions dropdown — always visible when toggled */}
               {showMentions && (
-                <div className="mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-1.5 max-h-52 overflow-y-auto">
+                <div className="mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-1.5 max-h-80 overflow-y-auto">
                   <p className="text-[9px] text-gray-400 px-2 py-1 font-medium uppercase tracking-wider">Tag a team member</p>
                   {(teamUsers || []).map((u) => (
                     <button key={u.id} onClick={() => {
