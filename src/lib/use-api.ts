@@ -27,6 +27,16 @@ function dedupFetch<T>(url: string): Promise<T> {
   return promise as Promise<T>;
 }
 
+/** Invalidate dedup cache for URLs matching a pattern. Call after mutations
+ *  that affect shared data (e.g. after acknowledging feedback, clear /api/tasks and /api/stats). */
+export function invalidateCache(...patterns: string[]) {
+  for (const key of inflightCache.keys()) {
+    if (patterns.length === 0 || patterns.some(p => key.includes(p))) {
+      inflightCache.delete(key);
+    }
+  }
+}
+
 // ── useApi hook ──────────────────────────────────────────────────────
 export function useApi<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null);

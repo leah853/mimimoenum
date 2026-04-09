@@ -1,6 +1,6 @@
 "use client";
 
-import { useApi, apiPatch, apiPost, apiDelete } from "@/lib/use-api";
+import { useApi, apiPatch, apiPost, apiDelete, invalidateCache } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canGiveFeedback, canEditTasks } from "@/lib/roles";
 import type { Task, Feedback, Deliverable } from "@/lib/types";
@@ -112,6 +112,7 @@ export default function FeedbackTrailPage() {
   async function acknowledge(fbId: string) {
     try {
       await apiPatch(`/api/feedback/${fbId}`, { acknowledged: true, acknowledged_by: dbUser?.id });
+      invalidateCache("/api/tasks", "/api/stats");
       await refetch();
     } catch (e) { toast(handleApiError(e), "error"); }
   }
@@ -119,6 +120,7 @@ export default function FeedbackTrailPage() {
   async function markDeliverableViewed(delId: string) {
     try {
       await apiPatch(`/api/deliverables/${delId}`, { viewed: true });
+      invalidateCache("/api/tasks", "/api/stats");
       await refetch();
     } catch (e) { toast(handleApiError(e), "error"); }
   }
@@ -133,6 +135,7 @@ export default function FeedbackTrailPage() {
         comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved",
       });
       setReplyTo(null); setReplyText("");
+      invalidateCache("/api/tasks", "/api/stats");
       await refetch();
     } catch (e) {
       setReplyError(e instanceof Error ? e.message : "Reply failed");

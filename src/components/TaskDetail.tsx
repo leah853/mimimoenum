@@ -4,7 +4,7 @@ import { useMemo, useReducer } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Task, TaskStatus, Subtask, Deliverable, Feedback } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
-import { useApi, apiPatch, apiPost, apiUpload, apiDelete } from "@/lib/use-api";
+import { useApi, apiPatch, apiPost, apiUpload, apiDelete, invalidateCache } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, canGiveFeedback, canEditFeedback, canDeleteFeedback, canDeleteDeliverables } from "@/lib/roles";
 import { getCompletionBlockers } from "@/lib/business-rules";
@@ -183,7 +183,7 @@ export default function TaskDetail() {
         if (dbUser) fd.append("uploaded_by", dbUser.id);
         await apiUpload("/api/deliverables", fd);
       }
-      dispatch({ type: "RESET_UPLOAD" }); await refetch(); toast("File uploaded", "success");
+      dispatch({ type: "RESET_UPLOAD" }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); toast("File uploaded", "success");
     } catch (e) { set("error", e instanceof Error ? e.message : "Upload failed"); }
     set("uploading", false);
   }
@@ -193,22 +193,22 @@ export default function TaskDetail() {
   }
   async function submitFeedback() {
     if (!dbUser) return;
-    try { await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: ui.fbRating, comment: ui.fbComment || null, tag: ui.fbTag }); dispatch({ type: "RESET_FEEDBACK_FORM" }); await refetch(); }
+    try { await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: ui.fbRating, comment: ui.fbComment || null, tag: ui.fbTag }); dispatch({ type: "RESET_FEEDBACK_FORM" }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); }
     catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
   async function updateFeedback(fbId: string) {
-    try { await apiPatch(`/api/feedback/${fbId}`, { comment: ui.editFbComment, rating: ui.editFbRating }); dispatch({ type: "CANCEL_EDIT_FB" }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
+    try { await apiPatch(`/api/feedback/${fbId}`, { comment: ui.editFbComment, rating: ui.editFbRating }); dispatch({ type: "CANCEL_EDIT_FB" }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function deleteFeedback(fbId: string) {
     if (!confirm("Delete this feedback?")) return;
-    try { await apiDelete(`/api/feedback/${fbId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
+    try { await apiDelete(`/api/feedback/${fbId}`); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function replyToFeedback() {
     if (!dbUser || !ui.replyText || !ui.replyTo) return;
     const orig = task!.feedback?.find(f => f.id === ui.replyTo);
     try {
       await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: orig?.rating || 5, comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${ui.replyText}`, tag: "approved" });
-      dispatch({ type: "RESET_REPLY" }); await refetch();
+      dispatch({ type: "RESET_REPLY" }); invalidateCache("/api/tasks", "/api/stats"); await refetch();
     } catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
   async function addDependency() {
@@ -553,7 +553,7 @@ export default function TaskDetail() {
                   <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3">
                     {/* Acknowledge — doers only */}
                     {isDoer && !fb.acknowledged && (
-                      <button onClick={async () => { try { await apiPatch(`/api/feedback/${fb.id}`, { acknowledged: true, acknowledged_by: dbUser?.id }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
+                      <button onClick={async () => { try { await apiPatch(`/api/feedback/${fb.id}`, { acknowledged: true, acknowledged_by: dbUser?.id }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                         className="flex items-center gap-1 text-[10px] text-green-600 hover:text-green-500 transition-colors"><HiCheck className="w-3 h-3" /> Acknowledge</button>
                     )}
                     {fb.acknowledged && <span className="text-[10px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
