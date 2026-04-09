@@ -6,6 +6,7 @@ import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus, Dependency } from "@/lib/types";
 import Link from "next/link";
 import { HiChevronDown, HiChevronRight, HiViewGrid, HiViewList, HiCalendar, HiZoomIn, HiZoomOut, HiExclamationCircle } from "react-icons/hi";
+import { EmptyState } from "@/components/ui";
 
 type FullTask = Task & { subtasks?: { id: string; title: string; status: TaskStatus }[]; owner?: { full_name: string } };
 type Iter = { id: string; name: string; iteration_number: number; start_date: string; end_date: string; weeks?: { id: string; week_number: number; start_date: string; end_date: string }[] };
@@ -184,9 +185,12 @@ export default function GanttPage() {
   }
 
   if (!quarter) return (
-    <div className="p-8 text-center animate-fade-in">
-      <p className="text-gray-500 mb-3">No data yet.</p>
-      <Link href="/upload" className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl">Upload CSV</Link>
+    <div className="p-8">
+      <EmptyState
+        title="No timeline data yet"
+        description="Upload a CSV or create tasks to see the Gantt chart."
+        action={<Link href="/upload" className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl hover:brightness-110 transition-all">Upload CSV</Link>}
+      />
     </div>
   );
 

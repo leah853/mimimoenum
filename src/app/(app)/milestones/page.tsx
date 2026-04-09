@@ -6,6 +6,7 @@ import { useApi } from "@/lib/use-api";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus } from "@/lib/types";
 import { HiChevronDown, HiChevronRight, HiOutlineChatAlt, HiOutlinePaperClip, HiPlus } from "react-icons/hi";
+import { SkeletonRows, EmptyState } from "@/components/ui";
 
 type FullTask = Task & { subtasks?: { id: string; title: string; status: TaskStatus }[]; deliverables?: { id: string }[]; feedback?: { id: string }[] };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
@@ -39,7 +40,17 @@ export default function MilestonesPage() {
     queueMicrotask(() => { setExpandedIters(new Set(iterations.map((i) => i.id))); setInitialized(true); });
   }
 
-  if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>;
+  if (loading) return (
+    <div className="p-8 space-y-4 animate-fade-in">
+      <div className="skeleton h-8 w-56" />
+      <div className="skeleton h-12 w-full rounded-2xl" />
+      <SkeletonRows count={6} />
+    </div>
+  );
+
+  if (!loading && all.length === 0) return (
+    <div className="p-8"><EmptyState title="No milestones yet" description="Tasks will appear here once added to the system." /></div>
+  );
 
   const toggleIter = (id: string) => { const n = new Set(expandedIters); n.has(id) ? n.delete(id) : n.add(id); setExpandedIters(n); };
   const expandAll = () => setExpandedIters(new Set(iterations.map((i) => i.id)));

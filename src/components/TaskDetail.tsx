@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useReducer } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Task, TaskStatus, Subtask, Deliverable, Feedback } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, canGiveFeedback, canEditFeedback, canDeleteFeedback, canDeleteDeliverables } from "@/lib/roles";
 import { getCompletionBlockers } from "@/lib/business-rules";
 import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye } from "react-icons/hi";
-import { useToast } from "@/components/ui";
+import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
@@ -23,6 +23,88 @@ type FullTask = Task & {
 };
 type OwnerOption = { id: string; full_name: string; email: string };
 
+type UIState = {
+  activeTab: "details" | "feedback";
+  editing: boolean;
+  form: { title: string; description: string; status: TaskStatus; deadline: string; owner_id: string };
+  subtaskTitle: string;
+  showSubForm: boolean;
+  fileTitle: string;
+  file: File | null;
+  uploading: boolean;
+  textOnly: boolean;
+  deliverableDesc: string;
+  fbRating: number;
+  fbComment: string;
+  fbTag: string;
+  replyTo: string | null;
+  replyText: string;
+  editingFb: string | null;
+  editFbComment: string;
+  editFbRating: number;
+  saving: boolean;
+  deleting: boolean;
+  showDepAdd: "prerequisite" | "dependency" | null;
+  depTaskId: string;
+  error: string;
+};
+
+type UIAction =
+  | { type: "SET_FIELD"; field: keyof UIState; value: unknown }
+  | { type: "SET_FORM"; form: Partial<UIState["form"]> }
+  | { type: "RESET_UPLOAD" }
+  | { type: "RESET_FEEDBACK_FORM" }
+  | { type: "RESET_REPLY" }
+  | { type: "START_EDIT_FB"; fbId: string; comment: string; rating: number }
+  | { type: "CANCEL_EDIT_FB" };
+
+const initialUIState: UIState = {
+  activeTab: "details",
+  editing: false,
+  form: { title: "", description: "", status: "not_started" as TaskStatus, deadline: "", owner_id: "" },
+  subtaskTitle: "",
+  showSubForm: false,
+  fileTitle: "",
+  file: null,
+  uploading: false,
+  textOnly: false,
+  deliverableDesc: "",
+  fbRating: 5,
+  fbComment: "",
+  fbTag: "approved",
+  replyTo: null,
+  replyText: "",
+  editingFb: null,
+  editFbComment: "",
+  editFbRating: 5,
+  saving: false,
+  deleting: false,
+  showDepAdd: null,
+  depTaskId: "",
+  error: "",
+};
+
+function uiReducer(state: UIState, action: UIAction): UIState {
+  switch (action.type) {
+    case "SET_FIELD":
+      return { ...state, [action.field]: action.value };
+    case "SET_FORM":
+      return { ...state, form: { ...state.form, ...action.form } };
+    case "RESET_UPLOAD":
+      return { ...state, file: null, fileTitle: "", deliverableDesc: "", textOnly: false, uploading: false };
+    case "RESET_FEEDBACK_FORM":
+      return { ...state, fbComment: "", fbRating: 5 };
+    case "RESET_REPLY":
+      return { ...state, replyTo: null, replyText: "" };
+    case "START_EDIT_FB":
+      return { ...state, editingFb: action.fbId, editFbComment: action.comment, editFbRating: action.rating };
+    case "CANCEL_EDIT_FB":
+      return { ...state, editingFb: null, editFbComment: "", editFbRating: 5 };
+    default:
+      return state;
+  }
+}
+
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -32,31 +114,20 @@ export default function TaskDetail() {
   const { data: owners } = useApi<OwnerOption[]>("/api/users/owners");
   const { data: allTasks } = useApi<{ id: string; title: string; category: string; status: TaskStatus }[]>("/api/tasks");
 
-  const [activeTab, setActiveTab] = useState<"details" | "feedback">("details");
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", status: "not_started" as TaskStatus, deadline: "", owner_id: "" });
-  const [subtaskTitle, setSubtaskTitle] = useState("");
-  const [showSubForm, setShowSubForm] = useState(false);
-  const [fileTitle, setFileTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [textOnly, setTextOnly] = useState(false);
-  const [deliverableDesc, setDeliverableDesc] = useState("");
-  const [fbRating, setFbRating] = useState(5);
-  const [fbComment, setFbComment] = useState("");
-  const [fbTag, setFbTag] = useState("approved");
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [editingFb, setEditingFb] = useState<string | null>(null);
-  const [editFbComment, setEditFbComment] = useState("");
-  const [editFbRating, setEditFbRating] = useState(5);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showDepAdd, setShowDepAdd] = useState<"prerequisite" | "dependency" | null>(null);
-  const [depTaskId, setDepTaskId] = useState("");
-  const [error, setError] = useState("");
+  const [ui, dispatch] = useReducer(uiReducer, initialUIState);
+  const set = (field: keyof UIState, value: unknown) => dispatch({ type: "SET_FIELD", field, value });
 
-  if (loading) return <div className="p-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" /></div>;
+  if (loading) return (
+    <div className="p-8 max-w-5xl space-y-6 animate-fade-in">
+      <div className="skeleton h-5 w-16" />
+      <div className="skeleton h-8 w-2/3" />
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800 pb-2"><div className="skeleton h-8 w-20" /><div className="skeleton h-8 w-28" /></div>
+      <div className="grid grid-cols-3 gap-6">
+        <div className="col-span-2 space-y-4"><div className="skeleton h-32 rounded-2xl" /><div className="skeleton h-24 rounded-2xl" /></div>
+        <div className="space-y-4"><div className="skeleton h-48 rounded-2xl" /><div className="skeleton h-32 rounded-2xl" /></div>
+      </div>
+    </div>
+  );
   if (!task) return <div className="p-8 animate-fade-in"><button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-gray-500 mb-4"><HiArrowLeft className="w-4 h-4" /> Back</button><p className="text-gray-500">Task not found</p></div>;
 
   const isDoer = canEditTasks(appRole);
@@ -69,48 +140,48 @@ export default function TaskDetail() {
   const canModifyTask = isDoer;
 
   async function startEdit() {
-    setForm({ title: task!.title, description: task!.description || "", status: task!.status, deadline: task!.deadline || "", owner_id: task!.owner_id || "" });
-    setEditing(true); setError("");
+    set("form", { title: task!.title, description: task!.description || "", status: task!.status, deadline: task!.deadline || "", owner_id: task!.owner_id || "" });
+    set("editing", true); set("error", "");
   }
   async function saveEdit() {
-    setSaving(true); setError("");
-    try { await apiPatch(`/api/tasks/${id}`, form); await refetch(); setEditing(false); }
-    catch (e) { setError(e instanceof Error ? e.message : "Save failed"); }
-    setSaving(false);
+    set("saving", true); set("error", "");
+    try { await apiPatch(`/api/tasks/${id}`, ui.form); await refetch(); set("editing", false); }
+    catch (e) { set("error", e instanceof Error ? e.message : "Save failed"); }
+    set("saving", false);
   }
   async function deleteTask() {
     if (!confirm("Delete this task permanently?")) return;
-    setDeleting(true);
+    set("deleting", true);
     try { await apiDelete(`/api/tasks/${id}`); toast("Task deleted", "success"); router.push("/tasks"); }
-    catch (e) { setError(e instanceof Error ? e.message : "Delete failed"); setDeleting(false); }
+    catch (e) { set("error", e instanceof Error ? e.message : "Delete failed"); set("deleting", false); }
   }
   async function addSubtask() {
-    if (!subtaskTitle) return;
-    try { await apiPost("/api/subtasks", { task_id: id, title: subtaskTitle }); setSubtaskTitle(""); setShowSubForm(false); await refetch(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    if (!ui.subtaskTitle) return;
+    try { await apiPost("/api/subtasks", { task_id: id, title: ui.subtaskTitle }); set("subtaskTitle", ""); set("showSubForm", false); await refetch(); }
+    catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
   async function uploadFile() {
-    if (!textOnly && !file) return;
-    if (textOnly && !fileTitle) return;
-    setUploading(true);
+    if (!ui.textOnly && !ui.file) return;
+    if (ui.textOnly && !ui.fileTitle) return;
+    set("uploading", true);
     try {
-      if (textOnly) {
+      if (ui.textOnly) {
         // Text-only deliverable — no file attachment
         await apiPost("/api/deliverables/text", {
           task_id: id,
-          title: fileTitle,
-          description: deliverableDesc || null,
+          title: ui.fileTitle,
+          description: ui.deliverableDesc || null,
           uploaded_by: dbUser?.id,
         });
       } else {
-        const fd = new FormData(); fd.append("file", file!); fd.append("task_id", id); fd.append("title", fileTitle || file!.name);
-        if (deliverableDesc) fd.append("description", deliverableDesc);
+        const fd = new FormData(); fd.append("file", ui.file!); fd.append("task_id", id); fd.append("title", ui.fileTitle || ui.file!.name);
+        if (ui.deliverableDesc) fd.append("description", ui.deliverableDesc);
         if (dbUser) fd.append("uploaded_by", dbUser.id);
         await apiUpload("/api/deliverables", fd);
       }
-      setFile(null); setFileTitle(""); setDeliverableDesc(""); setTextOnly(false); await refetch(); toast("File uploaded", "success");
-    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed"); }
-    setUploading(false);
+      dispatch({ type: "RESET_UPLOAD" }); await refetch(); toast("File uploaded", "success");
+    } catch (e) { set("error", e instanceof Error ? e.message : "Upload failed"); }
+    set("uploading", false);
   }
   async function deleteDeliverable(delId: string) {
     if (!confirm("Delete this file?")) return;
@@ -118,31 +189,31 @@ export default function TaskDetail() {
   }
   async function submitFeedback() {
     if (!dbUser) return;
-    try { await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: fbRating, comment: fbComment || null, tag: fbTag }); setFbComment(""); setFbRating(5); await refetch(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    try { await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: ui.fbRating, comment: ui.fbComment || null, tag: ui.fbTag }); dispatch({ type: "RESET_FEEDBACK_FORM" }); await refetch(); }
+    catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
   async function updateFeedback(fbId: string) {
-    try { await apiPatch(`/api/feedback/${fbId}`, { comment: editFbComment, rating: editFbRating }); setEditingFb(null); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
+    try { await apiPatch(`/api/feedback/${fbId}`, { comment: ui.editFbComment, rating: ui.editFbRating }); dispatch({ type: "CANCEL_EDIT_FB" }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function deleteFeedback(fbId: string) {
     if (!confirm("Delete this feedback?")) return;
     try { await apiDelete(`/api/feedback/${fbId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function replyToFeedback() {
-    if (!dbUser || !replyText || !replyTo) return;
-    const orig = task!.feedback?.find(f => f.id === replyTo);
+    if (!dbUser || !ui.replyText || !ui.replyTo) return;
+    const orig = task!.feedback?.find(f => f.id === ui.replyTo);
     try {
-      await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: orig?.rating || 5, comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved" });
-      setReplyTo(null); setReplyText(""); await refetch();
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: orig?.rating || 5, comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${ui.replyText}`, tag: "approved" });
+      dispatch({ type: "RESET_REPLY" }); await refetch();
+    } catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
   async function addDependency() {
-    if (!depTaskId) return;
+    if (!ui.depTaskId) return;
     try {
-      if (showDepAdd === "prerequisite") await apiPost("/api/dependencies", { task_id: depTaskId, depends_on_task_id: id });
-      else await apiPost("/api/dependencies", { task_id: id, depends_on_task_id: depTaskId });
-      setShowDepAdd(null); setDepTaskId(""); await refetch();
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      if (ui.showDepAdd === "prerequisite") await apiPost("/api/dependencies", { task_id: ui.depTaskId, depends_on_task_id: id });
+      else await apiPost("/api/dependencies", { task_id: id, depends_on_task_id: ui.depTaskId });
+      set("showDepAdd", null); set("depTaskId", ""); await refetch();
+    } catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
   async function removeDependency(depId: string) {
     try { await apiDelete(`/api/dependencies?id=${depId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
@@ -162,19 +233,19 @@ export default function TaskDetail() {
       <div className="flex items-center justify-between">
         <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"><HiArrowLeft className="w-4 h-4" /> Back</button>
         {canDeleteTasks(appRole) && (
-          <button onClick={deleteTask} disabled={deleting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:text-white hover:bg-red-500 border border-red-200 dark:border-red-800/30 rounded-xl transition-all">
-            <HiTrash className="w-3.5 h-3.5" /> {deleting ? "Deleting..." : "Delete"}
+          <button onClick={deleteTask} disabled={ui.deleting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:text-white hover:bg-red-500 border border-red-200 dark:border-red-800/30 rounded-xl transition-all">
+            <HiTrash className="w-3.5 h-3.5" /> {ui.deleting ? "Deleting..." : "Delete"}
           </button>
         )}
       </div>
 
-      {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200/60 dark:border-red-800/40 rounded-xl px-4 py-2.5 text-sm text-red-600 dark:text-red-400 animate-fade-in">{error}</div>}
+      {ui.error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200/60 dark:border-red-800/40 rounded-xl px-4 py-2.5 text-sm text-red-600 dark:text-red-400 animate-fade-in">{ui.error}</div>}
 
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-2 flex-1 mr-4">
-          {editing ? (
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="text-2xl font-bold bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-1 text-gray-900 dark:text-white w-full" />
+          {ui.editing ? (
+            <input value={ui.form.title} onChange={(e) => dispatch({ type: "SET_FORM", form: { title: e.target.value } })} className="text-2xl font-bold bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-1 text-gray-900 dark:text-white w-full" />
           ) : (
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{task.title}</h1>
           )}
@@ -184,11 +255,11 @@ export default function TaskDetail() {
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[task.status] + "18", color: STATUS_COLORS[task.status] }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[task.status] }} />{STATUS_LABELS[task.status]}
           </span>
-          {canModifyTask && !editing && <button onClick={startEdit} className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-xl hover:brightness-105 transition-all">Edit</button>}
-          {editing && (
+          {canModifyTask && !ui.editing && <button onClick={startEdit} className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-xl hover:brightness-105 transition-all">Edit</button>}
+          {ui.editing && (
             <div className="flex gap-2">
-              <button onClick={saveEdit} disabled={saving} className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:brightness-110 text-white text-sm rounded-xl shadow-sm transition-all active:scale-[0.97]">{saving ? "Saving..." : "Save"}</button>
-              <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-gray-500 text-sm">Cancel</button>
+              <button onClick={saveEdit} disabled={ui.saving} className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:brightness-110 text-white text-sm rounded-xl shadow-sm transition-all active:scale-[0.97]">{ui.saving ? "Saving..." : "Save"}</button>
+              <button onClick={() => set("editing", false)} className="px-3 py-1.5 text-gray-500 text-sm">Cancel</button>
             </div>
           )}
         </div>
@@ -214,43 +285,43 @@ export default function TaskDetail() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
         {(["details", "feedback"] as const).map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-all capitalize ${activeTab === tab ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          <button key={tab} onClick={() => set("activeTab", tab)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-all capitalize ${ui.activeTab === tab ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
             {tab === "details" ? "Details" : `Feedback Trail (${feedbackList.length})`}
           </button>
         ))}
       </div>
 
       {/* ===== DETAILS TAB ===== */}
-      {activeTab === "details" && (
+      {ui.activeTab === "details" && (
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 space-y-6">
             {/* Description */}
             <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-6">
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</h3>
-              {editing ? (
-                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" placeholder="Add description..." />
+              {ui.editing ? (
+                <textarea value={ui.form.description} onChange={(e) => dispatch({ type: "SET_FORM", form: { description: e.target.value } })} rows={4} className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" placeholder="Add description..." />
               ) : (
                 <p className="text-sm text-gray-600 dark:text-gray-300">{task.description || "No description"}</p>
               )}
             </div>
 
             {/* Edit fields — doers only */}
-            {editing && isDoer && (() => {
+            {ui.editing && isDoer && (() => {
               const blockers = getCompletionBlockers(task as Task & { deliverables?: { id: string }[]; feedback?: { id: string }[] });
               const blocked = blockers.length > 0;
               return (
                 <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-6 space-y-3">
                   <div className="grid grid-cols-3 gap-3">
                     <div><label className="text-xs text-gray-500 mb-1 block">Status</label>
-                      <select value={form.status} onChange={(e) => { const v = e.target.value as TaskStatus; if (v === "completed" && blocked) { setError(`Cannot complete: ${blockers.join(". ")}`); return; } setForm({ ...form, status: v }); }}
+                      <select value={ui.form.status} onChange={(e) => { const v = e.target.value as TaskStatus; if (v === "completed" && blocked) { set("error", `Cannot complete: ${blockers.join(". ")}`); return; } dispatch({ type: "SET_FORM", form: { status: v } }); }}
                         className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
                         {Object.entries(STATUS_LABELS).map(([k, l]) => <option key={k} value={k} disabled={k === "completed" && blocked}>{l}</option>)}
                       </select></div>
                     <div><label className="text-xs text-gray-500 mb-1 block">Deadline</label>
-                      <input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
+                      <input type="date" value={ui.form.deadline} onChange={(e) => dispatch({ type: "SET_FORM", form: { deadline: e.target.value } })} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
                     <div><label className="text-xs text-gray-500 mb-1 block">Owner</label>
-                      <select value={form.owner_id} onChange={(e) => setForm({ ...form, owner_id: e.target.value })} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
+                      <select value={ui.form.owner_id} onChange={(e) => dispatch({ type: "SET_FORM", form: { owner_id: e.target.value } })} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
                         <option value="">Unassigned</option>{(owners || []).map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
                       </select></div>
                   </div>
@@ -263,10 +334,10 @@ export default function TaskDetail() {
             <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-6 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Subtasks ({task.subtasks?.length || 0})</h3>
-                {isDoer && <button onClick={() => setShowSubForm(!showSubForm)} className="text-xs text-indigo-500 hover:text-indigo-400 transition-colors">+ Add</button>}
+                {isDoer && <button onClick={() => set("showSubForm", !ui.showSubForm)} className="text-xs text-indigo-500 hover:text-indigo-400 transition-colors">+ Add</button>}
               </div>
-              {showSubForm && isDoer && (
-                <div className="flex gap-2"><input value={subtaskTitle} onChange={(e) => setSubtaskTitle(e.target.value)} placeholder="Subtask title" className="flex-1 px-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" onKeyDown={(e) => e.key === "Enter" && addSubtask()} /><button onClick={addSubtask} className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl shadow-sm">Add</button></div>
+              {ui.showSubForm && isDoer && (
+                <div className="flex gap-2"><input value={ui.subtaskTitle} onChange={(e) => set("subtaskTitle", e.target.value)} placeholder="Subtask title" className="flex-1 px-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" onKeyDown={(e) => e.key === "Enter" && addSubtask()} /><button onClick={addSubtask} className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl shadow-sm">Add</button></div>
               )}
               {(task.subtasks || []).map((st) => (
                 <div key={st.id} className="flex items-center justify-between bg-gray-50/80 dark:bg-gray-800/40 rounded-xl px-4 py-3"><div className="flex items-center gap-3"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[st.status] }} /><span className="text-sm text-gray-800 dark:text-white">{st.title}</span></div>
@@ -289,7 +360,7 @@ export default function TaskDetail() {
                     {isDoer && <button onClick={() => removeDependency(d.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiX className="w-3.5 h-3.5" /></button>}
                   </div>
                 ))}
-                {isDoer && <button onClick={() => setShowDepAdd("prerequisite")} className="text-xs text-indigo-500 hover:text-indigo-400 mt-1">+ Add prerequisite</button>}
+                {isDoer && <button onClick={() => set("showDepAdd", "prerequisite")} className="text-xs text-indigo-500 hover:text-indigo-400 mt-1">+ Add prerequisite</button>}
               </div>
 
               {/* Has Dependency On */}
@@ -301,14 +372,14 @@ export default function TaskDetail() {
                     {isDoer && <button onClick={() => removeDependency(d.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiX className="w-3.5 h-3.5" /></button>}
                   </div>
                 ))}
-                {isDoer && <button onClick={() => setShowDepAdd("dependency")} className="text-xs text-indigo-500 hover:text-indigo-400 mt-1">+ Add dependency</button>}
+                {isDoer && <button onClick={() => set("showDepAdd", "dependency")} className="text-xs text-indigo-500 hover:text-indigo-400 mt-1">+ Add dependency</button>}
               </div>
 
               {/* Add dependency modal */}
-              {showDepAdd && (
+              {ui.showDepAdd && (
                 <div className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl p-4 space-y-3 border border-gray-200/60 dark:border-gray-700/60">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{showDepAdd === "prerequisite" ? "Select task that depends on this one:" : "Select task this depends on:"}</p>
-                  <select value={depTaskId} onChange={(e) => setDepTaskId(e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{ui.showDepAdd === "prerequisite" ? "Select task that depends on this one:" : "Select task this depends on:"}</p>
+                  <select value={ui.depTaskId} onChange={(e) => set("depTaskId", e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
                     <option value="">Select task...</option>
                     {categories.map((cat) => (
                       <optgroup key={cat} label={cat as string}>
@@ -317,8 +388,8 @@ export default function TaskDetail() {
                     ))}
                   </select>
                   <div className="flex gap-2">
-                    <button onClick={addDependency} disabled={!depTaskId} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-xs rounded-xl shadow-sm transition-all">Add</button>
-                    <button onClick={() => { setShowDepAdd(null); setDepTaskId(""); }} className="text-xs text-gray-500">Cancel</button>
+                    <button onClick={addDependency} disabled={!ui.depTaskId} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-xs rounded-xl shadow-sm transition-all">Add</button>
+                    <button onClick={() => { set("showDepAdd", null); set("depTaskId", ""); }} className="text-xs text-gray-500">Cancel</button>
                   </div>
                 </div>
               )}
@@ -349,9 +420,9 @@ export default function TaskDetail() {
                     const v = e.target.value;
                     if (v === "completed") {
                       const blockers = getCompletionBlockers(task as Task & { deliverables?: { id: string }[]; feedback?: { id: string }[] });
-                      if (blockers.length) { setError(`Cannot complete: ${blockers.join(". ")}`); return; }
+                      if (blockers.length) { set("error", `Cannot complete: ${blockers.join(". ")}`); return; }
                     }
-                    try { await apiPatch(`/api/tasks/${id}`, { status: v }); await refetch(); } catch (e2) { setError(e2 instanceof Error ? e2.message : "Failed"); }
+                    try { await apiPatch(`/api/tasks/${id}`, { status: v }); await refetch(); } catch (e2) { set("error", e2 instanceof Error ? e2.message : "Failed"); }
                   }}
                     className="w-full text-sm font-semibold px-3 py-2 rounded-xl border-0 cursor-pointer"
                     style={{ backgroundColor: STATUS_COLORS[task.status] + "15", color: STATUS_COLORS[task.status] }}>
@@ -407,19 +478,19 @@ export default function TaskDetail() {
               {(!task.deliverables || task.deliverables.length === 0) && <p className="text-sm text-gray-400">No deliverables</p>}
               {canUploadDeliverables(appRole) && (
                 <div className="space-y-2 pt-2 border-t border-gray-200/60 dark:border-gray-800/60">
-                  <input value={fileTitle} onChange={(e) => setFileTitle(e.target.value)} placeholder={textOnly ? "Deliverable title *" : "File title"} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-                  <textarea value={deliverableDesc} onChange={(e) => setDeliverableDesc(e.target.value)} placeholder="Description / notes (optional)" rows={2} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                  <input value={ui.fileTitle} onChange={(e) => set("fileTitle", e.target.value)} placeholder={ui.textOnly ? "Deliverable title *" : "File title"} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                  <textarea value={ui.deliverableDesc} onChange={(e) => set("deliverableDesc", e.target.value)} placeholder="Description / notes (optional)" rows={2} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={textOnly} onChange={(e) => { setTextOnly(e.target.checked); if (e.target.checked) setFile(null); }}
+                    <input type="checkbox" checked={ui.textOnly} onChange={(e) => { set("textOnly", e.target.checked); if (e.target.checked) set("file", null); }}
                       className="w-3.5 h-3.5 rounded border-gray-300 text-indigo-500 focus:ring-indigo-500" />
                     <span className="text-xs text-gray-500">Submit without attachment</span>
                   </label>
-                  {!textOnly && (
-                    <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gray-100 dark:file:bg-gray-800" />
+                  {!ui.textOnly && (
+                    <input type="file" onChange={(e) => set("file", e.target.files?.[0] || null)} className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gray-100 dark:file:bg-gray-800" />
                   )}
-                  <button onClick={uploadFile} disabled={textOnly ? !fileTitle || uploading : !file || uploading}
+                  <button onClick={uploadFile} disabled={ui.textOnly ? !ui.fileTitle || ui.uploading : !ui.file || ui.uploading}
                     className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-xs rounded-xl shadow-sm transition-all">
-                    {uploading ? "Submitting..." : textOnly ? "Submit Deliverable" : "Upload"}
+                    {ui.uploading ? "Submitting..." : ui.textOnly ? "Submit Deliverable" : "Upload"}
                   </button>
                 </div>
               )}
@@ -430,10 +501,10 @@ export default function TaskDetail() {
               <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-violet-200/60 dark:border-violet-800/30 rounded-2xl shadow-sm p-6 space-y-3">
                 <h3 className="text-sm font-medium text-violet-600 dark:text-violet-400 uppercase tracking-wider">Add Feedback</h3>
                 <div className="flex gap-2">
-                  <div className="flex-1"><label className="text-xs text-gray-500">Rating</label><input type="number" min={1} max={10} value={fbRating} onChange={(e) => setFbRating(parseInt(e.target.value))} className="w-full px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
-                  <div className="flex-1"><label className="text-xs text-gray-500">Tag</label><select value={fbTag} onChange={(e) => setFbTag(e.target.value)} className="w-full px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"><option value="approved">Approved</option><option value="needs_improvement">Needs Improvement</option><option value="blocked">Obstacle</option></select></div>
+                  <div className="flex-1"><label className="text-xs text-gray-500">Rating</label><input type="number" min={1} max={10} value={ui.fbRating} onChange={(e) => set("fbRating", parseInt(e.target.value))} className="w-full px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
+                  <div className="flex-1"><label className="text-xs text-gray-500">Tag</label><select value={ui.fbTag} onChange={(e) => set("fbTag", e.target.value)} className="w-full px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"><option value="approved">Approved</option><option value="needs_improvement">Needs Improvement</option><option value="blocked">Obstacle</option></select></div>
                 </div>
-                <textarea value={fbComment} onChange={(e) => setFbComment(e.target.value)} placeholder="Your feedback..." rows={2} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                <textarea value={ui.fbComment} onChange={(e) => set("fbComment", e.target.value)} placeholder="Your feedback..." rows={2} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
                 <button onClick={submitFeedback} className="px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-500 hover:brightness-110 text-white text-xs rounded-xl shadow-sm transition-all">Submit Feedback</button>
               </div>
             )}
@@ -442,7 +513,7 @@ export default function TaskDetail() {
       )}
 
       {/* ===== FEEDBACK TRAIL TAB ===== */}
-      {activeTab === "feedback" && (
+      {ui.activeTab === "feedback" && (
         <div className="space-y-4 max-w-2xl">
           {feedbackList.length === 0 ? (
             <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center"><p className="text-gray-500">No feedback yet.</p></div>
@@ -460,18 +531,18 @@ export default function TaskDetail() {
                     <span className="text-lg font-bold text-gray-900 dark:text-white">{fb.rating}<span className="text-xs text-gray-400">/10</span></span>
                     {isOwner && canEditFeedback(appRole) && (
                       <div className="flex gap-1">
-                        <button onClick={() => { setEditingFb(fb.id); setEditFbComment(fb.comment || ""); setEditFbRating(fb.rating); }} className="text-gray-400 hover:text-indigo-500 transition-colors"><HiPencil className="w-3 h-3" /></button>
+                        <button onClick={() => dispatch({ type: "START_EDIT_FB", fbId: fb.id, comment: fb.comment || "", rating: fb.rating })} className="text-gray-400 hover:text-indigo-500 transition-colors"><HiPencil className="w-3 h-3" /></button>
                         <button onClick={() => deleteFeedback(fb.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiTrash className="w-3 h-3" /></button>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {editingFb === fb.id ? (
+                {ui.editingFb === fb.id ? (
                   <div className="space-y-2 mt-2">
-                    <div className="flex gap-2"><input type="number" min={1} max={10} value={editFbRating} onChange={(e) => setEditFbRating(parseInt(e.target.value))} className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm" /><span className="text-xs text-gray-400 self-center">/10</span></div>
-                    <textarea value={editFbComment} onChange={(e) => setEditFbComment(e.target.value)} rows={2} className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-                    <div className="flex gap-2"><button onClick={() => updateFeedback(fb.id)} className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs rounded-lg">Save</button><button onClick={() => setEditingFb(null)} className="text-xs text-gray-500">Cancel</button></div>
+                    <div className="flex gap-2"><input type="number" min={1} max={10} value={ui.editFbRating} onChange={(e) => set("editFbRating", parseInt(e.target.value))} className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm" /><span className="text-xs text-gray-400 self-center">/10</span></div>
+                    <textarea value={ui.editFbComment} onChange={(e) => set("editFbComment", e.target.value)} rows={2} className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                    <div className="flex gap-2"><button onClick={() => updateFeedback(fb.id)} className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs rounded-lg">Save</button><button onClick={() => dispatch({ type: "CANCEL_EDIT_FB" })} className="text-xs text-gray-500">Cancel</button></div>
                   </div>
                 ) : (
                   fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{fb.comment}</p>
@@ -486,10 +557,10 @@ export default function TaskDetail() {
                     )}
                     {fb.acknowledged && <span className="text-[10px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
                     {/* Reply */}
-                    {replyTo === fb.id ? (
-                      <div className="flex gap-2 flex-1"><input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Reply..." autoFocus className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" onKeyDown={(e) => e.key === "Enter" && replyToFeedback()} /><button onClick={replyToFeedback} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Reply</button><button onClick={() => { setReplyTo(null); setReplyText(""); }} className="text-xs text-gray-400">Cancel</button></div>
+                    {ui.replyTo === fb.id ? (
+                      <div className="flex gap-2 flex-1"><input value={ui.replyText} onChange={(e) => set("replyText", e.target.value)} placeholder="Reply..." autoFocus className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" onKeyDown={(e) => e.key === "Enter" && replyToFeedback()} /><button onClick={replyToFeedback} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Reply</button><button onClick={() => dispatch({ type: "RESET_REPLY" })} className="text-xs text-gray-400">Cancel</button></div>
                     ) : (
-                      <button onClick={() => setReplyTo(fb.id)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-500 transition-colors"><HiReply className="w-3 h-3" /> Reply</button>
+                      <button onClick={() => set("replyTo", fb.id)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-500 transition-colors"><HiReply className="w-3 h-3" /> Reply</button>
                     )}
                   </div>
                 )}

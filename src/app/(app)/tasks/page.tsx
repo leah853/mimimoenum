@@ -11,6 +11,7 @@ import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaper
 import Link from "next/link";
 import { FIXED_CATEGORIES, OWNER_STYLE } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
+import { Skeleton, SkeletonRows } from "@/components/ui";
 
 type FullTask = Task & {
   owner?: { id: string; full_name: string };
@@ -24,7 +25,7 @@ type IterOption = { id: string; name: string; start_date: string; end_date: stri
 type QuarterOption = { id: string; name: string; start_date: string; end_date: string; iterations: IterOption[] };
 
 export default function TasksPage() {
-  return <Suspense fallback={<div className="p-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" /></div>}><TasksInner /></Suspense>;
+  return <Suspense fallback={<div className="p-8 space-y-4 animate-fade-in"><div className="flex items-center justify-between"><div className="skeleton h-8 w-48" /><div className="skeleton h-9 w-28 rounded-xl" /></div><div className="flex gap-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-7 w-20 rounded-full" />)}</div><SkeletonRows count={8} /></div>}><TasksInner /></Suspense>;
 }
 
 function TasksInner() {
@@ -101,7 +102,13 @@ function TasksInner() {
     }
   });
 
-  if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>;
+  if (loading) return (
+    <div className="p-8 space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between"><div className="skeleton h-8 w-48" /><div className="skeleton h-9 w-28 rounded-xl" /></div>
+      <div className="flex gap-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-7 w-20 rounded-full" />)}</div>
+      <SkeletonRows count={8} />
+    </div>
+  );
 
   const toggle = (k: string) => { const n = new Set(expanded); n.has(k) ? n.delete(k) : n.add(k); setExpanded(n); };
 

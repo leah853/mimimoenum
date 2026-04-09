@@ -6,7 +6,7 @@ import { useApi, apiPost, apiPatch, apiDelete } from "@/lib/use-api";
 import { canAddEOD } from "@/lib/roles";
 import type { EODUpdate } from "@/lib/types";
 import { HiChevronLeft, HiChevronRight } from "react-icons/hi";
-import { useToast } from "@/components/ui";
+import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
 type FullEOD = EODUpdate & {
@@ -26,7 +26,7 @@ export default function EODPage() {
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [selectedDate, setSelectedDate] = useState<string>(today.toISOString().split("T")[0]);
 
-  const { data: allUpdates, refetch } = useApi<FullEOD[]>("/api/eod");
+  const { data: allUpdates, loading, refetch } = useApi<FullEOD[]>("/api/eod");
   const { data: owners } = useApi<OwnerOption[]>("/api/users/owners");
   const updates = allUpdates || [];
 
@@ -49,6 +49,16 @@ export default function EODPage() {
   const updatesByDate = new Map<string, FullEOD>();
   updates.forEach((u) => updatesByDate.set(u.date, u));
   const selectedUpdate = updatesByDate.get(selectedDate);
+
+  if (loading) return (
+    <div className="p-8 space-y-6 animate-fade-in">
+      <div className="skeleton h-8 w-48" />
+      <div className="flex gap-6">
+        <div className="skeleton h-72 w-[380px] rounded-2xl" />
+        <div className="flex-1 skeleton h-48 rounded-2xl" />
+      </div>
+    </div>
+  );
 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); };
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); };

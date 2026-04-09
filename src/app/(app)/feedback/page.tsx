@@ -8,7 +8,7 @@ import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import Link from "next/link";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol } from "react-icons/hi";
-import { useToast } from "@/components/ui";
+import { useToast, Skeleton, SkeletonRows } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
@@ -53,7 +53,13 @@ export default function FeedbackTrailPage() {
     if (activeTab === "general_chat") chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages.length, activeTab]);
 
-  if (loading) return <div className="p-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" /></div>;
+  if (loading) return (
+    <div className="p-8 space-y-6 animate-fade-in">
+      <div className="skeleton h-8 w-56" />
+      <div className="grid grid-cols-5 gap-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)}</div>
+      <SkeletonRows count={5} />
+    </div>
+  );
 
   const all = tasks || [];
 
