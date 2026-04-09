@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       owner:users!tasks_owner_id_fkey(id, full_name, email),
       subtasks(*),
       deliverables(id, title, file_url, version, created_at),
-      feedback(id, rating, tag, comment, created_at, reviewer:users!feedback_reviewer_id_fkey(id, full_name)),
+      feedback(id, rating, tag, comment, acknowledged, acknowledged_by, acknowledged_at, created_at, reviewer:users!feedback_reviewer_id_fkey(id, full_name)),
       deps_from:dependencies!dependencies_task_id_fkey(depends_on_task_id),
       deps_to:dependencies!dependencies_depends_on_task_id_fkey(task_id)
     `)
