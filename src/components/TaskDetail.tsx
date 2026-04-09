@@ -526,7 +526,11 @@ export default function TaskDetail() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">{fb.reviewer?.full_name?.[0] || "?"}</div>
-                    <div><span className="text-sm font-medium text-gray-800 dark:text-white">{fb.reviewer?.full_name}</span><span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${tagColors[fb.tag] || ""}`}>{fb.tag.replace("_", " ")}</span></div>
+                    <div>
+                      <span className="text-sm font-medium text-gray-800 dark:text-white">{fb.reviewer?.full_name}</span>
+                      <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${tagColors[fb.tag] || ""}`}>{fb.tag.replace("_", " ")}</span>
+                      <span className="ml-2 text-[9px] text-gray-400">{new Date(fb.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-lg font-bold text-gray-900 dark:text-white">{fb.rating}<span className="text-xs text-gray-400">/10</span></span>

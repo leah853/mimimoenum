@@ -18,7 +18,7 @@ type FullTask = Task & {
   owner?: { id: string; full_name: string };
 };
 
-type FilterType = "all" | "unacknowledged" | "unviewed" | "awaiting_review" | null;
+type FilterType = "all" | "unacknowledged" | "awaiting_review" | null;
 
 type WeekReport = {
   id: string;
@@ -78,7 +78,7 @@ export default function FeedbackTrailPage() {
   }, [all]);
 
   // Stats (must be before any early return)
-  const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables } = useMemo(() => {
+  const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables } = useMemo(() => {
     const totalThreads = threads.length;
     const taskFeedbackCount = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !isReplyComment(f.comment)).length, 0);
     const wrList = weekReports || [];
@@ -88,8 +88,7 @@ export default function FeedbackTrailPage() {
     const awaitingReviewTasks = all.filter((t) => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length));
     const weekReportsAwaitingReview = wrList.filter((wr) => !(wr.feedback?.length));
     const tasksWithDeliverables = awaitingReviewTasks.length + weekReportsAwaitingReview.length;
-    const unviewedDeliverables = all.reduce((s, t) => s + (t.deliverables || []).filter((d) => !d.viewed).length, 0);
-    return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables };
+    return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables };
   }, [threads, all, weekReports]);
 
   // Auto-scroll chat to bottom
@@ -110,9 +109,6 @@ export default function FeedbackTrailPage() {
     if (!activeFilter || activeFilter === "all") return threads;
     if (activeFilter === "unacknowledged") {
       return threads.filter(t => t.feedbacks.some(f => !f.acknowledged && !isReplyComment(f.comment)));
-    }
-    if (activeFilter === "unviewed") {
-      return threads.filter(t => (t.task.deliverables || []).some(d => !d.viewed));
     }
     return threads;
   }
@@ -224,7 +220,7 @@ export default function FeedbackTrailPage() {
       </div>
 
       {/* KPI Cards — clickable filters */}
-      <div className="grid grid-cols-5 gap-4 stagger-children">
+      <div className="grid grid-cols-4 gap-4 stagger-children">
         <button onClick={() => toggleFilter("all")}
           className={`text-left bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border rounded-2xl p-4 interactive transition-all ${
             activeFilter === "all" || !activeFilter ? "border-gray-300 dark:border-gray-600 ring-1 ring-gray-300 dark:ring-gray-600" : "border-gray-200/60 dark:border-gray-800/60"
@@ -246,16 +242,6 @@ export default function FeedbackTrailPage() {
           <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{unacknowledged}</p>
           {activeFilter === "unacknowledged" && <p className="text-[9px] text-yellow-500 mt-1">Filter active</p>}
         </button>
-        <button onClick={() => toggleFilter("unviewed")}
-          className={`text-left rounded-2xl p-4 interactive transition-all ${
-            activeFilter === "unviewed"
-              ? "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/20 dark:to-cyan-900/15 border-2 border-blue-400 dark:border-blue-600 ring-1 ring-blue-400"
-              : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-blue-200/60 dark:border-blue-800/30 bg-gradient-to-br from-blue-50 to-cyan-50/50 dark:from-blue-900/10 dark:to-cyan-900/5"
-          }`}>
-          <p className="text-xs text-blue-600 dark:text-blue-400">Unviewed Files</p>
-          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{unviewedDeliverables}</p>
-          {activeFilter === "unviewed" && <p className="text-[9px] text-blue-500 mt-1">Filter active</p>}
-        </button>
         <button onClick={() => toggleFilter("awaiting_review")}
           className={`text-left rounded-2xl p-4 interactive transition-all ${
             activeFilter === "awaiting_review"
@@ -273,7 +259,7 @@ export default function FeedbackTrailPage() {
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Filtering by:</span>
           <span className="text-xs px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full font-medium">
-            {activeFilter === "unacknowledged" ? "Unacknowledged feedback" : activeFilter === "unviewed" ? "Unviewed files" : "Awaiting review"}
+            {activeFilter === "unacknowledged" ? "Unacknowledged feedback" : "Awaiting review"}
           </span>
           <button onClick={() => setActiveFilter(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><HiX className="w-3.5 h-3.5" /></button>
         </div>
@@ -565,8 +551,8 @@ export default function FeedbackTrailPage() {
               <div className="space-y-3">
                 {(weekReports || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((wr) => (
                   <div key={wr.id} className="bg-gradient-to-br from-teal-50/80 to-cyan-50/60 dark:from-teal-900/15 dark:to-cyan-900/10 border border-teal-200/60 dark:border-teal-800/30 rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
-                    {/* Report header */}
-                    <div className="flex items-center gap-3 px-5 py-3 border-b border-teal-200/40 dark:border-teal-800/20">
+                    {/* Report header — clickable to navigate to week */}
+                    <Link href={`/weeks/${wr.week_id}`} className="flex items-center gap-3 px-5 py-3 border-b border-teal-200/40 dark:border-teal-800/20 hover:bg-teal-50/50 dark:hover:bg-teal-900/10 transition-all">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
                         wr.report_type === "wednesday"
                           ? "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400"
@@ -581,15 +567,15 @@ export default function FeedbackTrailPage() {
                         </span>
                       </div>
                       {wr.file_url && (
-                        <a href={wr.file_url} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-[10px] text-teal-600 dark:text-teal-400 hover:text-teal-500 transition-colors">
+                        <span className="flex items-center gap-1 text-[10px] text-teal-600 dark:text-teal-400">
                           <HiOutlinePaperClip className="w-3.5 h-3.5" /> File
-                        </a>
+                        </span>
                       )}
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-[10px] text-gray-400">{wr.feedback?.length || 0} feedback</span>
+                        <HiArrowRight className="w-3 h-3 text-gray-400" />
                       </div>
-                    </div>
+                    </Link>
 
                     {/* Feedback entries */}
                     <div className="px-5 py-3 space-y-3">
