@@ -25,9 +25,14 @@ export function validateUser(email: string, password: string): BasicUser | null 
 }
 
 export function encodeSession(user: BasicUser): string {
-  return btoa(JSON.stringify({ email: user.email, full_name: user.full_name, role: user.role }));
+  const json = JSON.stringify({ email: user.email, full_name: user.full_name, role: user.role });
+  if (typeof btoa === "function") return btoa(json);
+  return Buffer.from(json).toString("base64");
 }
 
 export function decodeSession(token: string): { email: string; full_name: string; role: string } | null {
-  try { return JSON.parse(atob(token)); } catch { return null; }
+  try {
+    const decoded = typeof atob === "function" ? atob(token) : Buffer.from(token, "base64").toString("utf-8");
+    return JSON.parse(decoded);
+  } catch { return null; }
 }
