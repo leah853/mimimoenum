@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
+import { useApi } from "@/lib/use-api";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
+import type { Task, Feedback, Deliverable } from "@/lib/types";
 import {
   HiOutlineViewGrid, HiOutlineChartBar, HiOutlineClipboardList,
   HiOutlineDocumentText, HiOutlineUpload, HiOutlineLogout,
@@ -14,20 +16,32 @@ import {
 
 const ZOOM_BASE = "https://us05web.zoom.us/j/84008799468?pwd=2N7Zq6UWhuYVSW3opb6T3xDJi34BXM.1";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: HiOutlineViewGrid },
-  { href: "/milestones", label: "Milestones", icon: HiOutlineTable },
-  { href: "/gantt", label: "Gantt View", icon: HiOutlineChartBar },
-  { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList },
-  { href: "/feedback", label: "Feedback Trail", icon: HiOutlineAnnotation },
-  { href: "/eod", label: "EOD Updates", icon: HiOutlineDocumentText },
-  { href: "/upload", label: "Upload CSV", icon: HiOutlineUpload },
-];
+type FbTask = Task & {
+  feedback?: (Feedback & { acknowledged?: boolean })[];
+  deliverables?: Deliverable[];
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { dbUser, appRole, signOut } = useAuth();
   const { theme, toggle } = useTheme();
+  const { data: tasks } = useApi<FbTask[]>("/api/tasks");
+
+  // Compute feedback counts
+  const all = tasks || [];
+  const unacknowledged = all.reduce((s, t) => s + (t.feedback || []).filter(f => !f.acknowledged && !f.comment?.startsWith("↩️")).length, 0);
+  const awaitingReview = all.filter(t => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length)).length;
+  const feedbackCount = unacknowledged + awaitingReview;
+
+  const NAV_ITEMS = [
+    { href: "/dashboard", label: "Dashboard", icon: HiOutlineViewGrid, badge: 0 },
+    { href: "/milestones", label: "Milestones", icon: HiOutlineTable, badge: 0 },
+    { href: "/gantt", label: "Gantt View", icon: HiOutlineChartBar, badge: 0 },
+    { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList, badge: 0 },
+    { href: "/feedback", label: "Feedback Trail", icon: HiOutlineAnnotation, badge: feedbackCount },
+    { href: "/eod", label: "EOD Updates", icon: HiOutlineDocumentText, badge: 0 },
+    { href: "/upload", label: "Upload CSV", icon: HiOutlineUpload, badge: 0 },
+  ];
 
   return (
     <aside className="w-64 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-r border-gray-200/60 dark:border-gray-800/60 flex flex-col min-h-screen">
@@ -53,7 +67,12 @@ export default function Sidebar() {
             >
               <item.icon className={`w-5 h-5 ${isActive ? "text-indigo-500" : ""}`} />
               {item.label}
-              {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500" />}
+              {item.badge > 0 && (
+                <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white min-w-[18px] text-center">
+                  {item.badge}
+                </span>
+              )}
+              {isActive && item.badge === 0 && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500" />}
             </Link>
           );
         })}

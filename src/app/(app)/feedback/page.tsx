@@ -1,13 +1,13 @@
 "use client";
 
-import { useApi, apiPatch, apiPost } from "@/lib/use-api";
+import { useApi, apiPatch, apiPost, apiDelete } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canGiveFeedback, canEditTasks } from "@/lib/roles";
 import type { Task, Feedback, Deliverable } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import Link from "next/link";
-import { useState } from "react";
-import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX } from "react-icons/hi";
+import { useState, useRef, useEffect } from "react";
+import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol } from "react-icons/hi";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -18,19 +18,35 @@ type FullTask = Task & {
 
 type FilterType = "all" | "unacknowledged" | "unviewed" | "awaiting_review" | null;
 
+type ChatMessage = { id: string; user_id: string; message: string; mentions?: string[]; parent_id?: string; created_at: string; user?: { id: string; full_name: string; email: string } };
+type TeamUser = { id: string; full_name: string; email: string };
+
 export default function FeedbackTrailPage() {
   const { data: tasks, loading, refetch } = useApi<FullTask[]>("/api/tasks");
+  const { data: chatData, refetch: refetchChat } = useApi<ChatMessage[]>("/api/chat");
+  const { data: teamUsers } = useApi<TeamUser[]>("/api/users");
   const { dbUser, appRole } = useAuth();
   const isDoer = canEditTasks(appRole);
   const isAssessor = canGiveFeedback(appRole);
 
   const [replyTo, setReplyTo] = useState<{ taskId: string; fbId: string } | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [replyError, setReplyError] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
   const [activeTab, setActiveTab] = useState<"task_feedback" | "general_chat">("task_feedback");
 
   // General Chat state
   const [chatMsg, setChatMsg] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const chatMessages = chatData || [];
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (activeTab === "general_chat") chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages.length, activeTab]);
 
   if (loading) return <div className="p-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" /></div>;
 
@@ -94,15 +110,18 @@ export default function FeedbackTrailPage() {
 
   async function submitReply() {
     if (!replyTo || !replyText || !dbUser) return;
+    setReplyError("");
     try {
       const orig = threadsMap.get(replyTo.taskId)?.feedbacks.find((f) => f.id === replyTo.fbId);
       await apiPost("/api/feedback", {
         task_id: replyTo.taskId, reviewer_id: dbUser.id, rating: orig?.rating || 5,
-        comment: `\u21a9\ufe0f Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved",
+        comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved",
       });
       setReplyTo(null); setReplyText("");
       await refetch();
-    } catch {}
+    } catch (e) {
+      setReplyError(e instanceof Error ? e.message : "Reply failed");
+    }
   }
 
   const tagColors: Record<string, string> = {
@@ -114,6 +133,36 @@ export default function FeedbackTrailPage() {
   function fmtTime(d: string) {
     return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   }
+
+  // Extract @mentions from message text and resolve to user IDs
+  function extractMentionIds(text: string): string[] {
+    const mentionNames = [...text.matchAll(/@([A-Za-z\s]+?)(?=\s|$|@)/g)].map(m => m[1].trim());
+    return mentionNames.map(name => (teamUsers || []).find(u => u.full_name.toLowerCase() === name.toLowerCase())?.id).filter(Boolean) as string[];
+  }
+
+  // Render message with highlighted @mentions
+  function renderMentions(text: string) {
+    const parts = text.split(/(@[A-Za-z\s]+?)(?=\s|$|@)/g);
+    return parts.map((part, i) =>
+      part.startsWith("@") ? <span key={i} className="text-indigo-400 font-medium">{part}</span> : <span key={i}>{part}</span>
+    );
+  }
+
+  async function sendChat() {
+    if (!chatMsg.trim() || !dbUser) return;
+    setChatSending(true);
+    try {
+      const mentions = extractMentionIds(chatMsg);
+      await apiPost("/api/chat", { user_id: dbUser.id, message: chatMsg, mentions });
+      setChatMsg("");
+      setShowMentions(false);
+      await refetchChat();
+    } catch {}
+    setChatSending(false);
+  }
+
+  // Counts for sidebar badge
+  const totalNewItems = unacknowledged + tasksWithDeliverables;
 
   return (
     <div className="p-8 space-y-6 animate-fade-in">
@@ -193,18 +242,96 @@ export default function FeedbackTrailPage() {
       {/* ===== GENERAL CHAT TAB ===== */}
       {activeTab === "general_chat" && (
         <div className="space-y-4 max-w-2xl">
-          <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Team Chat</h3>
-            <p className="text-xs text-gray-400">Conversational messages not tied to specific tasks. Use @mentions to tag team members.</p>
-            <div className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl p-8 text-center">
-              <HiOutlineChatAlt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-400">General chat coming soon</p>
-              <p className="text-xs text-gray-400 mt-1">Threaded conversations with @mentions, timestamps, and CRUD</p>
+          <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-200/60 dark:border-gray-800/60">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Team Chat</h3>
+              <p className="text-[10px] text-gray-400">Conversational — not tied to specific tasks. Use @ to mention team members.</p>
             </div>
-            <div className="flex gap-2">
-              <input value={chatMsg} onChange={(e) => setChatMsg(e.target.value)} placeholder="Type a message... (use @name to mention)"
-                className="flex-1 px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-              <button disabled className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl opacity-50 cursor-not-allowed">Send</button>
+
+            {/* Messages */}
+            <div className="px-5 py-4 space-y-3 max-h-[500px] overflow-y-auto min-h-[200px]">
+              {chatMessages.length === 0 ? (
+                <div className="text-center py-8">
+                  <HiOutlineChatAlt className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">No messages yet. Start the conversation!</p>
+                </div>
+              ) : chatMessages.map((msg) => {
+                const isMe = msg.user_id === dbUser?.id;
+                return (
+                  <div key={msg.id} className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${isMe ? "bg-gradient-to-br from-indigo-500 to-violet-500" : "bg-gradient-to-br from-gray-400 to-gray-500"}`}>
+                      {msg.user?.full_name?.[0] || "?"}
+                    </div>
+                    <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
+                      <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
+                        <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
+                      </div>
+                      <div className={`inline-block px-3 py-2 rounded-xl text-sm ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                        {renderMentions(msg.message)}
+                      </div>
+                      {(msg.mentions?.length || 0) > 0 && (
+                        <div className="flex gap-1 mt-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                          {msg.mentions!.map((m, i) => (
+                            <span key={i} className="text-[9px] text-indigo-500">@{(teamUsers || []).find(u => u.id === m)?.full_name || m}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat input */}
+            <div className="px-5 py-3 border-t border-gray-200/60 dark:border-gray-800/60 relative">
+              {/* Mentions dropdown */}
+              {showMentions && (
+                <div className="absolute bottom-full left-5 mb-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-1 w-52 max-h-48 overflow-y-auto z-10">
+                  <p className="text-[9px] text-gray-400 px-2 py-1">Select team member</p>
+                  {(teamUsers || []).map((u) => (
+                    <button key={u.id} onClick={() => {
+                      const atIndex = chatMsg.lastIndexOf("@");
+                      setChatMsg(chatMsg.slice(0, atIndex) + `@${u.full_name} `);
+                      setShowMentions(false);
+                    }}
+                      className="w-full text-left px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-[8px] font-bold">{u.full_name[0]}</div>
+                      <span>{u.full_name}</span>
+                      <span className="text-[9px] text-gray-400 ml-auto">{u.email.split("@")[1]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input value={chatMsg}
+                    onChange={(e) => {
+                      setChatMsg(e.target.value);
+                      const val = e.target.value;
+                      const lastAt = val.lastIndexOf("@");
+                      if (lastAt >= 0 && (lastAt === val.length - 1 || !val.slice(lastAt).includes(" "))) {
+                        setShowMentions(true);
+                      } else {
+                        setShowMentions(false);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+                      if (e.key === "Escape") setShowMentions(false);
+                    }}
+                    placeholder="Type a message..."
+                    className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10" />
+                  <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors">
+                    <HiAtSymbol className="w-4 h-4" />
+                  </button>
+                </div>
+                <button onClick={sendChat} disabled={!chatMsg.trim() || chatSending}
+                  className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-sm rounded-xl transition-all">
+                  {chatSending ? "..." : "Send"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -316,12 +443,15 @@ export default function FeedbackTrailPage() {
 
                                 {/* Inline reply */}
                                 {replyTo?.fbId === fb.id && (
-                                  <div className="flex gap-2 mt-2 ml-10">
-                                    <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Reply..." autoFocus
-                                      className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
-                                      onKeyDown={(e) => e.key === "Enter" && submitReply()} />
-                                    <button onClick={submitReply} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
-                                    <button onClick={() => { setReplyTo(null); setReplyText(""); }} className="text-xs text-gray-400">Cancel</button>
+                                  <div className="mt-2 ml-10 space-y-1">
+                                    <div className="flex gap-2">
+                                      <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Reply..." autoFocus
+                                        className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
+                                        onKeyDown={(e) => e.key === "Enter" && submitReply()} />
+                                      <button onClick={submitReply} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
+                                      <button onClick={() => { setReplyTo(null); setReplyText(""); setReplyError(""); }} className="text-xs text-gray-400">Cancel</button>
+                                    </div>
+                                    {replyError && <p className="text-[10px] text-red-500">{replyError}</p>}
                                   </div>
                                 )}
                               </div>
