@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
       eod_update_id: data.id,
       task_id: taskId,
     }));
-    await sb.from("eod_update_tasks").insert(links);
+    const { error: linkError } = await sb.from("eod_update_tasks").insert(links);
+    if (linkError) return err(`Task linking failed: ${linkError.message}`, 400);
   }
 
   return ok(data, 201);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Task, TaskStatus, Subtask, Deliverable, Feedback } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
@@ -116,6 +116,15 @@ export default function TaskDetail() {
 
   const [ui, dispatch] = useReducer(uiReducer, initialUIState);
   const set = (field: keyof UIState, value: unknown) => dispatch({ type: "SET_FIELD", field, value });
+
+  // Reset UI state when navigating between tasks
+  useEffect(() => {
+    dispatch({ type: "SET_FIELD", field: "editing", value: false });
+    dispatch({ type: "SET_FIELD", field: "error", value: "" });
+    dispatch({ type: "RESET_UPLOAD" });
+    dispatch({ type: "RESET_REPLY" });
+    dispatch({ type: "CANCEL_EDIT_FB" });
+  }, [id]);
 
   // Hooks must be called before any early return
   const feedbackList = useMemo(() => task?.feedback || [], [task?.feedback]);

@@ -12,6 +12,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // Ownership check: only the author or admin can edit
   if (role !== "admin") {
     const callerId = await getCallerId(request);
+    if (!callerId) return err("Could not verify identity", 401);
     const { data: record } = await sb.from("eod_updates").select("user_id").eq("id", id).single();
     if (!record || record.user_id !== callerId) {
       return err("Forbidden: you can only edit your own EOD updates", 403);
@@ -34,6 +35,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // Ownership check: only the author or admin can delete
   if (role !== "admin") {
     const callerId = await getCallerId(request);
+    if (!callerId) return err("Could not verify identity", 401);
     const { data: record } = await sb.from("eod_updates").select("user_id").eq("id", id).single();
     if (!record || record.user_id !== callerId) {
       return err("Forbidden: you can only delete your own EOD updates", 403);

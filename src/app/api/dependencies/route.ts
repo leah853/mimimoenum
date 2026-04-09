@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { ok, err, validate } from "@/lib/api-helpers";
+import { ok, err, validate, safeJson } from "@/lib/api-helpers";
+import { getCallerRole } from "@/lib/api-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const { data, error } = await sb
     .from("dependencies")
@@ -13,8 +16,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
-  const body = await request.json();
+  const body = await safeJson(request);
+  if (!body) return err("Invalid JSON", 400);
 
   const missing = validate(body, ["task_id", "depends_on_task_id"]);
   if (missing) return err(missing);
@@ -23,9 +29,8 @@ export async function POST(request: NextRequest) {
     return err("Task cannot depend on itself");
   }
 
-  // Check both tasks exist
-  const { data: t1 } = await sb.from("tasks").select("id").eq("id", body.task_id).single();
-  const { data: t2 } = await sb.from("tasks").select("id").eq("id", body.depends_on_task_id).single();
+  const { data: t1 } = await sb.from("tasks").select("id").eq("id", body.task_id as string).single();
+  const { data: t2 } = await sb.from("tasks").select("id").eq("id", body.depends_on_task_id as string).single();
   if (!t1 || !t2) return err("One or both tasks not found", 404);
 
   const { data, error } = await sb.from("dependencies").insert(body).select().single();
@@ -34,6 +39,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return err("Missing dependency id");

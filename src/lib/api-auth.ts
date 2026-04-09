@@ -32,8 +32,12 @@ export async function getCallerId(request: NextRequest): Promise<string | null> 
   const session = decodeSession(decodeURIComponent(cookie.value));
   if (!session?.email) return null;
 
-  const { createServiceClient } = require("@/lib/supabase/server");
-  const sb = createServiceClient();
-  const { data } = await sb.from("users").select("id").eq("email", session.email).single();
-  return data?.id || null;
+  try {
+    const { createServiceClient } = require("@/lib/supabase/server");
+    const sb = createServiceClient();
+    const { data } = await sb.from("users").select("id").eq("email", session.email).maybeSingle();
+    return data?.id || null;
+  } catch {
+    return null;
+  }
 }

@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
   if (!callerRole) return err("Not authenticated", 401);
 
   const sb = createServiceClient();
-  const body = await request.json();
+  let body;
+  try { body = await request.json(); } catch { return err("Invalid JSON", 400); }
 
   // Any authenticated user can reply; only assessors can post new feedback
   const isReply = isReplyComment(body.comment);
@@ -40,8 +41,8 @@ export async function POST(request: NextRequest) {
     return err("task_id or subtask_id required");
   }
 
-  if (body.rating < 1 || body.rating > 10) {
-    return err("Rating must be between 1 and 10");
+  if (typeof body.rating !== "number" || isNaN(body.rating) || body.rating < 1 || body.rating > 10) {
+    return err("Rating must be a number between 1 and 10");
   }
 
   if (!["approved", "needs_improvement", "blocked"].includes(body.tag)) {

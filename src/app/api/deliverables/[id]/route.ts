@@ -12,6 +12,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // Ownership check: only the uploader or admin can edit
   if (role !== "admin") {
     const callerId = await getCallerId(request);
+    if (!callerId) return err("Could not verify identity", 401);
     const { data: record } = await sb.from("deliverables").select("uploaded_by").eq("id", id).single();
     if (!record || record.uploaded_by !== callerId) {
       return err("Forbidden: you can only edit your own deliverables", 403);
@@ -38,6 +39,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // Ownership check: only the uploader or admin can delete
   if (role !== "admin") {
     const callerId = await getCallerId(request);
+    if (!callerId) return err("Could not verify identity", 401);
     const { data: record } = await sb.from("deliverables").select("uploaded_by").eq("id", id).single();
     if (!record || record.uploaded_by !== callerId) {
       return err("Forbidden: you can only delete your own deliverables", 403);

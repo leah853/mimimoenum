@@ -10,9 +10,18 @@ export function err(message: string, status = 400) {
 
 export function validate(body: Record<string, unknown>, required: string[]): string | null {
   for (const field of required) {
-    if (body[field] === undefined || body[field] === null || body[field] === "") {
+    const val = body[field];
+    if (val === undefined || val === null || val === "") {
       return `Missing required field: ${field}`;
+    }
+    if (typeof val === "string" && val.trim() === "") {
+      return `${field} cannot be blank`;
     }
   }
   return null;
+}
+
+/** Safely parse request JSON — returns parsed body or null on malformed input */
+export async function safeJson(request: Request): Promise<Record<string, unknown> | null> {
+  try { return await request.json(); } catch { return null; }
 }

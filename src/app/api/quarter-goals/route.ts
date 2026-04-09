@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { ok, err, validate } from "@/lib/api-helpers";
+import { ok, err, validate, safeJson } from "@/lib/api-helpers";
 import { getCallerRole } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
@@ -18,8 +18,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
-  const body = await request.json();
+  const body = await safeJson(request);
+  if (!body) return err("Invalid JSON", 400);
   const missing = validate(body, ["quarter_id", "category", "goal"]);
   if (missing) return err(missing);
 
@@ -29,6 +32,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return err("id required");
