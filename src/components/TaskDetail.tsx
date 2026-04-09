@@ -117,6 +117,10 @@ export default function TaskDetail() {
   const [ui, dispatch] = useReducer(uiReducer, initialUIState);
   const set = (field: keyof UIState, value: unknown) => dispatch({ type: "SET_FIELD", field, value });
 
+  // Hooks must be called before any early return
+  const feedbackList = useMemo(() => task?.feedback || [], [task?.feedback]);
+  const categories = useMemo(() => [...new Set((allTasks || []).map(t => t.category).filter(Boolean))], [allTasks]);
+
   if (loading) return (
     <div className="p-8 max-w-5xl space-y-6 animate-fade-in">
       <div className="skeleton h-5 w-16" />
@@ -218,9 +222,6 @@ export default function TaskDetail() {
   async function removeDependency(depId: string) {
     try { await apiDelete(`/api/dependencies?id=${depId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
-
-  const feedbackList = useMemo(() => task.feedback || [], [task.feedback]);
-  const categories = useMemo(() => [...new Set((allTasks || []).map(t => t.category).filter(Boolean))], [allTasks]);
 
   const tagColors: Record<string, string> = {
     approved: "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",

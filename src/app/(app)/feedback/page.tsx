@@ -47,23 +47,9 @@ export default function FeedbackTrailPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const chatMessages = chatData || [];
-
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    if (activeTab === "general_chat") chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages.length, activeTab]);
-
-  if (loading) return (
-    <div className="p-8 space-y-6 animate-fade-in">
-      <div className="skeleton h-8 w-56" />
-      <div className="grid grid-cols-5 gap-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)}</div>
-      <SkeletonRows count={5} />
-    </div>
-  );
-
   const all = tasks || [];
 
-  // Build per-task feedback threads
+  // Build per-task feedback threads (must be before any early return)
   const threads = useMemo(() => {
     const threadsMap = new Map<string, { task: FullTask; feedbacks: FeedbackItem[] }>();
     for (const task of all) {
@@ -78,7 +64,7 @@ export default function FeedbackTrailPage() {
     });
   }, [all]);
 
-  // Stats
+  // Stats (must be before any early return)
   const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables } = useMemo(() => {
     const totalThreads = threads.length;
     const totalFeedback = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.comment?.startsWith("↩️") && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
@@ -88,6 +74,19 @@ export default function FeedbackTrailPage() {
     const unviewedDeliverables = all.reduce((s, t) => s + (t.deliverables || []).filter((d) => !d.viewed).length, 0);
     return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables };
   }, [threads, all]);
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (activeTab === "general_chat") chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages.length, activeTab]);
+
+  if (loading) return (
+    <div className="p-8 space-y-6 animate-fade-in">
+      <div className="skeleton h-8 w-56" />
+      <div className="grid grid-cols-5 gap-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)}</div>
+      <SkeletonRows count={5} />
+    </div>
+  );
 
   // Filter logic — applied to threads
   function getFilteredThreads() {
