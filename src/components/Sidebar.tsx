@@ -13,7 +13,7 @@ import {
   HiOutlineVideoCamera,
 } from "react-icons/hi";
 
-type Stats = { feedbackCount: number; unacknowledged: number; awaitingReview: number };
+type Stats = { feedbackCount: number; unacknowledged: number; awaitingReview: number; eodNeedsReview: number };
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -22,6 +22,7 @@ export default function Sidebar() {
   const { data: stats } = useApi<Stats>("/api/stats");
 
   const feedbackCount = stats?.feedbackCount || 0;
+  const eodNeedsReview = stats?.eodNeedsReview || 0;
 
   const NAV_ITEMS = [
     { href: "/dashboard", label: "Dashboard", icon: HiOutlineViewGrid, badge: 0 },
@@ -29,7 +30,7 @@ export default function Sidebar() {
     { href: "/gantt", label: "Gantt View", icon: HiOutlineChartBar, badge: 0 },
     { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList, badge: 0 },
     { href: "/feedback", label: "Feedback Trail", icon: HiOutlineAnnotation, badge: feedbackCount },
-    { href: "/eod", label: "EOD Updates", icon: HiOutlineDocumentText, badge: 0 },
+    { href: "/eod", label: "EOD Updates", icon: HiOutlineDocumentText, badge: eodNeedsReview },
     { href: "/upload", label: "Upload CSV", icon: HiOutlineUpload, badge: 0 },
   ];
 

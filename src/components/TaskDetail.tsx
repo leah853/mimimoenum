@@ -10,7 +10,7 @@ import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, ca
 import { getCompletionBlockers } from "@/lib/business-rules";
 import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye } from "react-icons/hi";
 import { useToast, Skeleton } from "@/components/ui";
-import { handleApiError } from "@/lib/utils";
+import { handleApiError, isReplyComment } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -138,7 +138,7 @@ export default function TaskDetail() {
   const isAssessor = canGiveFeedback(appRole);
   const hasFeedback = (task.feedback?.length || 0) > 0;
   const hasDeliverables = (task.deliverables?.length || 0) > 0;
-  const hasUnacknowledgedFeedback = (task.feedback || []).some(f => !f.acknowledged && !f.comment?.startsWith("↩️"));
+  const hasUnacknowledgedFeedback = (task.feedback || []).some(f => !f.acknowledged && !isReplyComment(f.comment));
   const needsReview = hasDeliverables && !hasFeedback;
   const needsAcknowledgement = hasFeedback && hasUnacknowledgedFeedback;
   const canModifyTask = isDoer;
@@ -519,7 +519,7 @@ export default function TaskDetail() {
           {feedbackList.length === 0 ? (
             <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center"><p className="text-gray-500">No feedback yet.</p></div>
           ) : feedbackList.map((fb) => {
-            const isReply = fb.comment?.startsWith("↩️");
+            const isReply = isReplyComment(fb.comment);
             const isOwner = fb.reviewer_id === dbUser?.id;
             return (
               <div key={fb.id} className={`bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-5 animate-fade-in ${isReply ? "ml-8 border-l-2 border-l-violet-400" : ""}`}>

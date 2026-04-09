@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol } from "react-icons/hi";
 import { useToast, Skeleton, SkeletonRows } from "@/components/ui";
-import { handleApiError } from "@/lib/utils";
+import { handleApiError, isReplyComment } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -20,11 +20,24 @@ type FullTask = Task & {
 
 type FilterType = "all" | "unacknowledged" | "unviewed" | "awaiting_review" | null;
 
+type WeekReport = {
+  id: string;
+  week_id: string;
+  report_type: "wednesday" | "saturday";
+  content: string;
+  file_url?: string;
+  submitted_by: string;
+  created_at: string;
+  submitted_by_user?: { id: string; full_name: string };
+  feedback?: { id: string; reviewer_id: string; rating: number; comment?: string; created_at: string; reviewer?: { id: string; full_name: string } }[];
+};
+
 type ChatMessage = { id: string; user_id: string; message: string; mentions?: string[]; parent_id?: string; created_at: string; user?: { id: string; full_name: string; email: string } };
 type TeamUser = { id: string; full_name: string; email: string };
 
 export default function FeedbackTrailPage() {
   const { data: tasks, loading, refetch } = useApi<FullTask[]>("/api/tasks");
+  const { data: weekReports } = useApi<WeekReport[]>("/api/week-reports");
   const { data: chatData, refetch: refetchChat } = useApi<ChatMessage[]>("/api/chat");
   const { data: teamUsers } = useApi<TeamUser[]>("/api/users");
   const { dbUser, appRole } = useAuth();
@@ -67,13 +80,17 @@ export default function FeedbackTrailPage() {
   // Stats (must be before any early return)
   const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables } = useMemo(() => {
     const totalThreads = threads.length;
-    const totalFeedback = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.comment?.startsWith("↩️") && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
-    const unacknowledged = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.acknowledged && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
+    const taskFeedbackCount = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !isReplyComment(f.comment)).length, 0);
+    const wrList = weekReports || [];
+    const weekReportFeedbackCount = wrList.reduce((s, wr) => s + (wr.feedback?.length || 0), 0);
+    const totalFeedback = taskFeedbackCount + weekReportFeedbackCount;
+    const unacknowledged = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.acknowledged && !isReplyComment(f.comment)).length, 0);
     const awaitingReviewTasks = all.filter((t) => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length));
-    const tasksWithDeliverables = awaitingReviewTasks.length;
+    const weekReportsAwaitingReview = wrList.filter((wr) => !(wr.feedback?.length));
+    const tasksWithDeliverables = awaitingReviewTasks.length + weekReportsAwaitingReview.length;
     const unviewedDeliverables = all.reduce((s, t) => s + (t.deliverables || []).filter((d) => !d.viewed).length, 0);
     return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables };
-  }, [threads, all]);
+  }, [threads, all, weekReports]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -92,7 +109,7 @@ export default function FeedbackTrailPage() {
   function getFilteredThreads() {
     if (!activeFilter || activeFilter === "all") return threads;
     if (activeFilter === "unacknowledged") {
-      return threads.filter(t => t.feedbacks.some(f => !f.acknowledged && !f.comment?.startsWith("\u21a9\ufe0f")));
+      return threads.filter(t => t.feedbacks.some(f => !f.acknowledged && !isReplyComment(f.comment)));
     }
     if (activeFilter === "unviewed") {
       return threads.filter(t => (t.task.deliverables || []).some(d => !d.viewed));
@@ -439,7 +456,7 @@ export default function FeedbackTrailPage() {
                     Feedback Threads ({filteredThreads.length}{activeFilter && activeFilter !== "all" ? ` of ${totalThreads}` : ""})
                   </h2>
                   {filteredThreads.map(({ task, feedbacks }) => {
-                    const unack = feedbacks.filter((f) => !f.acknowledged && !f.comment?.startsWith("\u21a9\ufe0f")).length;
+                    const unack = feedbacks.filter((f) => !f.acknowledged && !isReplyComment(f.comment)).length;
                     return (
                       <div key={task.id} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
                         {/* Task header — clickable card */}
@@ -465,7 +482,7 @@ export default function FeedbackTrailPage() {
                         {/* Feedback messages — chronological */}
                         <div className="px-5 py-3 space-y-3 max-h-96 overflow-y-auto">
                           {feedbacks.map((fb) => {
-                            const isReply = fb.comment?.startsWith("\u21a9\ufe0f");
+                            const isReply = isReplyComment(fb.comment);
                             return (
                               <div key={fb.id} className={`${isReply ? "ml-8 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600" : ""}`}>
                                 <div className="flex items-start gap-2.5">
@@ -537,6 +554,72 @@ export default function FeedbackTrailPage() {
                 </div>
               )}
             </>
+          )}
+
+          {/* ===== WEEK REPORTS SECTION ===== */}
+          {(weekReports || []).length > 0 && (
+            <div className="mt-6 space-y-4">
+              <h2 className="text-sm font-semibold text-teal-600 dark:text-teal-400 flex items-center gap-2">
+                <span className="text-base">📊</span> Week Reports
+              </h2>
+              <div className="space-y-3">
+                {(weekReports || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((wr) => (
+                  <div key={wr.id} className="bg-gradient-to-br from-teal-50/80 to-cyan-50/60 dark:from-teal-900/15 dark:to-cyan-900/10 border border-teal-200/60 dark:border-teal-800/30 rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+                    {/* Report header */}
+                    <div className="flex items-center gap-3 px-5 py-3 border-b border-teal-200/40 dark:border-teal-800/20">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                        wr.report_type === "wednesday"
+                          ? "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400"
+                          : "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400"
+                      }`}>
+                        {wr.report_type === "wednesday" ? "Wednesday" : "Saturday"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate block">{wr.content}</span>
+                        <span className="text-[10px] text-gray-400">
+                          Submitted by {wr.submitted_by_user?.full_name || "Unknown"} · {fmtTime(wr.created_at)}
+                        </span>
+                      </div>
+                      {wr.file_url && (
+                        <a href={wr.file_url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[10px] text-teal-600 dark:text-teal-400 hover:text-teal-500 transition-colors">
+                          <HiOutlinePaperClip className="w-3.5 h-3.5" /> File
+                        </a>
+                      )}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-gray-400">{wr.feedback?.length || 0} feedback</span>
+                      </div>
+                    </div>
+
+                    {/* Feedback entries */}
+                    <div className="px-5 py-3 space-y-3">
+                      {(wr.feedback?.length || 0) > 0 ? (
+                        wr.feedback!.map((fb) => (
+                          <div key={fb.id} className="flex items-start gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
+                              {fb.reviewer?.full_name?.[0] || "?"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{fb.reviewer?.full_name}</span>
+                                <span className="text-xs font-bold text-gray-900 dark:text-white">{fb.rating}/10</span>
+                                <span className="text-[9px] text-gray-400">{fmtTime(fb.created_at)}</span>
+                              </div>
+                              {fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{fb.comment}</p>}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex items-center gap-2 py-1">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="text-xs text-amber-600 dark:text-amber-400">Awaiting review</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </>
       )}

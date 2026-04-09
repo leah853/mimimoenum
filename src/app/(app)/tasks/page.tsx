@@ -10,7 +10,7 @@ import { canEditTasks, canCreateTasks } from "@/lib/roles";
 import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck } from "react-icons/hi";
 import Link from "next/link";
 import { FIXED_CATEGORIES, OWNER_STYLE } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
+import { formatDate, isReplyComment } from "@/lib/utils";
 import { Skeleton, SkeletonRows } from "@/components/ui";
 
 type FullTask = Task & {
@@ -398,7 +398,7 @@ function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullT
   // Highlight states for review workflow
   const hasDeliverables = (task.deliverables?.length || 0) > 0;
   const hasFeedback = (task.feedback?.length || 0) > 0;
-  const hasUnacknowledgedFb = (task.feedback || []).some(f => !f.acknowledged && !f.comment?.startsWith("↩️"));
+  const hasUnacknowledgedFb = (task.feedback || []).some(f => !f.acknowledged && !isReplyComment(f.comment));
   const needsReview = hasDeliverables && !hasFeedback;
   const needsAck = hasFeedback && hasUnacknowledgedFb;
 

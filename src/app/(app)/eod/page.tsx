@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useApi, apiPost, apiPatch, apiDelete } from "@/lib/use-api";
-import { canAddEOD } from "@/lib/roles";
+import { canAddEOD, canGiveFeedback } from "@/lib/roles";
 import type { EODUpdate } from "@/lib/types";
 import { HiChevronLeft, HiChevronRight } from "react-icons/hi";
 import { useToast, Skeleton } from "@/components/ui";
@@ -29,6 +29,7 @@ export default function EODPage() {
   const { data: allUpdates, loading, refetch } = useApi<FullEOD[]>("/api/eod");
   const { data: owners } = useApi<OwnerOption[]>("/api/users/owners");
   const updates = allUpdates || [];
+  const isAssessor = canGiveFeedback(appRole);
 
   const [whatWasDone, setWhatWasDone] = useState("");
   const [whatsNext, setWhatsNext] = useState("");
@@ -40,6 +41,18 @@ export default function EODPage() {
   const [editDone, setEditDone] = useState("");
   const [editNext, setEditNext] = useState("");
   const [editObstacles, setEditObstacles] = useState("");
+
+  // Summary stats for current month
+  const eodStats = useMemo(() => {
+    const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
+    const monthUpdates = updates.filter(u => u.date.startsWith(monthPrefix));
+    const totalThisMonth = monthUpdates.length;
+    const unreviewed = monthUpdates.filter(u => !u.comments || u.comments.length === 0).length;
+    const withBlockers = monthUpdates.filter(u => !!u.blockers).length;
+    // All-time: updates with no comments (for assessor banner)
+    const allUnreviewed = updates.filter(u => !u.comments || u.comments.length === 0).length;
+    return { totalThisMonth, unreviewed, withBlockers, allUnreviewed };
+  }, [updates, viewYear, viewMonth]);
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
@@ -93,6 +106,37 @@ export default function EODPage() {
   return (
     <div className="p-8 space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">EOD Updates</h1>
+
+      {/* Summary stat pills */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="px-4 py-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-xl shadow-sm flex items-center gap-2">
+          <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{eodStats.totalThisMonth}</span>
+          <span className="text-xs text-gray-500">updates this month</span>
+        </div>
+        <div className="px-4 py-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-yellow-200/60 dark:border-yellow-800/40 rounded-xl shadow-sm flex items-center gap-2">
+          <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{eodStats.unreviewed}</span>
+          <span className="text-xs text-gray-500">unreviewed</span>
+        </div>
+        <div className="px-4 py-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-red-200/60 dark:border-red-800/40 rounded-xl shadow-sm flex items-center gap-2">
+          <span className="text-lg font-bold text-red-500 dark:text-red-400">{eodStats.withBlockers}</span>
+          <span className="text-xs text-gray-500">with blockers</span>
+        </div>
+      </div>
+
+      {/* Assessor (rep) alert banner */}
+      {isAssessor && eodStats.allUnreviewed > 0 && (
+        <div className="bg-gradient-to-r from-violet-500/10 to-indigo-500/10 dark:from-violet-600/20 dark:to-indigo-600/20 border border-violet-300/40 dark:border-violet-700/40 rounded-2xl px-5 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+            {eodStats.allUnreviewed}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+              {eodStats.allUnreviewed} EOD update{eodStats.allUnreviewed !== 1 ? "s" : ""} need{eodStats.allUnreviewed === 1 ? "s" : ""} your review
+            </p>
+            <p className="text-xs text-violet-500 dark:text-violet-400">Updates with no comments yet are awaiting your feedback.</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-6">
         {/* Calendar */}

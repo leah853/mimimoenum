@@ -18,6 +18,11 @@ export function calcScore(tasks: { status: TaskStatus }[]): number {
   return (tasks.filter((t) => t.status === "completed").length / tasks.length) * 10;
 }
 
+/** Check if a feedback comment is a reply (not original feedback) */
+export function isReplyComment(comment?: string | null): boolean {
+  return !!comment && (comment.startsWith("↩️") || comment.startsWith("\u21a9\ufe0f") || comment.startsWith("Reply to"));
+}
+
 /** Extract a human-readable error message from an unknown catch value */
 export function handleApiError(e: unknown): string {
   if (e instanceof Error) return e.message;

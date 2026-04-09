@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, validate } from "@/lib/api-helpers";
 import { isAssessor, getCallerRole } from "@/lib/api-auth";
+import { isReplyComment } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   const sb = createServiceClient();
@@ -27,11 +28,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
 
   // Any authenticated user can reply; only assessors can post new feedback
-  const isReply = typeof body.comment === "string" && (
-    body.comment.startsWith("↩️") ||
-    body.comment.startsWith("\u21a9\ufe0f") ||
-    body.comment.startsWith("Reply to")
-  );
+  const isReply = isReplyComment(body.comment);
   if (callerRole !== "assessor" && !isReply) {
     return err("Only assessors can give feedback", 403);
   }

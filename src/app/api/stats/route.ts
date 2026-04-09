@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err } from "@/lib/api-helpers";
 import { getCallerRole } from "@/lib/api-auth";
+import { isReplyComment } from "@/lib/utils";
 
 /** Lightweight counts for sidebar badge — avoids fetching all tasks with relations */
 export async function GET(request: NextRequest) {
@@ -9,12 +10,13 @@ export async function GET(request: NextRequest) {
   if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
 
-  // Count unacknowledged feedback (excluding replies)
-  const { count: unacknowledged, error: e1 } = await sb
+  // Fetch all unacknowledged feedback then filter replies in JS for robustness
+  const { data: unackRows, error: e1 } = await sb
     .from("feedback")
-    .select("id", { count: "exact", head: true })
-    .or("acknowledged.is.null,acknowledged.eq.false")
-    .not("comment", "like", "↩️%");
+    .select("id, comment")
+    .or("acknowledged.is.null,acknowledged.eq.false");
+
+  const unacknowledged = (unackRows || []).filter((f: { id: string; comment: string | null }) => !isReplyComment(f.comment)).length;
 
   // Count tasks with deliverables but no feedback (awaiting review)
   const { data: tasksWithDeliverables, error: e2 } = await sb
@@ -36,11 +38,26 @@ export async function GET(request: NextRequest) {
     awaitingReview = deliverableTaskIds.filter(id => !feedbackTaskIds.has(id)).length;
   }
 
-  if (e1 || e2) return err((e1 || e2)!.message, 500);
+  // EOD stats: count updates from last 7 days with zero comments (needs review)
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split("T")[0];
+
+  const { data: recentEods, error: e3 } = await sb
+    .from("eod_updates")
+    .select("id, eod_comments(id)")
+    .gte("date", sevenDaysAgoStr);
+
+  const eodNeedsReview = (recentEods || []).filter(
+    (e: { id: string; eod_comments: { id: string }[] }) => !e.eod_comments || e.eod_comments.length === 0
+  ).length;
+
+  if (e1 || e2 || e3) return err((e1 || e2 || e3)!.message, 500);
 
   return ok({
-    unacknowledged: unacknowledged || 0,
+    unacknowledged,
     awaitingReview,
-    feedbackCount: (unacknowledged || 0) + awaitingReview,
+    feedbackCount: unacknowledged + awaitingReview,
+    eodNeedsReview,
   });
 }
