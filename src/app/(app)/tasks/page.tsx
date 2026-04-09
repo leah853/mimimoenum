@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Task, TaskStatus } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
@@ -14,7 +14,7 @@ type FullTask = Task & {
   owner?: { id: string; full_name: string };
   subtasks?: { id: string }[];
   deliverables?: { id: string }[];
-  feedback?: { id: string; rating: number }[];
+  feedback?: { id: string; rating: number; acknowledged?: boolean; comment?: string }[];
 };
 type UserOption = { id: string; full_name: string; email: string };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
@@ -48,6 +48,8 @@ function TasksInner() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">(initialStatus);
   const [catFilter, setCatFilter] = useState<string>("all");
+  const [iterFilter, setIterFilter] = useState<string>("all");
+  const [weekFilter, setWeekFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -61,23 +63,53 @@ function TasksInner() {
   const dynamicCats = [...new Set(all.map((t) => t.category).filter(Boolean))] as string[];
   const categories = [...new Set([...FIXED_CATEGORIES, ...dynamicCats])];
 
-  // Auto-expand on first load
+  // Auto-expand — runs on first load AND whenever filters change
+  const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}`;
   if (!initialized && (categories.length > 0 || iterations.length > 0)) {
+    queueMicrotask(() => { expandForCurrentView(); setInitialized(true); });
+  }
+
+  function expandForCurrentView() {
     const auto = new Set<string>();
     auto.add("q");
-    categories.forEach((c) => auto.add(c));
+    const tasksToShow = all.filter((t) => {
+      if (catFilter !== "all" && t.category !== catFilter) return false;
+      if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
+      if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
+      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      return true;
+    });
+    // Expand categories that have matching tasks
+    categories.forEach((c) => { if (tasksToShow.some((t) => t.category === c)) auto.add(c); });
+    // Expand iterations that have matching tasks
     iterations.forEach((i) => {
-      auto.add(i.id);
-      // Auto-expand weeks that have tasks
+      if (tasksToShow.some((t) => t.iteration_id === i.id)) {
+        auto.add(i.id);
+        // Also expand matching iteration key per category
+        categories.forEach((cat) => {
+          if (tasksToShow.some((t) => t.iteration_id === i.id && t.category === cat)) {
+            auto.add(`${cat}|${i.id}`);
+          }
+        });
+      }
+      // Expand weeks that have matching tasks
       (i.weeks || []).forEach((w) => {
-        const weekHasTasks = all.some((t) => t.week_id === w.id);
-        if (weekHasTasks) {
+        if (tasksToShow.some((t) => t.week_id === w.id)) {
           categories.forEach((cat) => auto.add(`${cat}|${i.id}|w${w.id}`));
         }
       });
     });
-    queueMicrotask(() => { setExpanded(auto); setInitialized(true); });
+    setExpanded(auto);
   }
+
+  // Re-expand when filters change
+  const prevFilterKey = useRef(filterKey);
+  useEffect(() => {
+    if (initialized && prevFilterKey.current !== filterKey) {
+      prevFilterKey.current = filterKey;
+      expandForCurrentView();
+    }
+  });
 
   if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>;
 
@@ -86,9 +118,14 @@ function TasksInner() {
   const filtered = all.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (catFilter !== "all" && t.category !== catFilter) return false;
+    if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
+    if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const overdueCount = all.filter((t) => t.deadline && new Date(t.deadline) < new Date() && t.status !== "completed").length;
+  const dueTodayCount = all.filter((t) => t.deadline === new Date().toISOString().split("T")[0] && t.status !== "completed").length;
 
   async function updateField(taskId: string, field: string, value: string) {
     if (field === "status" && value === "completed") {
@@ -147,156 +184,178 @@ function TasksInner() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="space-y-3">
-        <div className="flex gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" />
-            <svg className="absolute left-3 top-3 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      {/* Filters — compact, modern */}
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-4 space-y-3">
+        {/* Row 1: Search + dropdowns */}
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..."
+              className="w-full pl-8 pr-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all" />
+            <svg className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
           <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}
-            className="px-4 py-2.5 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+            className="px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/30 transition-all">
             <option value="all">All Categories</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          <select value={iterFilter} onChange={(e) => { setIterFilter(e.target.value); setWeekFilter("all"); }}
+            className="px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/30 transition-all">
+            <option value="all">All Iterations</option>
+            {iterations.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+          <select value={weekFilter} onChange={(e) => setWeekFilter(e.target.value)}
+            className="px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/30 transition-all">
+            <option value="all">All Weeks</option>
+            {iterations.flatMap((iter) => (iter.weeks || []).map((w) => (
+              <option key={w.id} value={w.id}>{iter.name} · W{w.week_number}</option>
+            )))}
+          </select>
+          {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || search) && (
+            <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setSearch(""); }}
+              className="px-3 py-2 text-xs text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all">
+              Clear all
+            </button>
+          )}
         </div>
-        {/* Status pills */}
-        <div className="flex gap-2 flex-wrap">
+
+        {/* Row 2: Status pills + alert badges */}
+        <div className="flex items-center gap-2 flex-wrap">
           {[{ key: "all", label: "All" }, ...Object.entries(STATUS_LABELS).map(([k, l]) => ({ key: k, label: l }))].map(({ key, label }) => {
             const isActive = statusFilter === key;
             const color = key !== "all" ? STATUS_COLORS[key as TaskStatus] : undefined;
-            const count = key === "all" ? filtered.length : all.filter((t) => t.status === key).length;
+            const count = key === "all" ? filtered.length : filtered.filter((t) => t.status === key).length;
+            if (key !== "all" && count === 0) return null;
             return (
               <button key={key} onClick={() => setStatusFilter(key as TaskStatus | "all")}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all duration-200 ${
                   isActive
                     ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm"
-                    : "bg-white/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 border border-gray-200/60 dark:border-gray-700/60 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"
                 }`}>
                 {color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isActive ? "white" : color }} />}
-                {label}
-                <span className={`text-[10px] ${isActive ? "text-white/70" : "text-gray-400"}`}>({count})</span>
+                {label} <span className={`${isActive ? "text-white/60" : "text-gray-400"}`}>{count}</span>
               </button>
             );
           })}
+          {/* Overdue + Due Today badges */}
+          <div className="flex items-center gap-2 ml-auto">
+            {dueTodayCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
+                ⏰ Due Today: {dueTodayCount}
+              </span>
+            )}
+            {overdueCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg animate-pulse-subtle">
+                🔴 Overdue: {overdueCount}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Full structure: Quarter → Category → Iteration (Goals) → Week (Tasks) */}
+      {/* Task Table — shows only matching items, no empty shells */}
       <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-x-auto">
-        {/* Quarter */}
-        <button onClick={() => toggle("q")}
-          className="flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 border-b border-gray-200 dark:border-gray-800">
-          {expanded.has("q") ? <HiChevronDown className="w-5 h-5 text-gray-400" /> : <HiChevronRight className="w-5 h-5 text-gray-400" />}
+        {/* Quarter header */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
           <span className="text-base font-bold text-gray-900 dark:text-white">{quarter?.name || "Q2 2026"}</span>
           {quarter && <span className="text-xs text-gray-400">{fmt(quarter.start_date)} — {fmt(quarter.end_date)}</span>}
-          <span className="ml-auto text-xs text-gray-400">{all.length} items</span>
-        </button>
+          <span className="ml-auto text-xs text-gray-500">{filtered.length} of {all.length}</span>
+        </div>
 
-        {expanded.has("q") && <div className="stagger-children">{categories.map((cat) => {
-          if (catFilter !== "all" && catFilter !== cat) return null;
+        {/* Column headers */}
+        <div className="grid grid-cols-[minmax(220px,1fr)_100px_110px_110px_40px] gap-0 px-6 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800/30 sticky top-0 bg-white/95 dark:bg-gray-900/95 z-10">
+          <span>Task / Goal</span><span>Owner</span><span>Status</span><span>Deadline</span><span></span>
+        </div>
+
+        <div className="stagger-children">{categories.map((cat) => {
           const catTasks = filtered.filter((t) => t.category === cat);
+          if (catTasks.length === 0) return null;
 
           return (
             <div key={cat} className="border-b border-gray-100 dark:border-gray-800/50 last:border-b-0">
-              {/* Category */}
+              {/* Category header */}
               <button onClick={() => toggle(cat)}
-                className="flex items-center gap-2 w-full text-left px-6 py-2.5 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200">
+                className="flex items-center gap-2 w-full text-left px-5 py-2 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 bg-gray-50/50 dark:bg-gray-800/20">
                 {expanded.has(cat) ? <HiChevronDown className="w-4 h-4 text-gray-400" /> : <HiChevronRight className="w-4 h-4 text-gray-400" />}
                 <span className="text-sm font-semibold text-gray-800 dark:text-white">{cat}</span>
                 <span className="ml-auto text-xs text-gray-400">{catTasks.length}</span>
               </button>
 
               {expanded.has(cat) && (
-                <div className="pl-4">
-                  {/* Column headers */}
-                  <div className="grid grid-cols-[minmax(220px,1fr)_100px_110px_100px_40px] gap-0 px-6 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800/30">
-                    <span>Goal / Outcome</span>
-                    <span>Owner</span>
-                    <span>Status</span>
-                    <span>Deadline</span>
-                    <span></span>
-                  </div>
-
-                  {/* Always show all iterations */}
+                <div>
+                  {/* Iterations — only show those with matching tasks */}
                   {iterations.map((iter) => {
-                    const iterTasks = catTasks.filter((t) => t.iteration_id === iter.id && !t.week_id);
+                    const iterGoals = catTasks.filter((t) => t.iteration_id === iter.id && !t.week_id);
+                    const iterWeekTasks = catTasks.filter((t) => t.iteration_id === iter.id && t.week_id);
+                    if (iterGoals.length === 0 && iterWeekTasks.length === 0) return null;
                     const iterKey = `${cat}|${iter.id}`;
 
                     return (
                       <div key={iter.id}>
-                        {/* Iteration header */}
+                        {/* Iteration sub-header */}
                         <button onClick={() => toggle(iterKey)}
-                          className="flex items-center gap-2 w-full text-left px-6 py-1.5 bg-gray-50/50 dark:bg-gray-800/15 border-b border-gray-100 dark:border-gray-800/30 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200">
+                          className="flex items-center gap-2 w-full text-left px-6 py-1.5 bg-gray-50/30 dark:bg-gray-800/10 border-b border-gray-100/60 dark:border-gray-800/20 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all">
                           {expanded.has(iterKey) ? <HiChevronDown className="w-3 h-3 text-gray-400" /> : <HiChevronRight className="w-3 h-3 text-gray-400" />}
-                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">{iter.name} — Goals / Outcomes</span>
+                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">{iter.name}</span>
                           <span className="text-[10px] text-gray-400">{fmt(iter.start_date)} — {fmt(iter.end_date)}</span>
-                          <span className="ml-auto text-[10px] text-gray-400">{iterTasks.length}</span>
+                          <span className="ml-auto text-[10px] text-gray-400">{iterGoals.length + iterWeekTasks.length}</span>
                         </button>
 
                         {expanded.has(iterKey) && (
                           <>
-                            {/* Iteration-level goals */}
-                            {iterTasks.map((task) => (
-                              <TaskRow key={task.id} task={task} onUpdate={updateField} owners={allUsers} editable={isDoer} />
-                            ))}
-
-                            {/* Quick add goal — doers only */}
+                            {/* Iteration goals */}
+                            {iterGoals.length > 0 && (
+                              <div className="border-l-2 border-amber-400/40 ml-6">
+                                {iterGoals.map((task) => (
+                                  <TaskRow key={task.id} task={task} onUpdate={updateField} owners={allUsers} editable={isDoer} />
+                                ))}
+                              </div>
+                            )}
                             {isDoer && (addingTo === iterKey ? (
                               <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100/50 dark:border-gray-800/15">
-                                <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="New goal / outcome..." autoFocus
-                                  className="flex-1 w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                                <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="New goal..." autoFocus
+                                  className="flex-1 px-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/40 transition-all"
                                   onKeyDown={(e) => { if (e.key === "Enter") quickAddTask(cat, iter.id); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} />
                                 <button onClick={() => quickAddTask(cat, iter.id)} className="text-green-500"><HiCheck className="w-4 h-4" /></button>
                                 <button onClick={() => { setAddingTo(null); setNewTitle(""); }} className="text-xs text-gray-400">✕</button>
                               </div>
                             ) : (
                               <button onClick={() => { setAddingTo(iterKey); setNewTitle(""); }}
-                                className="flex items-center gap-1.5 px-6 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 w-full text-left border-b border-gray-100/50 dark:border-gray-800/15">
+                                className="flex items-center gap-1.5 px-6 py-1 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 w-full text-left border-b border-gray-100/30 dark:border-gray-800/10 transition-all">
                                 <HiPlus className="w-3 h-3" /> Add goal
                               </button>
                             ))}
 
-                            {/* Always show all 3 weeks */}
+                            {/* Weeks — only show those with matching tasks */}
                             {(iter.weeks || []).map((week) => {
                               const weekTasks = catTasks.filter((t) => t.week_id === week.id);
+                              if (weekTasks.length === 0 && weekFilter === "all" && iterFilter === "all") return null;
+                              if (weekTasks.length === 0 && weekFilter !== "all" && weekFilter !== week.id) return null;
                               const weekKey = `${cat}|${iter.id}|w${week.id}`;
 
                               return (
                                 <div key={week.id}>
-                                  {/* Week header — clickable to open week view */}
-                                  <div className="flex items-center border-b border-gray-100/50 dark:border-gray-800/15">
+                                  <div className="flex items-center border-b border-gray-100/40 dark:border-gray-800/10">
                                     <button onClick={() => toggle(weekKey)}
-                                      className="flex items-center gap-2 flex-1 text-left pl-10 pr-2 py-1.5 bg-gray-50/30 dark:bg-gray-800/8 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200">
+                                      className="flex items-center gap-2 flex-1 text-left pl-10 pr-2 py-1.5 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all">
                                       {expanded.has(weekKey) ? <HiChevronDown className="w-2.5 h-2.5 text-gray-300" /> : <HiChevronRight className="w-2.5 h-2.5 text-gray-300" />}
-                                      <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Week {week.week_number} — Tasks</span>
+                                      <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">W{week.week_number}</span>
                                       <span className="text-[10px] text-gray-300 dark:text-gray-600">{fmt(week.start_date)} — {fmt(week.end_date)}</span>
-                                      {weekTasks.length > 0 && <span className="text-[10px] text-gray-400 ml-1">{weekTasks.length}</span>}
+                                      <span className="text-[10px] text-gray-400 ml-1">{weekTasks.length}</span>
                                     </button>
-                                    <Link href={`/weeks/${week.id}`} className="text-[9px] text-blue-500 hover:text-blue-400 pr-4 transition-all duration-200">Open →</Link>
+                                    <Link href={`/weeks/${week.id}`} className="text-[9px] text-indigo-500 hover:text-indigo-400 pr-4 transition-all">Open →</Link>
                                   </div>
 
                                   {expanded.has(weekKey) && (
-                                    <div className="pl-6">
-                                      {/* Week tasks table */}
-                                      {weekTasks.length > 0 && (
-                                        <div className="grid grid-cols-[minmax(220px,1fr)_100px_110px_100px_40px] gap-0 px-6 py-1 text-[9px] font-semibold text-gray-300 dark:text-gray-600 uppercase tracking-wider border-b border-gray-100/30 dark:border-gray-800/10">
-                                          <span>Task</span><span>Owner</span><span>Status</span><span>Due</span><span></span>
-                                        </div>
-                                      )}
+                                    <div className="border-l-2 border-indigo-400/20 ml-10">
                                       {weekTasks.map((task) => (
                                         <TaskRow key={task.id} task={task} onUpdate={updateField} owners={allUsers} editable={isDoer} />
                                       ))}
-                                      {weekTasks.length === 0 && addingTo !== weekKey && (
-                                        <p className="text-[10px] text-gray-300 dark:text-gray-600 px-6 py-2 italic border-b border-gray-100/30 dark:border-gray-800/10">No tasks yet</p>
-                                      )}
-
-                                      {/* Quick add week task — doers only */}
+                                      {weekTasks.length === 0 && <p className="text-[10px] text-gray-300 dark:text-gray-600 px-6 py-2 italic">No tasks</p>}
                                       {isDoer && (addingTo === weekKey ? (
-                                        <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100/30 dark:border-gray-800/10">
+                                        <div className="flex items-center gap-2 px-6 py-2">
                                           <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="New task..." autoFocus
-                                            className="flex-1 w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                                            className="flex-1 px-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/40 transition-all"
                                             onKeyDown={(e) => { if (e.key === "Enter") quickAddWeekTask(cat, iter.id, week.id); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} />
                                           <button onClick={() => quickAddWeekTask(cat, iter.id, week.id)} className="text-green-500"><HiCheck className="w-4 h-4" /></button>
                                           <button onClick={() => { setAddingTo(null); setNewTitle(""); }} className="text-xs text-gray-400">✕</button>
@@ -321,7 +380,7 @@ function TasksInner() {
               )}
             </div>
           );
-        })}</div>}
+        })}</div>
       </div>
 
       {showCreate && (
@@ -332,25 +391,58 @@ function TasksInner() {
   );
 }
 
+// Owner color mapping — Leah = pink, Chloe = cyan
+const OWNER_STYLE: Record<string, { text: string; bg: string; border: string; dot: string }> = {
+  "Leah": { text: "text-pink-600 dark:text-pink-400", bg: "bg-pink-50/40 dark:bg-pink-900/10", border: "border-l-pink-400", dot: "#ec4899" },
+  "Chloe": { text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-50/40 dark:bg-cyan-900/10", border: "border-l-cyan-400", dot: "#06b6d4" },
+};
+
 function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullTask; onUpdate: (id: string, field: string, value: string) => void; editable?: boolean; owners?: UserOption[] }) {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isOverdue = task.deadline && task.deadline < todayStr && task.status !== "completed";
+  const isDueToday = task.deadline === todayStr && task.status !== "completed";
+  const ownerName = task.owner?.full_name || owners.find((o) => o.id === task.owner_id)?.full_name || "";
+  const ownerStyle = OWNER_STYLE[ownerName];
+
+  // Highlight states for review workflow
+  const hasDeliverables = (task.deliverables?.length || 0) > 0;
+  const hasFeedback = (task.feedback?.length || 0) > 0;
+  const hasUnacknowledgedFb = (task.feedback || []).some(f => !f.acknowledged && !f.comment?.startsWith("↩️"));
+  const needsReview = hasDeliverables && !hasFeedback;
+  const needsAck = hasFeedback && hasUnacknowledgedFb;
+
   return (
-    <div className="grid grid-cols-[minmax(220px,1fr)_100px_110px_100px_40px] gap-0 px-6 py-2 border-b border-gray-100/50 dark:border-gray-800/15 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 group items-center">
+    <div className={`grid grid-cols-[minmax(220px,1fr)_100px_110px_110px_40px] gap-0 px-6 py-2 border-b border-l-[3px] transition-all duration-200 group items-center ${
+      isOverdue
+        ? `border-red-200/60 dark:border-red-900/30 bg-red-50/40 dark:bg-red-900/8 hover:bg-red-50/70 dark:hover:bg-red-900/15 ${ownerStyle?.border || "border-l-transparent"}`
+        : isDueToday
+        ? `border-amber-200/60 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-900/5 hover:bg-amber-50/60 dark:hover:bg-amber-900/10 ${ownerStyle?.border || "border-l-transparent"}`
+        : needsReview
+        ? `border-blue-200/60 dark:border-blue-900/30 bg-gradient-to-r from-blue-50/60 to-cyan-50/40 dark:from-blue-900/10 dark:to-cyan-900/8 hover:from-blue-50/80 hover:to-cyan-50/60 ${ownerStyle?.border || "border-l-transparent"}`
+        : needsAck
+        ? `border-amber-200/60 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/50 to-yellow-50/40 dark:from-amber-900/10 dark:to-yellow-900/8 hover:from-amber-50/70 hover:to-yellow-50/60 ${ownerStyle?.border || "border-l-transparent"}`
+        : `border-gray-100/50 dark:border-gray-800/15 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 ${ownerStyle?.border || "border-l-transparent"}`
+    }`}>
       <div className="flex items-center gap-2 min-w-0 pr-2">
         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[task.status] }} />
         <Link href={`/tasks/${task.id}`} className="text-sm text-gray-700 dark:text-gray-200 hover:text-indigo-500 truncate transition-all duration-200">{task.title}</Link>
         {(task.subtasks?.length || 0) > 0 && <span className="text-[9px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded flex-shrink-0">{task.subtasks!.length}</span>}
         {(task.deliverables?.length || 0) > 0 && <HiOutlinePaperClip className="w-3 h-3 text-blue-500 flex-shrink-0" />}
         {(task.feedback?.length || 0) > 0 && <HiOutlineChatAlt className="w-3 h-3 text-violet-400 flex-shrink-0" />}
+        {isOverdue && <span className="text-[8px] font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded flex-shrink-0">OVERDUE</span>}
+        {isDueToday && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex-shrink-0">DUE TODAY</span>}
+        {needsReview && <span className="text-[8px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded flex-shrink-0">NEEDS REVIEW</span>}
+        {needsAck && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex-shrink-0">ACTION REQ</span>}
       </div>
-      {/* Owner */}
+      {/* Owner — only Leah or Chloe, color coded */}
       {editable ? (
         <select value={task.owner_id || ""} onChange={(e) => onUpdate(task.id, "owner_id", e.target.value)}
-          className="text-[11px] text-gray-600 dark:text-gray-400 bg-transparent border-0 cursor-pointer w-full truncate">
+          className={`text-[11px] font-medium bg-transparent border-0 cursor-pointer w-full truncate ${ownerStyle?.text || "text-gray-500"}`}>
           <option value="" className="bg-white dark:bg-gray-900">—</option>
           {owners.map((o) => <option key={o.id} value={o.id} className="bg-white dark:bg-gray-900">{o.full_name}</option>)}
         </select>
       ) : (
-        <span className="text-[11px] text-gray-500 truncate">{task.owner?.full_name || owners.find((o) => o.id === task.owner_id)?.full_name || "—"}</span>
+        <span className={`text-[11px] font-medium truncate ${ownerStyle?.text || "text-gray-500"}`}>{ownerName || "—"}</span>
       )}
       {/* Status */}
       {editable ? (
@@ -363,12 +455,14 @@ function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullT
         <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[task.status] + "18", color: STATUS_COLORS[task.status] }}>{STATUS_LABELS[task.status]}</span>
       )}
       {/* Deadline */}
-      {editable ? (
-        <input type="date" value={task.deadline || ""} onChange={(e) => onUpdate(task.id, "deadline", e.target.value)}
-          className="text-[11px] text-gray-500 dark:text-gray-400 bg-transparent border-0 cursor-pointer w-full" />
-      ) : (
-        <span className="text-[11px] text-gray-500">{task.deadline || "—"}</span>
-      )}
+      <div className="flex items-center gap-1">
+        {editable ? (
+          <input type="date" value={task.deadline || ""} onChange={(e) => onUpdate(task.id, "deadline", e.target.value)}
+            className={`text-[11px] bg-transparent border-0 cursor-pointer w-full ${isOverdue ? "text-red-500 font-medium" : isDueToday ? "text-amber-600 font-medium" : "text-gray-500 dark:text-gray-400"}`} />
+        ) : (
+          <span className={`text-[11px] ${isOverdue ? "text-red-500 font-medium" : isDueToday ? "text-amber-600 font-medium" : "text-gray-500"}`}>{task.deadline || "—"}</span>
+        )}
+      </div>
       <Link href={`/tasks/${task.id}`} className="text-[10px] text-gray-400 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all duration-200">Open</Link>
     </div>
   );

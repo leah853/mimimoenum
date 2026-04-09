@@ -37,6 +37,8 @@ export default function TaskDetail() {
   const [fileTitle, setFileTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [textOnly, setTextOnly] = useState(false);
+  const [deliverableDesc, setDeliverableDesc] = useState("");
   const [fbRating, setFbRating] = useState(5);
   const [fbComment, setFbComment] = useState("");
   const [fbTag, setFbTag] = useState("approved");
@@ -57,8 +59,11 @@ export default function TaskDetail() {
   const isDoer = canEditTasks(appRole);
   const isAssessor = canGiveFeedback(appRole);
   const hasFeedback = (task.feedback?.length || 0) > 0;
-  const isLocked = hasFeedback; // Once feedback given, task/deliverables locked
-  const canModifyTask = isDoer && !isLocked;
+  const hasDeliverables = (task.deliverables?.length || 0) > 0;
+  const hasUnacknowledgedFeedback = (task.feedback || []).some(f => !f.acknowledged && !f.comment?.startsWith("↩️"));
+  const needsReview = hasDeliverables && !hasFeedback;
+  const needsAcknowledgement = hasFeedback && hasUnacknowledgedFeedback;
+  const canModifyTask = isDoer;
 
   async function startEdit() {
     setForm({ title: task!.title, description: task!.description || "", status: task!.status, deadline: task!.deadline || "", owner_id: task!.owner_id || "" });
@@ -82,12 +87,25 @@ export default function TaskDetail() {
     catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
   async function uploadFile() {
-    if (!file) return;
+    if (!textOnly && !file) return;
+    if (textOnly && !fileTitle) return;
     setUploading(true);
     try {
-      const fd = new FormData(); fd.append("file", file); fd.append("task_id", id); fd.append("title", fileTitle || file.name);
-      if (dbUser) fd.append("uploaded_by", dbUser.id);
-      await apiUpload("/api/deliverables", fd); setFile(null); setFileTitle(""); await refetch();
+      if (textOnly) {
+        // Text-only deliverable — no file attachment
+        await apiPost("/api/deliverables/text", {
+          task_id: id,
+          title: fileTitle,
+          description: deliverableDesc || null,
+          uploaded_by: dbUser?.id,
+        });
+      } else {
+        const fd = new FormData(); fd.append("file", file!); fd.append("task_id", id); fd.append("title", fileTitle || file!.name);
+        if (deliverableDesc) fd.append("description", deliverableDesc);
+        if (dbUser) fd.append("uploaded_by", dbUser.id);
+        await apiUpload("/api/deliverables", fd);
+      }
+      setFile(null); setFileTitle(""); setDeliverableDesc(""); setTextOnly(false); await refetch();
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed"); }
     setUploading(false);
   }
@@ -179,9 +197,14 @@ export default function TaskDetail() {
           👁️ You are viewing as <strong>Rep</strong> — you can review and provide feedback but cannot edit task details.
         </div>
       )}
-      {isLocked && isDoer && (
-        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200/60 dark:border-amber-800/30 rounded-xl px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
-          🔒 This task has received feedback — editing, deleting, and file changes are locked.
+      {needsReview && (
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/10 dark:to-cyan-900/10 border border-blue-200/60 dark:border-blue-800/30 rounded-xl px-4 py-2 text-xs text-blue-700 dark:text-blue-400">
+          📎 Deliverable submitted — awaiting review from Reps.
+        </div>
+      )}
+      {needsAcknowledgement && isDoer && (
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/10 dark:to-yellow-900/10 border border-amber-200/60 dark:border-amber-800/30 rounded-xl px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+          💬 Feedback received — please review and acknowledge to continue the rework cycle.
         </div>
       )}
 
@@ -353,29 +376,48 @@ export default function TaskDetail() {
             {/* Deliverables — doers can upload/delete */}
             <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-6 space-y-3">
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Deliverables</h3>
-              {(task.deliverables || []).map((d) => (
-                <div key={d.id} className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl px-3 py-2.5 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm text-gray-800 dark:text-white">{d.title}</span>
-                      <span className="text-xs text-gray-500 ml-2">v{d.version}</span>
-                      {d.viewed ? <span className="ml-2 w-2 h-2 rounded-full bg-green-500 inline-block" title="Viewed" /> : <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block" title="Not viewed" />}
+              {(task.deliverables || []).map((d) => {
+                const isTextOnly = d.file_url?.startsWith("text-only://");
+                return (
+                  <div key={d.id} className={`rounded-xl px-3 py-2.5 space-y-1 ${isTextOnly ? "bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/40 dark:border-amber-800/20" : "bg-gray-50/80 dark:bg-gray-800/40"}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        {isTextOnly && <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded mr-2">Text Only</span>}
+                        <span className="text-sm text-gray-800 dark:text-white">{d.title}</span>
+                        <span className="text-xs text-gray-500 ml-2">v{d.version}</span>
+                        {d.viewed ? <span className="ml-2 w-2 h-2 rounded-full bg-green-500 inline-block" title="Viewed" /> : <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block" title="Not viewed" />}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {!isTextOnly && (
+                          <>
+                            <a href={d.file_url || "#"} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-all">Open</a>
+                            <a href={d.file_url || "#"} download={d.file_name || d.title} className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">↓</a>
+                          </>
+                        )}
+                        {canDeleteDeliverables(appRole) && <button onClick={() => deleteDeliverable(d.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiTrash className="w-3 h-3" /></button>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <a href={d.file_url || "#"} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-all">Open</a>
-                      <a href={d.file_url || "#"} download={d.file_name || d.title} className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">↓</a>
-                      {canDeleteDeliverables(appRole) && !isLocked && <button onClick={() => deleteDeliverable(d.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiTrash className="w-3 h-3" /></button>}
-                    </div>
+                    <p className="text-[10px] text-gray-400">{new Date(d.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
                   </div>
-                  <p className="text-[10px] text-gray-400">{new Date(d.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
-                </div>
-              ))}
+                );
+              })}
               {(!task.deliverables || task.deliverables.length === 0) && <p className="text-sm text-gray-400">No deliverables</p>}
-              {canUploadDeliverables(appRole) && !isLocked && (
+              {canUploadDeliverables(appRole) && (
                 <div className="space-y-2 pt-2 border-t border-gray-200/60 dark:border-gray-800/60">
-                  <input value={fileTitle} onChange={(e) => setFileTitle(e.target.value)} placeholder="File title" className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-                  <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gray-100 dark:file:bg-gray-800" />
-                  <button onClick={uploadFile} disabled={!file || uploading} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-xs rounded-xl shadow-sm transition-all">{uploading ? "Uploading..." : "Upload"}</button>
+                  <input value={fileTitle} onChange={(e) => setFileTitle(e.target.value)} placeholder={textOnly ? "Deliverable title *" : "File title"} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                  <textarea value={deliverableDesc} onChange={(e) => setDeliverableDesc(e.target.value)} placeholder="Description / notes (optional)" rows={2} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={textOnly} onChange={(e) => { setTextOnly(e.target.checked); if (e.target.checked) setFile(null); }}
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-indigo-500 focus:ring-indigo-500" />
+                    <span className="text-xs text-gray-500">Submit without attachment</span>
+                  </label>
+                  {!textOnly && (
+                    <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gray-100 dark:file:bg-gray-800" />
+                  )}
+                  <button onClick={uploadFile} disabled={textOnly ? !fileTitle || uploading : !file || uploading}
+                    className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-xs rounded-xl shadow-sm transition-all">
+                    {uploading ? "Submitting..." : textOnly ? "Submit Deliverable" : "Upload"}
+                  </button>
                 </div>
               )}
             </div>
