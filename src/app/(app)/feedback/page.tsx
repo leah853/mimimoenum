@@ -285,21 +285,27 @@ export default function FeedbackTrailPage() {
             </div>
 
             {/* Chat input */}
-            <div className="px-5 py-3 border-t border-gray-200/60 dark:border-gray-800/60 relative">
-              {/* Mentions dropdown */}
+            <div className="px-5 py-3 border-t border-gray-200/60 dark:border-gray-800/60">
+              {/* Mentions dropdown — always visible when toggled */}
               {showMentions && (
-                <div className="absolute bottom-full left-5 mb-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-1 w-52 max-h-48 overflow-y-auto z-10">
-                  <p className="text-[9px] text-gray-400 px-2 py-1">Select team member</p>
+                <div className="mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-1.5 max-h-52 overflow-y-auto">
+                  <p className="text-[9px] text-gray-400 px-2 py-1 font-medium uppercase tracking-wider">Tag a team member</p>
                   {(teamUsers || []).map((u) => (
                     <button key={u.id} onClick={() => {
                       const atIndex = chatMsg.lastIndexOf("@");
-                      setChatMsg(chatMsg.slice(0, atIndex) + `@${u.full_name} `);
+                      if (atIndex >= 0) {
+                        setChatMsg(chatMsg.slice(0, atIndex) + `@${u.full_name} `);
+                      } else {
+                        setChatMsg(chatMsg + `@${u.full_name} `);
+                      }
                       setShowMentions(false);
                     }}
-                      className="w-full text-left px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-[8px] font-bold">{u.full_name[0]}</div>
-                      <span>{u.full_name}</span>
-                      <span className="text-[9px] text-gray-400 ml-auto">{u.email.split("@")[1]}</span>
+                      className="w-full text-left px-2.5 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">{u.full_name[0]}</div>
+                      <div className="flex-1 min-w-0">
+                        <span className="block font-medium">{u.full_name}</span>
+                        <span className="text-[9px] text-gray-400">{u.email}</span>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -323,7 +329,7 @@ export default function FeedbackTrailPage() {
                     }}
                     placeholder="Type a message..."
                     className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10" />
-                  <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors">
+                  <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors" title="Tag someone">
                     <HiAtSymbol className="w-4 h-4" />
                   </button>
                 </div>
