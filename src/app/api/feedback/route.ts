@@ -20,10 +20,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAssessor(request)) return err("Only assessors can give feedback", 403);
-
   const sb = createServiceClient();
   const body = await request.json();
+
+  // Assessors can post any feedback; doers can only post replies
+  const isReply = typeof body.comment === "string" && body.comment.startsWith("\u21a9\ufe0f");
+  if (!isAssessor(request) && !isReply) {
+    return err("Only assessors can give feedback", 403);
+  }
 
   const missing = validate(body, ["reviewer_id", "rating", "tag"]);
   if (missing) return err(missing);
