@@ -8,6 +8,7 @@ import type { Task, TaskStatus } from "@/lib/types";
 import { HiArrowLeft, HiOutlineChatAlt, HiPlus, HiCheck } from "react-icons/hi";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
+import { calcScore, formatDate } from "@/lib/utils";
 
 type FullTask = Task & { owner?: { id: string; full_name: string }; subtasks?: { id: string }[]; deliverables?: { id: string }[]; feedback?: { id: string }[] };
 type UserOption = { id: string; full_name: string };
@@ -18,8 +19,6 @@ type WeekReport = { id: string; report_type: string; content: string; file_url?:
 
 const CATEGORIES = ["Customer Success & PG Acquisition", "Product / Engineering / Workflows", "Cybersecurity", "Continuous Learning", "Talent Acquisition", "Branding"];
 
-function score(tasks: Task[]): number { if (!tasks.length) return 0; return (tasks.filter((t) => t.status === "completed").length / tasks.length) * 10; }
-function fmt(d: string) { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
 
 export default function WeekDetail() {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +55,7 @@ export default function WeekDetail() {
     }
   }
 
-  const weekScore = score(tasks);
+  const weekScore = calcScore(tasks);
   const completed = tasks.filter((t) => t.status === "completed").length;
   const wedReportData = (reports || []).find((r) => r.report_type === "wednesday");
   const satReportData = (reports || []).find((r) => r.report_type === "saturday");
@@ -115,7 +114,7 @@ export default function WeekDetail() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{iteration?.name || "Iteration"} — Week {week?.week_number || "?"}</h1>
-          {week && <p className="text-sm text-gray-500">{fmt(week.start_date)} — {fmt(week.end_date)}</p>}
+          {week && <p className="text-sm text-gray-500">{formatDate(week.start_date)} — {formatDate(week.end_date)}</p>}
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{weekScore.toFixed(1)}<span className="text-sm text-gray-400">/10</span></div>

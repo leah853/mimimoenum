@@ -6,7 +6,6 @@ import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useApi } from "@/lib/use-api";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
-import type { Task, Feedback, Deliverable } from "@/lib/types";
 import {
   HiOutlineViewGrid, HiOutlineChartBar, HiOutlineClipboardList,
   HiOutlineDocumentText, HiOutlineUpload, HiOutlineLogout,
@@ -14,24 +13,15 @@ import {
   HiOutlineVideoCamera,
 } from "react-icons/hi";
 
-const ZOOM_BASE = "https://us05web.zoom.us/j/84008799468?pwd=2N7Zq6UWhuYVSW3opb6T3xDJi34BXM.1";
-
-type FbTask = Task & {
-  feedback?: (Feedback & { acknowledged?: boolean })[];
-  deliverables?: Deliverable[];
-};
+type Stats = { feedbackCount: number; unacknowledged: number; awaitingReview: number };
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { dbUser, appRole, signOut } = useAuth();
   const { theme, toggle } = useTheme();
-  const { data: tasks } = useApi<FbTask[]>("/api/tasks");
+  const { data: stats } = useApi<Stats>("/api/stats");
 
-  // Compute feedback counts
-  const all = tasks || [];
-  const unacknowledged = all.reduce((s, t) => s + (t.feedback || []).filter(f => !f.acknowledged && !f.comment?.startsWith("↩️")).length, 0);
-  const awaitingReview = all.filter(t => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length)).length;
-  const feedbackCount = unacknowledged + awaitingReview;
+  const feedbackCount = stats?.feedbackCount || 0;
 
   const NAV_ITEMS = [
     { href: "/dashboard", label: "Dashboard", icon: HiOutlineViewGrid, badge: 0 },
@@ -77,7 +67,6 @@ export default function Sidebar() {
           );
         })}
 
-        {/* Let's Meet — goes to meet page which opens Zoom with locked name */}
         {dbUser && (
           <Link
             href="/meet"

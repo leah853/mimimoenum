@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Task, TaskStatus, Subtask, Deliverable, Feedback } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
@@ -9,6 +9,8 @@ import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, canGiveFeedback, canEditFeedback, canDeleteFeedback, canDeleteDeliverables } from "@/lib/roles";
 import { getCompletionBlockers } from "@/lib/business-rules";
 import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye } from "react-icons/hi";
+import { useToast } from "@/components/ui";
+import { handleApiError } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -25,6 +27,7 @@ export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { dbUser, appRole } = useAuth();
+  const { toast } = useToast();
   const { data: task, loading, refetch } = useApi<FullTask>(id ? `/api/tasks/${id}` : null);
   const { data: owners } = useApi<OwnerOption[]>("/api/users/owners");
   const { data: allTasks } = useApi<{ id: string; title: string; category: string; status: TaskStatus }[]>("/api/tasks");
@@ -78,7 +81,7 @@ export default function TaskDetail() {
   async function deleteTask() {
     if (!confirm("Delete this task permanently?")) return;
     setDeleting(true);
-    try { await apiDelete(`/api/tasks/${id}`); router.push("/tasks"); }
+    try { await apiDelete(`/api/tasks/${id}`); toast("Task deleted", "success"); router.push("/tasks"); }
     catch (e) { setError(e instanceof Error ? e.message : "Delete failed"); setDeleting(false); }
   }
   async function addSubtask() {
@@ -105,13 +108,13 @@ export default function TaskDetail() {
         if (dbUser) fd.append("uploaded_by", dbUser.id);
         await apiUpload("/api/deliverables", fd);
       }
-      setFile(null); setFileTitle(""); setDeliverableDesc(""); setTextOnly(false); await refetch();
+      setFile(null); setFileTitle(""); setDeliverableDesc(""); setTextOnly(false); await refetch(); toast("File uploaded", "success");
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed"); }
     setUploading(false);
   }
   async function deleteDeliverable(delId: string) {
     if (!confirm("Delete this file?")) return;
-    try { await apiDelete(`/api/deliverables/${delId}`); await refetch(); } catch {}
+    try { await apiDelete(`/api/deliverables/${delId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function submitFeedback() {
     if (!dbUser) return;
@@ -119,11 +122,11 @@ export default function TaskDetail() {
     catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
   async function updateFeedback(fbId: string) {
-    try { await apiPatch(`/api/feedback/${fbId}`, { comment: editFbComment, rating: editFbRating }); setEditingFb(null); await refetch(); } catch {}
+    try { await apiPatch(`/api/feedback/${fbId}`, { comment: editFbComment, rating: editFbRating }); setEditingFb(null); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function deleteFeedback(fbId: string) {
     if (!confirm("Delete this feedback?")) return;
-    try { await apiDelete(`/api/feedback/${fbId}`); await refetch(); } catch {}
+    try { await apiDelete(`/api/feedback/${fbId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function replyToFeedback() {
     if (!dbUser || !replyText || !replyTo) return;
@@ -142,11 +145,11 @@ export default function TaskDetail() {
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
   async function removeDependency(depId: string) {
-    try { await apiDelete(`/api/dependencies?id=${depId}`); await refetch(); } catch {}
+    try { await apiDelete(`/api/dependencies?id=${depId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
 
-  const feedbackList = task.feedback || [];
-  const categories = [...new Set((allTasks || []).map(t => t.category).filter(Boolean))];
+  const feedbackList = useMemo(() => task.feedback || [], [task.feedback]);
+  const categories = useMemo(() => [...new Set((allTasks || []).map(t => t.category).filter(Boolean))], [allTasks]);
 
   const tagColors: Record<string, string> = {
     approved: "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",
@@ -329,7 +332,7 @@ export default function TaskDetail() {
               <div>
                 <span className="text-xs text-gray-400 block mb-1">Owner</span>
                 {isDoer ? (
-                  <select value={task.owner_id || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { owner_id: e.target.value }); await refetch(); } catch {} }}
+                  <select value={task.owner_id || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { owner_id: e.target.value }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                     className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/60 rounded-xl text-sm text-gray-900 dark:text-white">
                     <option value="">Unassigned</option>
                     {(owners || []).map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
@@ -362,7 +365,7 @@ export default function TaskDetail() {
               <div>
                 <span className="text-xs text-gray-400 block mb-1">Deadline</span>
                 {isDoer ? (
-                  <input type="date" value={task.deadline || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { deadline: e.target.value }); await refetch(); } catch {} }}
+                  <input type="date" value={task.deadline || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { deadline: e.target.value }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                     className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/60 rounded-xl text-sm text-gray-900 dark:text-white" />
                 ) : (
                   <p className="text-sm text-gray-800 dark:text-white">{task.deadline || "—"}</p>
@@ -478,7 +481,7 @@ export default function TaskDetail() {
                   <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3">
                     {/* Acknowledge — doers only */}
                     {isDoer && !fb.acknowledged && (
-                      <button onClick={async () => { try { await apiPatch(`/api/feedback/${fb.id}`, { acknowledged: true, acknowledged_by: dbUser?.id }); await refetch(); } catch {} }}
+                      <button onClick={async () => { try { await apiPatch(`/api/feedback/${fb.id}`, { acknowledged: true, acknowledged_by: dbUser?.id }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                         className="flex items-center gap-1 text-[10px] text-green-600 hover:text-green-500 transition-colors"><HiCheck className="w-3 h-3" /> Acknowledge</button>
                     )}
                     {fb.acknowledged && <span className="text-[10px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}

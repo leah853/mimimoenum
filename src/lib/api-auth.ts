@@ -23,3 +23,17 @@ export function isAssessor(request: NextRequest): boolean {
   const role = getCallerRole(request);
   return role === "assessor";
 }
+
+export async function getCallerId(request: NextRequest): Promise<string | null> {
+  const role = getCallerRole(request);
+  if (!role) return null;
+  const cookie = request.cookies.get(AUTH_COOKIE_NAME);
+  if (!cookie?.value) return null;
+  const session = decodeSession(decodeURIComponent(cookie.value));
+  if (!session?.email) return null;
+
+  const { createServiceClient } = require("@/lib/supabase/server");
+  const sb = createServiceClient();
+  const { data } = await sb.from("users").select("id").eq("email", session.email).single();
+  return data?.id || null;
+}

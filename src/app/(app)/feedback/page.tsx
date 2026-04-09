@@ -6,8 +6,10 @@ import { canGiveFeedback, canEditTasks } from "@/lib/roles";
 import type { Task, Feedback, Deliverable } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import Link from "next/link";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol } from "react-icons/hi";
+import { useToast } from "@/components/ui";
+import { handleApiError } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -26,6 +28,7 @@ export default function FeedbackTrailPage() {
   const { data: chatData, refetch: refetchChat } = useApi<ChatMessage[]>("/api/chat");
   const { data: teamUsers } = useApi<TeamUser[]>("/api/users");
   const { dbUser, appRole } = useAuth();
+  const { toast } = useToast();
   const isDoer = canEditTasks(appRole);
   const isAssessor = canGiveFeedback(appRole);
 
@@ -55,25 +58,30 @@ export default function FeedbackTrailPage() {
   const all = tasks || [];
 
   // Build per-task feedback threads
-  const threadsMap = new Map<string, { task: FullTask; feedbacks: FeedbackItem[] }>();
-  for (const task of all) {
-    if (task.feedback && task.feedback.length > 0) {
-      threadsMap.set(task.id, { task, feedbacks: [...task.feedback].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) });
+  const threads = useMemo(() => {
+    const threadsMap = new Map<string, { task: FullTask; feedbacks: FeedbackItem[] }>();
+    for (const task of all) {
+      if (task.feedback && task.feedback.length > 0) {
+        threadsMap.set(task.id, { task, feedbacks: [...task.feedback].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) });
+      }
     }
-  }
-  const threads = Array.from(threadsMap.values()).sort((a, b) => {
-    const aLatest = a.feedbacks[a.feedbacks.length - 1]?.created_at || "";
-    const bLatest = b.feedbacks[b.feedbacks.length - 1]?.created_at || "";
-    return new Date(bLatest).getTime() - new Date(aLatest).getTime();
-  });
+    return Array.from(threadsMap.values()).sort((a, b) => {
+      const aLatest = a.feedbacks[a.feedbacks.length - 1]?.created_at || "";
+      const bLatest = b.feedbacks[b.feedbacks.length - 1]?.created_at || "";
+      return new Date(bLatest).getTime() - new Date(aLatest).getTime();
+    });
+  }, [all]);
 
   // Stats
-  const totalThreads = threads.length;
-  const totalFeedback = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.comment?.startsWith("↩️") && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
-  const unacknowledged = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.acknowledged && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
-  const awaitingReviewTasks = all.filter((t) => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length));
-  const tasksWithDeliverables = awaitingReviewTasks.length;
-  const unviewedDeliverables = all.reduce((s, t) => s + (t.deliverables || []).filter((d) => !d.viewed).length, 0);
+  const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables } = useMemo(() => {
+    const totalThreads = threads.length;
+    const totalFeedback = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.comment?.startsWith("↩️") && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
+    const unacknowledged = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !f.acknowledged && !f.comment?.startsWith("\u21a9\ufe0f")).length, 0);
+    const awaitingReviewTasks = all.filter((t) => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length));
+    const tasksWithDeliverables = awaitingReviewTasks.length;
+    const unviewedDeliverables = all.reduce((s, t) => s + (t.deliverables || []).filter((d) => !d.viewed).length, 0);
+    return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, unviewedDeliverables };
+  }, [threads, all]);
 
   // Filter logic — applied to threads
   function getFilteredThreads() {
@@ -100,21 +108,21 @@ export default function FeedbackTrailPage() {
     try {
       await apiPatch(`/api/feedback/${fbId}`, { acknowledged: true, acknowledged_by: dbUser?.id });
       await refetch();
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
 
   async function markDeliverableViewed(delId: string) {
     try {
       await apiPatch(`/api/deliverables/${delId}`, { viewed: true });
       await refetch();
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
 
   async function submitReply() {
     if (!replyTo || !replyText || !dbUser) return;
     setReplyError("");
     try {
-      const orig = threadsMap.get(replyTo.taskId)?.feedbacks.find((f) => f.id === replyTo.fbId);
+      const orig = threads.find((t) => t.task.id === replyTo.taskId)?.feedbacks.find((f) => f.id === replyTo.fbId);
       await apiPost("/api/feedback", {
         task_id: replyTo.taskId, reviewer_id: dbUser.id, rating: orig?.rating || 5,
         comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved",
@@ -159,7 +167,7 @@ export default function FeedbackTrailPage() {
       setChatMsg("");
       setShowMentions(false);
       await refetchChat();
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
     setChatSending(false);
   }
 
@@ -169,7 +177,7 @@ export default function FeedbackTrailPage() {
       await apiPatch(`/api/chat/${msgId}`, { message: editChatText });
       setEditingChat(null); setEditChatText("");
       await refetchChat();
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
 
   async function deleteChatMsg(msgId: string) {
@@ -177,7 +185,7 @@ export default function FeedbackTrailPage() {
     try {
       await apiDelete(`/api/chat/${msgId}`);
       await refetchChat();
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
 
   // Counts for sidebar badge

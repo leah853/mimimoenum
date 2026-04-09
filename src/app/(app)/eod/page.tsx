@@ -6,6 +6,8 @@ import { useApi, apiPost, apiPatch, apiDelete } from "@/lib/use-api";
 import { canAddEOD } from "@/lib/roles";
 import type { EODUpdate } from "@/lib/types";
 import { HiChevronLeft, HiChevronRight } from "react-icons/hi";
+import { useToast } from "@/components/ui";
+import { handleApiError } from "@/lib/utils";
 
 type FullEOD = EODUpdate & {
   user?: { id: string; full_name: string };
@@ -17,6 +19,7 @@ type OwnerOption = { id: string; full_name: string };
 
 export default function EODPage() {
   const { dbUser, appRole } = useAuth();
+  const { toast } = useToast();
   const isDoer = canAddEOD(appRole);
   const today = new Date();
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -63,7 +66,8 @@ export default function EODPage() {
       });
       setWhatWasDone(""); setWhatsNext(""); setBlockers("");
       await refetch();
-    } catch {}
+      toast("EOD update saved", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
     setSubmitting(false);
   }
 
@@ -73,7 +77,7 @@ export default function EODPage() {
       await apiPost("/api/eod/comments", { eod_update_id: eodId, user_id: dbUser.id, comment: commentText });
       setCommentText("");
       await refetch();
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
 
   return (
@@ -140,7 +144,7 @@ export default function EODPage() {
                       className="text-[10px] text-indigo-500 hover:text-indigo-400 transition-colors">Edit</button>
                     <button onClick={async () => {
                       if (!confirm("Delete this EOD update?")) return;
-                      try { await apiDelete(`/api/eod/${selectedUpdate.id}`); await refetch(); } catch {}
+                      try { await apiDelete(`/api/eod/${selectedUpdate.id}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
                     }} className="text-[10px] text-red-400 hover:text-red-500 transition-colors">Delete</button>
                   </div>
                 )}
@@ -159,7 +163,7 @@ export default function EODPage() {
                       className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
                   <div className="flex gap-2">
                     <button onClick={async () => {
-                      try { await apiPatch(`/api/eod/${selectedUpdate.id}`, { what_was_done: editDone, whats_next: editNext || null, blockers: editObstacles || null }); setEditingEod(false); await refetch(); } catch {}
+                      try { await apiPatch(`/api/eod/${selectedUpdate.id}`, { what_was_done: editDone, whats_next: editNext || null, blockers: editObstacles || null }); setEditingEod(false); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
                     }} className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:brightness-110 text-white text-xs rounded-xl shadow-sm transition-all">Save</button>
                     <button onClick={() => setEditingEod(false)} className="text-xs text-gray-500">Cancel</button>
                   </div>

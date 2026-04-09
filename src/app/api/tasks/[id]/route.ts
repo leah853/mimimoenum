@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err } from "@/lib/api-helpers";
+import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,8 +32,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const { id } = await params;
   const sb = createServiceClient();
+
+  // Ownership check: only the task owner or admin can edit
+  if (role !== "admin") {
+    const callerId = await getCallerId(request);
+    const { data: record } = await sb.from("tasks").select("owner_id").eq("id", id).single();
+    if (!record || record.owner_id !== callerId) {
+      return err("Forbidden: you can only edit your own tasks", 403);
+    }
+  }
+
   const body = await request.json();
 
   // Business rule: if trying to complete, check deliverables + feedback
@@ -52,7 +65,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   return ok(data);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const role = getCallerRole(request);
+  if (role !== "admin") return err("Only admins can delete tasks", 403);
   const { id } = await params;
   const sb = createServiceClient();
   const { error } = await sb.from("tasks").delete().eq("id", id);

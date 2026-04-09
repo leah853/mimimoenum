@@ -2,6 +2,32 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
+// ── Request deduplication cache ──────────────────────────────────────
+// Same-URL fetches within DEDUP_TTL_MS share one promise, eliminating
+// redundant calls when multiple components mount simultaneously.
+const DEDUP_TTL_MS = 2000;
+const inflightCache = new Map<string, { promise: Promise<unknown>; ts: number }>();
+
+function dedupFetch<T>(url: string): Promise<T> {
+  const now = Date.now();
+  const cached = inflightCache.get(url);
+  if (cached && now - cached.ts < DEDUP_TTL_MS) return cached.promise as Promise<T>;
+
+  const promise = fetch(url).then(async (res) => {
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  });
+
+  inflightCache.set(url, { promise, ts: now });
+  // Auto-cleanup after TTL
+  setTimeout(() => inflightCache.delete(url), DEDUP_TTL_MS);
+  return promise as Promise<T>;
+}
+
+// ── useApi hook ──────────────────────────────────────────────────────
 export function useApi<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -14,12 +40,9 @@ export function useApi<T>(url: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(currentUrl);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP ${res.status}`);
-      }
-      const json = await res.json();
+      // Bypass dedup cache on explicit refetch — user wants fresh data
+      inflightCache.delete(currentUrl);
+      const json = await dedupFetch<T>(currentUrl);
       setData(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -32,15 +55,20 @@ export function useApi<T>(url: string | null) {
     urlRef.current = url;
     if (url) {
       setData(null);
-      refetch();
+      // Use dedup for initial mount fetches (parallel components share one request)
+      dedupFetch<T>(url)
+        .then((json) => setData(json))
+        .catch((e) => setError(e instanceof Error ? e.message : "Unknown error"))
+        .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
-  }, [url, refetch]);
+  }, [url]);
 
   return { data, loading, error, refetch, setData };
 }
 
+// ── Mutation helpers ─────────────────────────────────────────────────
 export async function apiPost(url: string, body: unknown) {
   const res = await fetch(url, {
     method: "POST",

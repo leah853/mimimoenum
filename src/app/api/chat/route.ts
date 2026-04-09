@@ -18,6 +18,8 @@ async function ensureTable(sb: ReturnType<typeof createServiceClient>) {
 }
 
 export async function GET(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const tableExists = await ensureTable(sb);
   if (!tableExists) return ok([]);

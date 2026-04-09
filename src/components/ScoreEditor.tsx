@@ -4,6 +4,8 @@ import { useState } from "react";
 import { apiPost, apiDelete } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { HiPencil, HiX, HiCheck } from "react-icons/hi";
+import { useToast } from "@/components/ui";
+import { handleApiError } from "@/lib/utils";
 
 interface ScoreOverride {
   target_type: string;
@@ -22,6 +24,7 @@ interface ScoreEditorProps {
 
 export default function ScoreEditor({ targetType, targetId, cumulativeScore, override, onUpdate, size = "sm" }: ScoreEditorProps) {
   const { dbUser } = useAuth();
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(override?.score?.toString() || "");
   const [saving, setSaving] = useState(false);
@@ -51,7 +54,7 @@ export default function ScoreEditor({ targetType, targetId, cumulativeScore, ove
       });
       onUpdate();
       setEditing(false);
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
     setSaving(false);
   }
 
@@ -62,7 +65,7 @@ export default function ScoreEditor({ targetType, targetId, cumulativeScore, ove
       onUpdate();
       setEditing(false);
       setValue("");
-    } catch {}
+    } catch (e) { toast(handleApiError(e), "error"); }
     setSaving(false);
   }
 

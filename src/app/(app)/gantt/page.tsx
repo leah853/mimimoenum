@@ -12,15 +12,8 @@ type Iter = { id: string; name: string; iteration_number: number; start_date: st
 type Quarter = { id: string; name: string; start_date: string; end_date: string; iterations: Iter[] };
 type ViewMode = "overall" | "iteration" | "week";
 
-const FIXED_CATS = ["Customer Success & PG Acquisition", "Product / Engineering / Workflows", "Cybersecurity", "Continuous Learning", "Talent Acquisition", "Branding"];
-const CAT_COLORS: Record<string, string> = {
-  "Customer Success & PG Acquisition": "#6366f1", "Product / Engineering / Workflows": "#3b82f6",
-  "Cybersecurity": "#ef4444", "Continuous Learning": "#f59e0b", "Talent Acquisition": "#10b981", "Branding": "#8b5cf6",
-};
-const CAT_SHORT: Record<string, string> = {
-  "Customer Success & PG Acquisition": "CS & PG", "Product / Engineering / Workflows": "Engineering",
-  "Cybersecurity": "Cyber", "Continuous Learning": "Learning", "Talent Acquisition": "Talent", "Branding": "Brand",
-};
+import { FIXED_CATEGORIES, CAT_COLORS, CAT_SHORT } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
 
 // Owner-based border colors for task bars
 const OWNER_COLORS: Record<string, { border: string; bg: string; label: string }> = {
@@ -29,8 +22,6 @@ const OWNER_COLORS: Record<string, { border: string; bg: string; label: string }
 };
 
 function daysBetween(a: string, b: string) { return Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 86400000); }
-function fmt(d: string) { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
-
 export default function GanttPage() {
   const { data: tasks, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: deps } = useApi<Dependency[]>("/api/dependencies");
@@ -39,7 +30,7 @@ export default function GanttPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("overall");
   const [selectedIter, setSelectedIter] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(FIXED_CATS));
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(FIXED_CATEGORIES));
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; task: FullTask } | null>(null);
@@ -85,7 +76,7 @@ export default function GanttPage() {
 
   type RowItem = { type: "category" | "separator" | "task"; cat?: string; task?: FullTask; depth: number; label?: string };
   const rows: RowItem[] = [];
-  FIXED_CATS.forEach((cat) => {
+  FIXED_CATEGORIES.forEach((cat) => {
     const catTasks = filteredTasks.filter((t) => t.category === cat);
     // Hide empty categories when filtering by iteration or week
     if (catTasks.length === 0 && viewMode !== "overall") return;
@@ -152,7 +143,7 @@ export default function GanttPage() {
         curMonth = month; monthStart = x;
       }
       if (d.getDay() === 1 || d.getDate() === 1) {
-        bottomHeaders.push({ label: fmt(ds), x, isMajor: d.getDate() <= 7 });
+        bottomHeaders.push({ label: formatDate(ds), x, isMajor: d.getDate() <= 7 });
       }
       d.setDate(d.getDate() + 1);
     }
@@ -210,7 +201,7 @@ export default function GanttPage() {
         <div>
           <h1 className="text-2xl font-bold gradient-text">Roadmap</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            {quarter.name} &middot; {fmt(chartStart)} — {fmt(chartEnd)} &middot;
+            {quarter.name} &middot; {formatDate(chartStart)} — {formatDate(chartEnd)} &middot;
             <span className="text-green-500 ml-1">{completedCount} done</span> &middot;
             <span className="text-blue-500">{inProgressCount} active</span>
             {blockedCount > 0 && <span className="text-red-500"> &middot; {blockedCount} obstacles</span>}
@@ -250,7 +241,7 @@ export default function GanttPage() {
             {iterations.map((iter) => (
               <button key={iter.id} onClick={() => setSelectedIter(iter.id)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all ${selectedIter === iter.id ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50"}`}>
-                {iter.name} <span className="text-[9px] opacity-70">({fmt(iter.start_date)})</span>
+                {iter.name} <span className="text-[9px] opacity-70">({formatDate(iter.start_date)})</span>
               </button>
             ))}
           </div>
@@ -274,7 +265,7 @@ export default function GanttPage() {
 
         {/* Category legend */}
         <div className="flex items-center gap-3 ml-auto">
-          {FIXED_CATS.map((cat) => {
+          {FIXED_CATEGORIES.map((cat) => {
             const ct = filteredTasks.filter((t) => t.category === cat);
             if (ct.length === 0) return null;
             return (
@@ -576,8 +567,8 @@ export default function GanttPage() {
               {tooltip.task.owner && <span className="text-[10px] text-gray-400">{tooltip.task.owner.full_name}</span>}
             </div>
             <div className="flex gap-3 mt-1.5 text-[9px] text-gray-400">
-              <span>{fmt(tooltip.task.start_date || "")} → {fmt(tooltip.task.end_date || "")}</span>
-              {tooltip.task.deadline && <span>Due: {fmt(tooltip.task.deadline)}</span>}
+              <span>{formatDate(tooltip.task.start_date || "")} → {formatDate(tooltip.task.end_date || "")}</span>
+              {tooltip.task.deadline && <span>Due: {formatDate(tooltip.task.deadline)}</span>}
             </div>
             {tooltip.task.category && <span className="text-[9px] text-gray-500 mt-1 block">{tooltip.task.category}</span>}
           </div>
@@ -594,7 +585,7 @@ export default function GanttPage() {
               <select value={depFrom} onChange={(e) => setDepFrom(e.target.value)}
                 className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
                 <option value="">Select...</option>
-                {FIXED_CATS.map((cat) => (
+                {FIXED_CATEGORIES.map((cat) => (
                   <optgroup key={cat} label={cat}>
                     {all.filter((t) => t.category === cat).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </optgroup>
@@ -606,7 +597,7 @@ export default function GanttPage() {
               <select value={depTo} onChange={(e) => setDepTo(e.target.value)}
                 className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white">
                 <option value="">Select...</option>
-                {FIXED_CATS.map((cat) => (
+                {FIXED_CATEGORIES.map((cat) => (
                   <optgroup key={cat} label={cat}>
                     {all.filter((t) => t.category === cat && t.id !== depFrom).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </optgroup>

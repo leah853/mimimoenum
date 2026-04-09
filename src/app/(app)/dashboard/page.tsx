@@ -11,13 +11,10 @@ import { Card, KPICard, ProgressBar, ScorePill, SkeletonRows, EmptyState } from 
 import ScoreEditor from "@/components/ScoreEditor";
 import Link from "next/link";
 import { HiArrowRight, HiOutlinePaperClip } from "react-icons/hi";
+import { calcScore } from "@/lib/utils";
+import { FIXED_CATEGORIES } from "@/lib/constants";
 
 type ScoreOverride = { target_type: string; target_id: string; score: number };
-
-function score(tasks: Task[]): number {
-  if (!tasks.length) return 0;
-  return (tasks.filter((t) => t.status === "completed").length / tasks.length) * 10;
-}
 
 type FullTask = Task & { deliverables?: Deliverable[]; feedback?: { id: string }[] };
 
@@ -52,7 +49,7 @@ export default function DashboardPage() {
     if (!fb?.length) return false;
     return fb.reduce((s, f) => s + f.rating, 0) / fb.length < 6;
   });
-  const quarterScore = score(all);
+  const quarterScore = calcScore(all);
   const quarter = quarters?.[0];
   const overrides = scoreOverrides || [];
   function getOverride(type: string, id: string) { return overrides.find((o) => o.target_type === type && o.target_id === id) || null; }
@@ -141,7 +138,7 @@ export default function DashboardPage() {
                   className={`space-y-2 text-left p-3 rounded-xl transition-all ${isSelected ? "bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-300 dark:ring-indigo-700" : "hover:bg-gray-50 dark:hover:bg-gray-800/30"}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{iter.name}</span>
-                    <ScoreEditor targetType="iteration" targetId={iter.id} cumulativeScore={score(iterTasks)}
+                    <ScoreEditor targetType="iteration" targetId={iter.id} cumulativeScore={calcScore(iterTasks)}
                       override={getOverride("iteration", iter.id)} onUpdate={refetchScores} />
                   </div>
                   <ProgressBar value={pct} />
@@ -178,7 +175,7 @@ export default function DashboardPage() {
       <Card className="p-5">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4">Goals by Category</h2>
         <div className="space-y-5">
-          {["Customer Success & PG Acquisition", "Product / Engineering / Workflows", "Cybersecurity", "Continuous Learning", "Talent Acquisition", "Branding"].map((cat) => {
+          {FIXED_CATEGORIES.map((cat) => {
             const catTasks = all.filter((t) => t.category === cat);
             const done = catTasks.filter((t) => t.status === "completed").length;
             const ip = catTasks.filter((t) => t.status === "in_progress").length;
@@ -190,7 +187,7 @@ export default function DashboardPage() {
                   <span className="text-sm font-medium text-gray-800 dark:text-white">{cat}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-400">{done}/{catTasks.length}</span>
-                    <ScorePill score={score(catTasks)} />
+                    <ScorePill score={calcScore(catTasks)} />
                   </div>
                 </div>
                 <ProgressBar value={pct} size="sm" />

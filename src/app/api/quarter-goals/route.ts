@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, validate } from "@/lib/api-helpers";
+import { getCallerRole } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const quarterId = new URL(request.url).searchParams.get("quarter_id");
 

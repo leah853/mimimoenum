@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Task, TaskStatus } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
@@ -9,6 +9,8 @@ import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks } from "@/lib/roles";
 import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck } from "react-icons/hi";
 import Link from "next/link";
+import { FIXED_CATEGORIES, OWNER_STYLE } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
 
 type FullTask = Task & {
   owner?: { id: string; full_name: string };
@@ -20,18 +22,6 @@ type UserOption = { id: string; full_name: string; email: string };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
 type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
 type QuarterOption = { id: string; name: string; start_date: string; end_date: string; iterations: IterOption[] };
-
-function fmt(d: string) { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
-
-// Predefined categories — always show these even if empty
-const FIXED_CATEGORIES = [
-  "Customer Success & PG Acquisition",
-  "Product / Engineering / Workflows",
-  "Cybersecurity",
-  "Continuous Learning",
-  "Talent Acquisition",
-  "Branding",
-];
 
 export default function TasksPage() {
   return <Suspense fallback={<div className="p-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" /></div>}><TasksInner /></Suspense>;
@@ -61,7 +51,7 @@ function TasksInner() {
   const iterations = quarter?.iterations || [];
   const allUsers = users || [];
   const dynamicCats = [...new Set(all.map((t) => t.category).filter(Boolean))] as string[];
-  const categories = [...new Set([...FIXED_CATEGORIES, ...dynamicCats])];
+  const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...dynamicCats])], [all]);
 
   // Auto-expand — runs on first load AND whenever filters change
   const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}`;
@@ -258,7 +248,7 @@ function TasksInner() {
         {/* Quarter header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
           <span className="text-base font-bold text-gray-900 dark:text-white">{quarter?.name || "Q2 2026"}</span>
-          {quarter && <span className="text-xs text-gray-400">{fmt(quarter.start_date)} — {fmt(quarter.end_date)}</span>}
+          {quarter && <span className="text-xs text-gray-400">{formatDate(quarter.start_date)} — {formatDate(quarter.end_date)}</span>}
           <span className="ml-auto text-xs text-gray-500">{filtered.length} of {all.length}</span>
         </div>
 
@@ -297,7 +287,7 @@ function TasksInner() {
                           className="flex items-center gap-2 w-full text-left px-6 py-1.5 bg-gray-50/30 dark:bg-gray-800/10 border-b border-gray-100/60 dark:border-gray-800/20 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all">
                           {expanded.has(iterKey) ? <HiChevronDown className="w-3 h-3 text-gray-400" /> : <HiChevronRight className="w-3 h-3 text-gray-400" />}
                           <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">{iter.name}</span>
-                          <span className="text-[10px] text-gray-400">{fmt(iter.start_date)} — {fmt(iter.end_date)}</span>
+                          <span className="text-[10px] text-gray-400">{formatDate(iter.start_date)} — {formatDate(iter.end_date)}</span>
                           <span className="ml-auto text-[10px] text-gray-400">{iterGoals.length + iterWeekTasks.length}</span>
                         </button>
 
@@ -340,7 +330,7 @@ function TasksInner() {
                                       className="flex items-center gap-2 flex-1 text-left pl-10 pr-2 py-1.5 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all">
                                       {expanded.has(weekKey) ? <HiChevronDown className="w-2.5 h-2.5 text-gray-300" /> : <HiChevronRight className="w-2.5 h-2.5 text-gray-300" />}
                                       <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">W{week.week_number}</span>
-                                      <span className="text-[10px] text-gray-300 dark:text-gray-600">{fmt(week.start_date)} — {fmt(week.end_date)}</span>
+                                      <span className="text-[10px] text-gray-300 dark:text-gray-600">{formatDate(week.start_date)} — {formatDate(week.end_date)}</span>
                                       <span className="text-[10px] text-gray-400 ml-1">{weekTasks.length}</span>
                                     </button>
                                     <Link href={`/weeks/${week.id}`} className="text-[9px] text-indigo-500 hover:text-indigo-400 pr-4 transition-all">Open →</Link>
@@ -390,12 +380,6 @@ function TasksInner() {
     </div>
   );
 }
-
-// Owner color mapping — Leah = pink, Chloe = cyan
-const OWNER_STYLE: Record<string, { text: string; bg: string; border: string; dot: string }> = {
-  "Leah": { text: "text-pink-600 dark:text-pink-400", bg: "bg-pink-50/40 dark:bg-pink-900/10", border: "border-l-pink-400", dot: "#ec4899" },
-  "Chloe": { text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-50/40 dark:bg-cyan-900/10", border: "border-l-cyan-400", dot: "#06b6d4" },
-};
 
 function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullTask; onUpdate: (id: string, field: string, value: string) => void; editable?: boolean; owners?: UserOption[] }) {
   const todayStr = new Date().toISOString().split("T")[0];

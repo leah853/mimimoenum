@@ -1,30 +1,4 @@
-import type { Task, Deliverable, Feedback } from "@/lib/types";
-
-export interface CompletionCheck {
-  canComplete: boolean;
-  reasons: string[];
-}
-
-export function checkTaskCompletion(
-  task: Task,
-  deliverables: (Deliverable | { id: string })[],
-  feedback: (Feedback | { id: string })[]
-): CompletionCheck {
-  const reasons: string[] = [];
-
-  if (!deliverables || deliverables.length === 0) {
-    reasons.push("At least one deliverable is required before completion");
-  }
-
-  if (!feedback || feedback.length === 0) {
-    reasons.push("Feedback is required before completion");
-  }
-
-  return {
-    canComplete: reasons.length === 0,
-    reasons,
-  };
-}
+import type { Task } from "@/lib/types";
 
 export function getCompletionBlockers(task: Task & { deliverables?: { id: string }[]; feedback?: { id: string }[] }): string[] {
   const blockers: string[] = [];

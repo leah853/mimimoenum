@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/use-api";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
@@ -12,13 +12,11 @@ type WeekOption = { id: string; week_number: number; start_date: string; end_dat
 type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
 type QuarterOption = { id: string; name: string; start_date: string; end_date: string; iterations: IterOption[] };
 
-const FIXED_CATEGORIES = ["Customer Success & PG Acquisition", "Product / Engineering / Workflows", "Cybersecurity", "Continuous Learning", "Talent Acquisition", "Branding"];
-
-function scoreNum(tasks: Task[]): number { if (!tasks.length) return 0; return (tasks.filter((t) => t.status === "completed").length / tasks.length) * 10; }
-function fmt(d: string) { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
+import { FIXED_CATEGORIES } from "@/lib/constants";
+import { calcScore, formatDate } from "@/lib/utils";
 
 function ScorePill({ tasks, size = "sm" }: { tasks: Task[]; size?: "sm" | "lg" }) {
-  const s = scoreNum(tasks);
+  const s = calcScore(tasks);
   const bg = s >= 7 ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400" : s > 0 ? "bg-yellow-100 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400";
   const cls = size === "lg" ? "text-sm font-bold px-2.5 py-1" : "text-[10px] font-bold px-1.5 py-0.5";
   return <span className={`rounded-full ${bg} ${cls} transition-all duration-200`}>{s.toFixed(1)}/10</span>;
@@ -34,7 +32,7 @@ export default function MilestonesPage() {
   const all = tasks || [];
   const quarter = quarters?.[0];
   const iterations = quarter?.iterations || [];
-  const categories = [...new Set([...FIXED_CATEGORIES, ...all.map((t) => t.category).filter(Boolean)])] as string[];
+  const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...all.map((t) => t.category).filter(Boolean)])] as string[], [all]);
 
   // Auto-expand on first load
   if (!initialized && iterations.length > 0) {
@@ -57,7 +55,7 @@ export default function MilestonesPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Milestones</h1>
           <p className="text-xs text-gray-500 mt-1">
-            {quarter?.name || "Q2 2026"} &middot; {quarter ? `${fmt(quarter.start_date)} — ${fmt(quarter.end_date)}` : ""} &middot; {all.length} tasks
+            {quarter?.name || "Q2 2026"} &middot; {quarter ? `${formatDate(quarter.start_date)} — ${formatDate(quarter.end_date)}` : ""} &middot; {all.length} tasks
           </p>
         </div>
         <div className="flex gap-2">
@@ -155,7 +153,7 @@ function IterationRows({ iter, isExpanded, onToggle, categories, allTasks, tasks
             <span className="text-sm font-semibold text-gray-900 dark:text-white">{iter.name}</span>
             <ScorePill tasks={allTasks.filter((t) => t.iteration_id === iter.id)} />
           </div>
-          <span className="text-[10px] text-gray-400 ml-7">{fmt(iter.start_date)} — {fmt(iter.end_date)}</span>
+          <span className="text-[10px] text-gray-400 ml-7">{formatDate(iter.start_date)} — {formatDate(iter.end_date)}</span>
         </td>
         {categories.map((cat) => {
           const tasks = tasksFor(iter.id, cat);
@@ -180,7 +178,7 @@ function IterationRows({ iter, isExpanded, onToggle, categories, allTasks, tasks
                 <ScorePill tasks={categories.flatMap((c) => weekTasks(week.id, c))} />
                 <span className="text-[9px] text-blue-500">→</span>
               </div>
-              <span className="text-[10px] text-gray-400">{fmt(week.start_date)} — {fmt(week.end_date)}</span>
+              <span className="text-[10px] text-gray-400">{formatDate(week.start_date)} — {formatDate(week.end_date)}</span>
             </Link>
           </td>
           {categories.map((cat) => {

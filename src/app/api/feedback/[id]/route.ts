@@ -1,10 +1,23 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err } from "@/lib/api-helpers";
+import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const { id } = await params;
   const sb = createServiceClient();
+
+  // Ownership check: only the reviewer or admin can edit
+  if (role !== "admin") {
+    const callerId = await getCallerId(request);
+    const { data: record } = await sb.from("feedback").select("reviewer_id").eq("id", id).single();
+    if (!record || record.reviewer_id !== callerId) {
+      return err("Forbidden: you can only edit your own feedback", 403);
+    }
+  }
+
   const body = await request.json();
 
   // If acknowledging, set timestamp
@@ -17,9 +30,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   return ok(data);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const { id } = await params;
   const sb = createServiceClient();
+
+  // Ownership check: only the reviewer or admin can delete
+  if (role !== "admin") {
+    const callerId = await getCallerId(request);
+    const { data: record } = await sb.from("feedback").select("reviewer_id").eq("id", id).single();
+    if (!record || record.reviewer_id !== callerId) {
+      return err("Forbidden: you can only delete your own feedback", 403);
+    }
+  }
+
   const { error } = await sb.from("feedback").delete().eq("id", id);
   if (error) return err(error.message, 400);
   return ok({ deleted: true });
