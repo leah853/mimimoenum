@@ -310,6 +310,25 @@ canvas{display:block}
 .orch-row{cursor:pointer;transition:background .1s}
 .orch-row:hover{background:var(--c)}
 @keyframes slideDown{from{max-height:0;opacity:0}to{max-height:500px;opacity:1}}
+/* WFD Focus Panel */
+.wfd-focus{padding:20px;background:#fff;border-top:3px solid var(--cy);animation:fadeIn .2s ease}
+.wfd-focus .focus-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.wfd-focus .focus-title{font-size:16px;font-weight:800;color:var(--t);flex:1}
+.wfd-focus .focus-close{padding:6px 14px;border-radius:8px;border:1px solid var(--b);background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--td);transition:all .15s}
+.wfd-focus .focus-close:hover{background:var(--c);border-color:var(--td)}
+.wfd-focus .focus-meta{display:flex;gap:16px;margin-bottom:16px;font-size:12px;color:var(--td)}
+.wfd-focus .focus-meta b{color:var(--t)}
+.wfd-focus .focus-steps{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.wfd-focus .fs{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid var(--b)}
+.wfd-focus .fs.f-done{background:rgba(5,150,105,.04);border-color:rgba(5,150,105,.15);color:var(--g)}
+.wfd-focus .fs.f-active{background:rgba(8,145,178,.06);border-color:rgba(8,145,178,.3);color:var(--cy);font-weight:700}
+.wfd-focus .fs.f-pending{color:var(--tm);border-color:var(--b)}
+.wfd-focus .fs.f-blocked{background:rgba(214,51,108,.04);border-color:rgba(214,51,108,.2);color:var(--pk);font-weight:700}
+.wfd-focus .fs .fs-icon{flex-shrink:0;width:16px;text-align:center;font-size:13px}
+.wfd-focus .focus-blocker{margin-top:12px;padding:10px 14px;border-radius:8px;background:rgba(214,51,108,.04);border:1px solid rgba(214,51,108,.15);font-size:12px;color:var(--pk);font-weight:600}
+.hh-tbl tr{cursor:pointer;transition:background .1s}
+.hh-tbl tr:hover{background:rgba(8,145,178,.04)!important}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -431,9 +450,10 @@ canvas{display:block}
           <div><div class="wfd-kpi" id="wfdKpi"></div></div>
         </div>
         <div class="wfd-graph-wrap"><canvas id="wfdCanvas"></canvas></div>
-        <div class="wfd-bottom">
+        <div id="wfdFocus" style="display:none"></div>
+        <div class="wfd-bottom" id="wfdBottomGrid">
           <div>
-            <div class="section-title">Running Instances <span class="hint">(each agency being analyzed right now)</span></div>
+            <div class="section-title">Running Instances <span class="hint">(click any row to zoom in)</span></div>
             <div class="wfd-instance-chips" id="wfdInstChips"></div>
             <table class="hh-tbl"><thead><tr><th>Home Health Agency</th><th>What's Happening</th><th>Status</th><th>Time Spent</th></tr></thead><tbody id="wfdTbody"></tbody></table>
           </div>
@@ -1493,9 +1513,10 @@ function renderWFDetail(VS){
   document.getElementById('wfdInstChips').innerHTML=TASK_STEP_RANGES.map((r,ti)=>
     `<span class="wfd-inst-chip" style="${taskCounts[ti]?'border-color:var(--cy);color:var(--cy)':''}">${r.name}: <b>${taskCounts[ti]}</b></span>`).join('');
   const rows=sa.hhs.filter(h=>h.started);
-  document.getElementById('wfdTbody').innerHTML=(rows.length?rows:sa.hhs.slice(0,5)).map(h=>{
-    const st=getHHStatus(h);
-    return`<tr><td style="font-weight:600;color:var(--t)">${h.name.replace(' Home Health','')}</td><td>${h.started?STEP_NAMES[h.wfStep]:'—'}</td><td><span class="status-badge ${st.cls}">${st.icon} ${st.label}</span></td><td style="font-variant-numeric:tabular-nums" title="Time spent on current step">${h.started?(h.done?h.totalTicks+' weeks total':h.stepTicks+' weeks so far'):'—'}</td></tr>`;
+  const displayRows=rows.length?rows:sa.hhs.slice(0,5);
+  document.getElementById('wfdTbody').innerHTML=displayRows.map(h=>{
+    const st=getHHStatus(h);const hi=sa.hhs.indexOf(h);
+    return`<tr onclick="focusHH(${selSA},${hi})" title="Click to zoom into this workflow"><td style="font-weight:600;color:var(--t)">${h.name.replace(' Home Health','')}</td><td>${h.started?STEP_NAMES[h.wfStep]:'—'}</td><td><span class="status-badge ${st.cls}">${st.icon} ${st.label}</span></td><td style="font-variant-numeric:tabular-nums">${h.started?(h.done?h.totalTicks+' weeks total':h.stepTicks+' weeks so far'):'—'}</td></tr>`;
   }).join('');
 
   const curHH=sa.wfCur>=0&&sa.wfCur<sa.hhs.length?sa.hhs[sa.wfCur]:null;
@@ -1560,6 +1581,44 @@ function renderWFDetail(VS){
   });
   document.getElementById('wfdTaskPanel').innerHTML=taskHTML;
 }
+let wfdFocusHH=null;
+function focusHH(saIdx,hhIdx){
+  const VS=getViewState();const sa=VS.sas[saIdx];if(!sa)return;
+  const h=sa.hhs[hhIdx];if(!h)return;
+  wfdFocusHH={saIdx,hhIdx};
+  const st=getHHStatus(h);
+  let html=`<div class="wfd-focus">
+    <div class="focus-header">
+      <span class="focus-title">${h.name}</span>
+      <span class="status-badge ${st.cls}">${st.icon} ${st.label}</span>
+      <button class="focus-close" onclick="closeFocusHH()">✕ Close</button>
+    </div>
+    <div class="focus-meta">
+      <span>Region: <b>${sa.name}</b></span>
+      <span>Current Step: <b>${h.started?STEP_NAMES[h.wfStep]:'Not started'}</b></span>
+      <span>Time: <b>${h.started?(h.done?h.totalTicks+' weeks total':h.stepTicks+' weeks on this step'):'—'}</b></span>
+    </div>
+    <div class="focus-steps">`;
+  for(let si=0;si<=15;si++){
+    const name=STEP_NAMES[si]||'Step '+si;
+    const done=h.wfStep>si,active=h.wfStep===si&&h.started&&!h.done;
+    const blocked=active&&h.blocked;
+    const cls=blocked?'f-blocked':done?'f-done':active?'f-active':'f-pending';
+    const icon=blocked?'⊘':done?'✓':active?'▸':'·';
+    html+=`<div class="fs ${cls}"><span class="fs-icon">${icon}</span>${name}</div>`;
+  }
+  html+=`</div>`;
+  if(h.blocked) html+=`<div class="focus-blocker">⊘ Blocked: ${(h.blockType||'unknown').replace(/_/g,' ')} — waiting for retry (current retry rate: ${Math.round(V('retry_rate')*100)}%)</div>`;
+  html+=`</div>`;
+  document.getElementById('wfdFocus').style.display='block';
+  document.getElementById('wfdFocus').innerHTML=html;
+  document.getElementById('wfdBottomGrid').style.display='none';
+}
+function closeFocusHH(){
+  wfdFocusHH=null;
+  document.getElementById('wfdFocus').style.display='none';
+  document.getElementById('wfdBottomGrid').style.display='';
+}
 function toggleTask(id){
   if(expandedTasks.has(id))expandedTasks.delete(id);else expandedTasks.add(id);
   renderWFDetail();
@@ -1576,8 +1635,8 @@ function getOrchDetail(inst,VS){
     const parts=inst.id.split('-');const saAbbr=parts[1];const hhIdx=parseInt(parts[2].replace('HH',''))-1;
     const sa=VS.sas.find(s=>s.abbr===saAbbr);if(!sa||!sa.hhs[hhIdx])return'<div style="font-size:11px;color:var(--tm)">No data</div>';
     const h=sa.hhs[hhIdx];
-    return`<div class="detail-steps">${STEP_NAMES.map((name,si)=>{
-      const done=h.wfStep>si,active=h.wfStep===si&&h.started&&!h.done;
+    return`<div class="detail-steps">${Array.from({length:16},(_,si)=>{
+      const name=STEP_NAMES[si]||'Step '+si;const done=h.wfStep>si,active=h.wfStep===si&&h.started&&!h.done;
       return`<div class="detail-step ${done?'s-done':active?'s-active':'s-pending'}"><span class="step-icon">${done?'✓':active?'▸':'·'}</span>${name}</div>`;
     }).join('')}${h.blocked?`<div style="margin-top:6px;font-size:11px;color:var(--pk);font-weight:600">⊘ Blocked: ${(h.blockType||'unknown').replace(/_/g,' ')}</div>`:''}</div>`;
   }
