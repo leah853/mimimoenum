@@ -131,7 +131,7 @@ body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-seri
 .wf-chip-sm .dot{width:7px;height:7px;border-radius:50%}
 
 /* ── WORKFLOW DETAIL ── */
-.wfd-view{display:flex;flex-direction:column;overflow:hidden}
+.wfd-view{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
 .wfd-top{display:flex;gap:1px;background:var(--b);flex-shrink:0}
 .wfd-top>div{background:#fff;padding:12px 16px}
 .wfd-kpi{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -144,10 +144,47 @@ body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-seri
 .wfd-sa-card .sa-name{font-size:13px;font-weight:700;margin-bottom:4px}
 .wfd-sa-card .sa-prog-bar{height:5px;background:rgba(0,0,0,.06);border-radius:3px;margin-top:6px}
 .wfd-sa-card .sa-prog-fill{height:100%;border-radius:3px;transition:width .3s}
+/* Breadcrumb */
+.wfd-breadcrumb{display:flex;align-items:center;gap:6px;padding:10px 20px;font-size:12px;color:var(--tm);background:#fff;border-bottom:1px solid var(--b);flex-shrink:0}
+.wfd-breadcrumb .bc-seg{cursor:pointer;color:var(--bl);font-weight:600;transition:color .15s}
+.wfd-breadcrumb .bc-seg:hover{color:var(--cy);text-decoration:underline}
+.wfd-breadcrumb .bc-sep{color:var(--b);font-size:10px}
+.wfd-breadcrumb .bc-cur{color:var(--t);font-weight:700;cursor:default}
+/* View tabs */
+.wfd-view-tabs{display:flex;gap:0;border-bottom:1px solid var(--b);flex-shrink:0;background:#fff}
+.wfd-view-tab{padding:10px 20px;font-size:12px;font-weight:600;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.wfd-view-tab:hover{color:var(--t);background:var(--c)}
+.wfd-view-tab.active{color:var(--cy);border-bottom-color:var(--cy)}
+/* Phase Timeline */
+.phase-timeline{padding:20px;flex-shrink:0}
+.phase-timeline-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tm);margin-bottom:12px}
+.phase-tl-row{display:flex;gap:0;align-items:stretch;margin-bottom:16px}
+.phase-tl-card{flex:1;padding:14px 16px;background:#fff;border:1px solid var(--b);position:relative;cursor:pointer;transition:all .15s}
+.phase-tl-card:first-child{border-radius:10px 0 0 10px}
+.phase-tl-card:last-child{border-radius:0 10px 10px 0}
+.phase-tl-card:not(:first-child){border-left:none}
+.phase-tl-card:hover{background:rgba(8,145,178,.02);border-color:var(--cy);z-index:1}
+.phase-tl-card.ptl-done{border-left-color:var(--g)}
+.phase-tl-card.ptl-done .ptl-name{color:var(--g)}
+.phase-tl-card.ptl-active{border-color:var(--cy);background:rgba(8,145,178,.03);box-shadow:0 0 0 2px rgba(8,145,178,.1)}
+.phase-tl-card.ptl-active:not(:first-child){border-left:1px solid var(--cy)}
+.phase-tl-card.ptl-active .ptl-name{color:var(--cy);font-weight:800}
+.phase-tl-card.ptl-blocked{border-color:var(--pk);background:rgba(214,51,108,.02)}
+.phase-tl-card.ptl-blocked .ptl-name{color:var(--pk)}
+.ptl-name{font-size:12px;font-weight:700;color:var(--t);margin-bottom:4px}
+.ptl-count{font-size:11px;color:var(--tm)}
+.ptl-count b{font-weight:800}
+.ptl-arrow{position:absolute;right:-8px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--b);z-index:2}
+.ptl-bar{height:3px;border-radius:2px;background:rgba(0,0,0,.06);margin-top:8px}
+.ptl-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+/* Heatmap indicator */
+.ptl-heat{font-size:9px;color:var(--pk);font-weight:700;margin-top:4px}
+/* Diagram tab wrap */
 .wfd-graph-wrap{flex:1;position:relative;min-height:200px;border-bottom:1px solid var(--b)}
 .wfd-graph-wrap canvas{display:block}
-.wfd-bottom{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--b);flex-shrink:0;max-height:320px}
-.wfd-bottom>div{background:#fff;padding:16px 20px;overflow-y:auto}
+/* Bottom grid */
+.wfd-bottom{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--b);flex-shrink:0}
+.wfd-bottom>div{background:#fff;padding:16px 20px;overflow-y:auto;max-height:360px}
 .wfd-instance-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .wfd-inst-chip{padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;background:var(--c);border:1px solid var(--b)}
 
@@ -311,21 +348,55 @@ canvas{display:block}
 .orch-row:hover{background:var(--c)}
 @keyframes slideDown{from{max-height:0;opacity:0}to{max-height:500px;opacity:1}}
 /* WFD Focus Panel */
-.wfd-focus{padding:20px;background:#fff;border-top:3px solid var(--cy)}
-.wfd-focus .focus-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-.wfd-focus .focus-title{font-size:16px;font-weight:800;color:var(--t);flex:1}
+.wfd-focus{padding:24px;background:#fff}
+.wfd-focus .focus-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.wfd-focus .focus-title{font-size:18px;font-weight:800;color:var(--t);flex:1}
 .wfd-focus .focus-close{padding:6px 14px;border-radius:8px;border:1px solid var(--b);background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--td);transition:all .15s}
 .wfd-focus .focus-close:hover{background:var(--c);border-color:var(--td)}
-.wfd-focus .focus-meta{display:flex;gap:16px;margin-bottom:16px;font-size:12px;color:var(--td)}
+.wfd-focus .focus-meta{display:flex;gap:20px;margin-bottom:20px;font-size:12px;color:var(--td);flex-wrap:wrap}
 .wfd-focus .focus-meta b{color:var(--t)}
+.wfd-focus .focus-meta .fm-item{display:flex;align-items:center;gap:6px}
+.wfd-focus .focus-meta .fm-label{color:var(--tm);font-weight:500}
+.wfd-focus .focus-progress{margin-bottom:20px}
+.wfd-focus .focus-prog-bar{height:6px;border-radius:3px;background:rgba(0,0,0,.06)}
+.wfd-focus .focus-prog-fill{height:100%;border-radius:3px;transition:width .3s}
+.wfd-focus .focus-prog-text{font-size:11px;color:var(--tm);margin-top:4px;display:flex;justify-content:space-between}
+.wfd-focus .focus-section{margin-bottom:20px}
+.wfd-focus .focus-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tm);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.wfd-focus .focus-section-title::after{content:'';flex:1;height:1px;background:var(--b)}
 .wfd-focus .focus-steps{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.wfd-focus .fs{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid var(--b)}
+.wfd-focus .fs{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid var(--b);transition:all .15s}
 .wfd-focus .fs.f-done{background:rgba(5,150,105,.04);border-color:rgba(5,150,105,.15);color:var(--g)}
-.wfd-focus .fs.f-active{background:rgba(8,145,178,.06);border-color:rgba(8,145,178,.3);color:var(--cy);font-weight:700}
+.wfd-focus .fs.f-active{background:rgba(8,145,178,.06);border-color:rgba(8,145,178,.3);color:var(--cy);font-weight:700;box-shadow:0 0 0 2px rgba(8,145,178,.08)}
 .wfd-focus .fs.f-pending{color:var(--tm);border-color:var(--b)}
-.wfd-focus .fs.f-blocked{background:rgba(214,51,108,.04);border-color:rgba(214,51,108,.2);color:var(--pk);font-weight:700}
+.wfd-focus .fs.f-blocked{background:rgba(214,51,108,.04);border-color:rgba(214,51,108,.2);color:var(--pk);font-weight:700;box-shadow:0 0 0 2px rgba(214,51,108,.08)}
 .wfd-focus .fs .fs-icon{flex-shrink:0;width:16px;text-align:center;font-size:13px}
-.wfd-focus .focus-blocker{margin-top:12px;padding:10px 14px;border-radius:8px;background:rgba(214,51,108,.04);border:1px solid rgba(214,51,108,.15);font-size:12px;color:var(--pk);font-weight:600}
+.wfd-focus .fs .fs-num{font-size:9px;color:var(--tm);font-weight:600;margin-left:auto;font-variant-numeric:tabular-nums}
+/* Blocker card */
+.focus-blocker{margin-top:16px;padding:14px 18px;border-radius:10px;background:rgba(214,51,108,.03);border:1px solid rgba(214,51,108,.12)}
+.focus-blocker .fb-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.focus-blocker .fb-icon{font-size:16px}
+.focus-blocker .fb-title{font-size:13px;font-weight:700;color:var(--pk)}
+.focus-blocker .fb-detail{font-size:12px;color:var(--td);line-height:1.6}
+.focus-blocker .fb-detail b{color:var(--t)}
+.focus-blocker .fb-actions{display:flex;gap:8px;margin-top:10px}
+.focus-blocker .fb-btn{padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;border:1px solid}
+.focus-blocker .fb-btn-primary{background:var(--pk);color:#fff;border-color:var(--pk)}
+.focus-blocker .fb-btn-primary:hover{opacity:.85}
+.focus-blocker .fb-btn-secondary{background:#fff;color:var(--td);border-color:var(--b)}
+.focus-blocker .fb-btn-secondary:hover{background:var(--c)}
+/* Mini timeline */
+.focus-timeline{display:flex;align-items:center;gap:0;margin-top:16px;position:relative;padding:8px 0}
+.focus-tl-line{flex:1;height:2px;background:var(--b)}
+.focus-tl-line.done{background:var(--g)}
+.focus-tl-line.blocked{background:var(--pk);background:repeating-linear-gradient(90deg,var(--pk),var(--pk) 4px,transparent 4px,transparent 8px)}
+.focus-tl-node{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:2px solid}
+.focus-tl-node.n-done{background:var(--g);border-color:var(--g)}
+.focus-tl-node.n-active{background:var(--cy);border-color:var(--cy);box-shadow:0 0 0 3px rgba(8,145,178,.2)}
+.focus-tl-node.n-blocked{background:var(--pk);border-color:var(--pk);box-shadow:0 0 0 3px rgba(214,51,108,.2)}
+.focus-tl-node.n-pending{background:#fff;border-color:var(--b)}
+.focus-tl-labels{display:flex;justify-content:space-between;margin-top:4px}
+.focus-tl-label{font-size:9px;color:var(--tm);text-align:center}
 .hh-tbl tr{cursor:pointer;transition:background .1s}
 .hh-tbl tr:hover{background:rgba(8,145,178,.04)!important}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
@@ -445,23 +516,31 @@ canvas{display:block}
       </div>
       <!-- WORKFLOW DETAIL VIEW -->
       <div class="vw wfd-view" id="v-wfd">
-        <div class="wfd-top">
+        <div class="wfd-breadcrumb" id="wfdBreadcrumb"></div>
+        <div class="wfd-top" id="wfdTopBar">
           <div style="flex:1"><div class="wfd-sa-cards" id="wfdSaCards"></div></div>
           <div><div class="wfd-kpi" id="wfdKpi"></div></div>
         </div>
-        <div class="wfd-graph-wrap"><canvas id="wfdCanvas"></canvas></div>
-        <div id="wfdFocus" style="display:none"></div>
-        <div class="wfd-bottom" id="wfdBottomGrid">
-          <div>
-            <div class="section-title">Running Instances <span class="hint">(click any row to zoom in)</span></div>
-            <div class="wfd-instance-chips" id="wfdInstChips"></div>
-            <table class="hh-tbl"><thead><tr><th>Home Health Agency</th><th>What's Happening</th><th>Status</th><th>Time Spent</th></tr></thead><tbody id="wfdTbody"></tbody></table>
-          </div>
-          <div>
-            <div class="section-title">Task Detail <span class="hint">(click any task to see its steps)</span></div>
-            <div id="wfdTaskPanel"></div>
+        <div class="wfd-view-tabs" id="wfdViewTabs">
+          <div class="wfd-view-tab active" data-wfd-tab="overview" onclick="setWfdTab('overview')">📊 Overview</div>
+          <div class="wfd-view-tab" data-wfd-tab="diagram" onclick="setWfdTab('diagram')">🔀 Diagram</div>
+        </div>
+        <div id="wfdOverviewPanel">
+          <div class="phase-timeline" id="wfdPhaseTimeline"></div>
+          <div class="wfd-bottom" id="wfdBottomGrid">
+            <div>
+              <div class="section-title">Running Instances <span class="hint">(click any row to zoom in)</span></div>
+              <div class="wfd-instance-chips" id="wfdInstChips"></div>
+              <table class="hh-tbl"><thead><tr><th>Home Health Agency</th><th>What's Happening</th><th>Status</th><th>Time Spent</th></tr></thead><tbody id="wfdTbody"></tbody></table>
+            </div>
+            <div>
+              <div class="section-title">Task Detail <span class="hint">(click any task to see its steps)</span></div>
+              <div id="wfdTaskPanel"></div>
+            </div>
           </div>
         </div>
+        <div class="wfd-graph-wrap" id="wfdGraphWrap" style="display:none"><canvas id="wfdCanvas"></canvas></div>
+        <div id="wfdFocus" style="display:none"></div>
       </div>
       <!-- ORCHESTRATOR VIEW -->
       <div class="vw wfd-view" id="v-orch" style="display:flex;flex-direction:column">
@@ -1504,10 +1583,103 @@ function getHHStatus(h){
   return{cls:'pending',label:'Pending',icon:'○'};
 }
 
-// ── WFD: Workflow Detail with expandable task cards ──
+// ── WFD: View tabs, Phase Timeline, Breadcrumb ──
+let wfdTab='overview';
+function setWfdTab(tab){
+  wfdTab=tab;
+  document.querySelectorAll('.wfd-view-tab').forEach(t=>t.classList.toggle('active',t.dataset.wfdTab===tab));
+  document.getElementById('wfdOverviewPanel').style.display=tab==='overview'?'':'none';
+  document.getElementById('wfdGraphWrap').style.display=tab==='diagram'?'':'none';
+  if(tab==='diagram'){setTimeout(resizeAll,20);}
+}
+// Phase Timeline data: maps step ranges + CS phases into visual phases
+const SA_PHASES=[
+  {name:'NPI Research',steps:[1,2,3],taskIdx:0},
+  {name:'Location Discovery',steps:[4,5,6,7,8,9,10],taskIdx:1},
+  {name:'Corporate ID',steps:[11,12],taskIdx:2},
+  {name:'Account Mapping',steps:[13,14,15],taskIdx:3}
+];
+const CS_PHASES_VIZ=[
+  {name:'Enrichment',phase:'enrichment'},{name:'Signatures',phase:'signatures'},
+  {name:'Rapport',phase:'rapport'},{name:'BAA',phase:'baa'},
+  {name:'EHR Access',phase:'ehr'},{name:'HH Onboarding',phase:'hh_identify'}
+];
+function renderPhaseTimeline(VS){
+  VS=VS||S;const sa=VS.sas[selSA];if(!sa)return;
+  // SA Phase Timeline
+  let html='<div class="phase-timeline-label">Phase 1 — Market Research</div><div class="phase-tl-row">';
+  SA_PHASES.forEach((ph,pi)=>{
+    let phDone=0,phActive=0,phBlocked=0,phTotal=sa.hhs.length,avgTime=0,timeCount=0;
+    sa.hhs.forEach(h=>{
+      const inPhase=h.wfStep>=ph.steps[0]&&h.wfStep<=ph.steps[ph.steps.length-1];
+      const pastPhase=h.wfStep>ph.steps[ph.steps.length-1];
+      if(pastPhase||h.done)phDone++;
+      else if(inPhase&&h.started){phActive++;if(h.blocked)phBlocked++;avgTime+=h.stepTicks;timeCount++;}
+    });
+    const pct=phTotal?Math.round(phDone/phTotal*100):0;
+    const cls=phBlocked?'ptl-blocked':phActive?'ptl-active':phDone===phTotal&&phDone>0?'ptl-done':'';
+    const barCol=phBlocked?'var(--pk)':phActive?'var(--cy)':'var(--g)';
+    const avgT=timeCount?Math.round(avgTime/timeCount*10)/10:0;
+    html+=`<div class="phase-tl-card ${cls}" onclick="filterPhase('sa',${pi})">
+      <div class="ptl-name">${ph.name}</div>
+      <div class="ptl-count"><b>${phDone}</b>/${phTotal} done${phActive?' · '+phActive+' active':''}${phBlocked?' · <span style="color:var(--pk)">'+phBlocked+' stuck</span>':''}</div>
+      <div class="ptl-bar"><div class="ptl-bar-fill" style="width:${pct}%;background:${barCol}"></div></div>
+      ${avgT>2?'<div class="ptl-heat">⏱ avg '+avgT+'w per instance</div>':''}
+      ${pi<SA_PHASES.length-1?'<span class="ptl-arrow">→</span>':''}
+    </div>`;
+  });
+  html+='</div>';
+  // CS Phase Timeline
+  const csPGs=VS.pgs.filter(p=>p.saId===sa.id&&p.stage>=5&&p.cs.phase!=='idle');
+  if(csPGs.length){
+    html+='<div class="phase-timeline-label" style="margin-top:8px">Phase 2 — Customer Success</div><div class="phase-tl-row">';
+    const csPhaseOrder=['enrichment','signatures','rapport','baa','ehr','hh_identify'];
+    CS_PHASES_VIZ.forEach((ph,pi)=>{
+      let phDone=0,phActive=0,phBlocked=0;
+      csPGs.forEach(pg=>{
+        const idx=csPhaseOrder.indexOf(pg.cs.phase);
+        if(pg.cs.phase==='complete'||idx>pi)phDone++;
+        else if(idx===pi){phActive++;if(pg.cs.blocked)phBlocked++;}
+      });
+      const pct=csPGs.length?Math.round(phDone/csPGs.length*100):0;
+      const cls=phBlocked?'ptl-blocked':phActive?'ptl-active':phDone===csPGs.length&&phDone>0?'ptl-done':'';
+      const barCol=phBlocked?'var(--pk)':phActive?'var(--cy)':'var(--g)';
+      html+=`<div class="phase-tl-card ${cls}" onclick="filterPhase('cs',${pi})">
+        <div class="ptl-name">${ph.name}</div>
+        <div class="ptl-count"><b>${phDone}</b>/${csPGs.length}${phActive?' · '+phActive+' active':''}${phBlocked?' · <span style="color:var(--pk)">'+phBlocked+' stuck</span>':''}</div>
+        <div class="ptl-bar"><div class="ptl-bar-fill" style="width:${pct}%;background:${barCol}"></div></div>
+        ${pi<CS_PHASES_VIZ.length-1?'<span class="ptl-arrow">→</span>':''}
+      </div>`;
+    });
+    html+='</div>';
+  }
+  document.getElementById('wfdPhaseTimeline').innerHTML=html;
+}
+function filterPhase(type,idx){/* future: filter table to instances in this phase */}
+// Breadcrumb
+function renderBreadcrumb(level,ctx){
+  const bc=document.getElementById('wfdBreadcrumb');
+  if(!bc)return;
+  const VS=getViewState();const sa=VS.sas[selSA];
+  if(level==='focus'&&ctx){
+    const h=sa.hhs[ctx.hhIdx];
+    bc.innerHTML=`<span class="bc-seg" onclick="closeFocusHH()">Overview</span><span class="bc-sep">›</span><span class="bc-seg" onclick="closeFocusHH()">${sa.name}</span><span class="bc-sep">›</span><span class="bc-cur">${h?h.name:'Instance'}</span><span style="margin-left:auto;font-size:11px;color:var(--tm)">Press Esc to go back</span>`;
+  } else {
+    bc.innerHTML=`<span class="bc-cur">Overview</span><span class="bc-sep">›</span><span class="bc-cur">${sa?sa.name:''}</span><span style="margin-left:auto;font-size:11px;color:var(--tm)">${sa?sa.hhs.length+' agencies':''}${wfdTab==='overview'?' · Click any row to zoom in':''}</span>`;
+  }
+}
+// Escape key navigation
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    if(wfdFocusHH){closeFocusHH();e.preventDefault();}
+    else if(orchExpanded){orchExpanded=null;renderOrchestrator();e.preventDefault();}
+  }
+});
 let expandedTasks=new Set();
 function renderWFDetail(VS){
   VS=VS||S;const sa=VS.sas[selSA];if(!sa)return;
+  renderPhaseTimeline(VS);
+  renderBreadcrumb(wfdFocusHH?'focus':null,wfdFocusHH);
   document.getElementById('wfdSaCards').innerHTML=VS.sas.map(s=>{
     const hd=s.hhs.filter(h=>h.done).length,pct=s.hhs.length?Math.round(hd/s.hhs.length*100):0;
     const col=s.status==='completed'?'var(--g)':s.status==='in_progress'?'var(--cy)':'var(--tm)';
@@ -1602,6 +1774,10 @@ function focusHH(saIdx,hhIdx){
   const h=sa.hhs[hhIdx];if(!h)return;
   wfdFocusHH={saIdx,hhIdx};
   const st=getHHStatus(h);
+  const stepsDone=h.started?h.wfStep:0;
+  const pct=Math.round(stepsDone/15*100);
+  const progCol=h.blocked?'var(--pk)':h.done?'var(--g)':'var(--cy)';
+  // Build enhanced focus panel
   let html=`<div class="wfd-focus">
     <div class="focus-header">
       <span class="focus-title">${h.name}</span>
@@ -1609,35 +1785,84 @@ function focusHH(saIdx,hhIdx){
       <button class="focus-close" onclick="closeFocusHH()">✕ Close</button>
     </div>
     <div class="focus-meta">
-      <span>Region: <b>${sa.name}</b></span>
-      <span>Current Step: <b>${h.started?STEP_NAMES[h.wfStep]:'Not started'}</b></span>
-      <span>Time: <b>${h.started?(h.done?h.totalTicks+' weeks total':h.stepTicks+' weeks on this step'):'—'}</b></span>
+      <span class="fm-item"><span class="fm-label">Region</span> <b>${sa.name}</b></span>
+      <span class="fm-item"><span class="fm-label">Step</span> <b>${h.started?(h.wfStep+1)+' of 16':'—'}</b></span>
+      <span class="fm-item"><span class="fm-label">Current</span> <b>${h.started?STEP_NAMES[h.wfStep]:'Not started'}</b></span>
+      <span class="fm-item"><span class="fm-label">Time</span> <b>${h.started?(h.done?h.totalTicks+'w total':h.stepTicks+'w on step'):'—'}</b></span>
     </div>
-    <div class="focus-steps">`;
+    <div class="focus-progress">
+      <div class="focus-prog-bar"><div class="focus-prog-fill" style="width:${pct}%;background:${progCol}"></div></div>
+      <div class="focus-prog-text"><span>${pct}% complete</span><span>${15-stepsDone} steps remaining</span></div>
+    </div>`;
+  // Blocker card (before steps if blocked — most important info first)
+  if(h.blocked){
+    const retryRate=Math.round(V('retry_rate')*100);
+    const bType=(h.blockType||'unknown').replace(/_/g,' ');
+    html+=`<div class="focus-blocker">
+      <div class="fb-header"><span class="fb-icon">⊘</span><span class="fb-title">Blocked: ${bType}</span></div>
+      <div class="fb-detail">This instance has been stuck for <b>${h.stepTicks} week${h.stepTicks>1?'s':''}</b> at step "${STEP_NAMES[h.wfStep]}".
+      Current auto-retry rate is <b>${retryRate}%</b>.${retryRate<30?' Consider increasing to 35%+ in Control Tower.':''}</div>
+      <div class="fb-actions">
+        <button class="fb-btn fb-btn-primary" onclick="switchView('ctrl')">Adjust in Control Tower</button>
+        <button class="fb-btn fb-btn-secondary" onclick="closeFocusHH()">Back to Overview</button>
+      </div>
+    </div>`;
+  }
+  // Step grid
+  html+=`<div class="focus-section"><div class="focus-section-title">Step-by-Step Progress</div><div class="focus-steps">`;
   for(let si=0;si<=15;si++){
     const name=STEP_NAMES[si]||'Step '+si;
     const done=h.wfStep>si,active=h.wfStep===si&&h.started&&!h.done;
     const blocked=active&&h.blocked;
     const cls=blocked?'f-blocked':done?'f-done':active?'f-active':'f-pending';
     const icon=blocked?'⊘':done?'✓':active?'▸':'·';
-    html+=`<div class="fs ${cls}"><span class="fs-icon">${icon}</span>${name}</div>`;
+    html+=`<div class="fs ${cls}"><span class="fs-icon">${icon}</span>${name}<span class="fs-num">${si+1}</span></div>`;
   }
-  html+=`</div>`;
-  if(h.blocked) html+=`<div class="focus-blocker">⊘ Blocked: ${(h.blockType||'unknown').replace(/_/g,' ')} — waiting for retry (current retry rate: ${Math.round(V('retry_rate')*100)}%)</div>`;
+  html+=`</div></div>`;
+  // Mini timeline
+  if(h.started){
+    const startW=S.tick-(h.done?h.totalTicks:(h.stepTicks+(h.wfStep>0?h.wfStep*2:0)));
+    const events=[{w:Math.max(0,startW),label:'Started',cls:'n-done'}];
+    if(h.blocked){events.push({w:S.tick-h.stepTicks,label:'Blocked',cls:'n-blocked'});}
+    events.push({w:S.tick,label:'Now (W'+S.tick+')',cls:h.blocked?'n-blocked':h.done?'n-done':'n-active'});
+    if(!h.done){events.push({w:S.tick+Math.max(1,(15-h.wfStep)*2),label:'Est. Done',cls:'n-pending'});}
+    html+=`<div class="focus-section"><div class="focus-section-title">Timeline</div>`;
+    html+=`<div class="focus-timeline">`;
+    events.forEach((ev,ei)=>{
+      if(ei>0){
+        const prevCls=events[ei-1].cls;
+        const lineCls=prevCls==='n-blocked'?'blocked':prevCls==='n-done'?'done':'';
+        html+=`<div class="focus-tl-line ${lineCls}"></div>`;
+      }
+      html+=`<div class="focus-tl-node ${ev.cls}" title="${ev.label}"></div>`;
+    });
+    html+=`</div><div class="focus-tl-labels">`;
+    events.forEach(ev=>html+=`<div class="focus-tl-label">${ev.label}</div>`);
+    html+=`</div></div>`;
+  }
   html+=`</div>`;
   document.getElementById('wfdFocus').style.display='block';
   document.getElementById('wfdFocus').innerHTML=html;
-  document.getElementById('wfdBottomGrid').style.display='none';
-  // Hide flowchart and top bar to give focus panel full space
-  const graph=document.querySelector('.wfd-graph-wrap');if(graph)graph.style.display='none';
-  const top=document.querySelector('#v-wfd .wfd-top');if(top)top.style.display='none';
+  // Hide everything else
+  document.getElementById('wfdOverviewPanel').style.display='none';
+  document.getElementById('wfdGraphWrap').style.display='none';
+  document.getElementById('wfdTopBar').style.display='none';
+  document.getElementById('wfdViewTabs').style.display='none';
+  renderBreadcrumb('focus',wfdFocusHH);
 }
 function closeFocusHH(){
   wfdFocusHH=null;
   document.getElementById('wfdFocus').style.display='none';
-  document.getElementById('wfdBottomGrid').style.display='';
-  const graph=document.querySelector('.wfd-graph-wrap');if(graph)graph.style.display='';
-  const top=document.querySelector('#v-wfd .wfd-top');if(top)top.style.display='';
+  document.getElementById('wfdTopBar').style.display='';
+  document.getElementById('wfdViewTabs').style.display='';
+  if(wfdTab==='overview'){
+    document.getElementById('wfdOverviewPanel').style.display='';
+    document.getElementById('wfdGraphWrap').style.display='none';
+  } else {
+    document.getElementById('wfdOverviewPanel').style.display='none';
+    document.getElementById('wfdGraphWrap').style.display='';
+  }
+  renderBreadcrumb();
 }
 function toggleTask(id){
   if(expandedTasks.has(id))expandedTasks.delete(id);else expandedTasks.add(id);
@@ -2050,7 +2275,7 @@ function renderAll(){
 
   updateSummaryBar(VS);
   if(curView==='sim'){updateFunnel(VS);updateVerts(VS);renderMap(VS);renderGrowth(VS);renderNarration(vw);updateWFChips(VS);}
-  else if(curView==='wfd'){renderWFDetail(VS);renderWFGraph(wfdX,wfdC,VS.sas[selSA]);}
+  else if(curView==='wfd'){renderWFDetail(VS);if(wfdTab==='diagram'&&!wfdFocusHH)renderWFGraph(wfdX,wfdC,VS.sas[selSA]);}
   else if(curView==='orch'){renderOrchestrator(VS);}
   else if(curView==='ct'){renderCT(VS);}
 
