@@ -1511,7 +1511,7 @@ function renderWFDetail(VS){
         ${task.items.map((it,ii)=>{const d=step>range.min+ii,a=step===range.min+ii;return`<div class="task-item ${d?'done':a?'active':''}"><span class="item-icon">${d?'✓':a?'▸':'·'}</span>${it}</div>`;}).join('')}
         ${task.conds.length?'<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--b)">'+task.conds.map(c=>`<div class="task-cond ${c.type}"><span class="item-icon">${c.type==='yes'?'✓':'✗'}</span>${c.text}</div>`).join('')+'</div>':''}
         ${isActive&&ti<3?`<div style="margin-top:6px;font-size:10px;color:var(--tm)">Next → ${TASKS_DEF[ti+1].name}</div>`:''}
-        ${h.blocked?`<div style="margin-top:6px;font-size:10px;color:var(--pk);font-weight:600">⊘ Blocked: ${h.blockType?h.blockType.replace(/_/g,' '):'unknown'}</div>`:''}
+        ${curHH&&curHH.blocked?`<div style="margin-top:6px;font-size:10px;color:var(--pk);font-weight:600">⊘ Blocked: ${curHH.blockType?curHH.blockType.replace(/_/g,' '):'unknown'}</div>`:''}
       </div></div></div>`;
   });
   // CS tasks — grouped into mental buckets
