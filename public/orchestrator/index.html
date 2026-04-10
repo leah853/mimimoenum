@@ -135,10 +135,10 @@ body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-seri
 .wfd-top{display:flex;gap:1px;background:var(--b);flex-shrink:0}
 .wfd-top>div{background:#fff;padding:12px 16px}
 .wfd-kpi{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.wfd-kpi-card{padding:10px 18px;border-radius:var(--radius);background:var(--c);border:1px solid var(--b);text-align:center;min-width:80px}
+.wfd-kpi-card{padding:14px 22px;border-radius:var(--radius);background:var(--c);border:1px solid var(--b);text-align:center;min-width:80px;box-shadow:var(--shadow)}
 .wfd-kpi-card .kv{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
 .wfd-kpi-card .kl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tm);margin-top:3px}
-.wfd-sa-cards{display:flex;gap:10px}
+.wfd-sa-cards{display:flex;gap:12px;margin-bottom:4px}
 .wfd-sa-card{flex:1;padding:12px 16px;border-radius:var(--radius);border:1.5px solid var(--b);background:var(--c);cursor:pointer;transition:all .15s}
 .wfd-sa-card:hover{border-color:var(--cy)}
 .wfd-sa-card .sa-name{font-size:13px;font-weight:700;margin-bottom:4px}
@@ -146,15 +146,16 @@ body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-seri
 .wfd-sa-card .sa-prog-fill{height:100%;border-radius:3px;transition:width .3s}
 .wfd-graph-wrap{flex:1;position:relative;min-height:200px;border-bottom:1px solid var(--b)}
 .wfd-graph-wrap canvas{display:block}
-.wfd-bottom{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--b);flex-shrink:0;max-height:260px}
-.wfd-bottom>div{background:#fff;padding:12px 16px;overflow-y:auto}
+.wfd-bottom{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--b);flex-shrink:0;max-height:320px}
+.wfd-bottom>div{background:#fff;padding:16px 20px;overflow-y:auto}
 .wfd-instance-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .wfd-inst-chip{padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;background:var(--c);border:1px solid var(--b)}
 
 /* Tables */
 .hh-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .hh-tbl th{text-align:left;padding:8px 8px;color:var(--tm);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;border-bottom:2px solid var(--b);position:sticky;top:0;background:#fff;z-index:1}
-.hh-tbl td{padding:6px 8px;border-bottom:1px solid var(--b);color:var(--td);white-space:nowrap}
+.hh-tbl td{padding:8px 10px;border-bottom:1px solid var(--b);color:var(--td);white-space:nowrap}
+.hh-tbl tbody tr:nth-child(even){background:var(--c)}
 .hh-tbl tr.stuck{background:rgba(214,51,108,.03)}
 .status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap}
 .status-badge.done{background:rgba(5,150,105,.08);color:var(--g)}
@@ -165,10 +166,10 @@ body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-seri
 .status-badge.no-locs{background:rgba(214,51,108,.08);color:var(--pk)}
 
 /* Task cards - expandable */
-.task-card{background:#fff;border-radius:var(--radius);padding:0;margin-bottom:8px;border:1px solid var(--b);overflow:hidden;transition:all .2s}
+.task-card{background:#fff;border-radius:var(--radius);padding:0;margin-bottom:12px;border:1px solid var(--b);overflow:hidden;transition:all .2s}
 .task-card.active{border-color:rgba(8,145,178,.4);box-shadow:0 0 0 3px rgba(8,145,178,.06)}
 .task-card.done{border-color:rgba(5,150,105,.3)}
-.task-header{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;transition:background .15s;user-select:none}
+.task-header{display:flex;align-items:center;gap:8px;padding:14px 18px;cursor:pointer;transition:background .15s;user-select:none}
 .task-header:hover{background:var(--c)}
 .task-name{font-size:13px;font-weight:700;flex:1;display:flex;align-items:center;gap:6px}
 .task-summary{font-size:11px;color:var(--tm);font-weight:500}
@@ -176,11 +177,11 @@ body{background:var(--bg);color:var(--t);font-family:'Inter',system-ui,sans-seri
 .task-card.expanded .task-chevron{transform:rotate(90deg)}
 .task-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
 .task-card.expanded .task-body{max-height:600px}
-.task-body-inner{padding:0 14px 14px;border-top:1px solid var(--b)}
-.task-item{font-size:12px;color:var(--tm);padding:4px 0 4px 14px;line-height:1.5;display:flex;align-items:flex-start;gap:6px}
+.task-body-inner{padding:8px 18px 18px;border-top:1px solid var(--b)}
+.task-item{font-size:12px;color:var(--tm);padding:6px 0 6px 18px;line-height:1.5;display:flex;align-items:flex-start;gap:6px}
 .task-item.done{color:var(--g)}.task-item.active{color:var(--cy)}
 .task-item .item-icon{flex-shrink:0;width:14px;text-align:center}
-.task-cond{font-size:11px;color:var(--pk);padding:3px 0 3px 14px;font-style:italic;line-height:1.4;display:flex;align-items:flex-start;gap:6px}
+.task-cond{font-size:11px;color:var(--pk);padding:5px 8px 5px 18px;font-style:italic;line-height:1.4;display:flex;align-items:flex-start;gap:6px;border-radius:6px;background:rgba(0,0,0,.02)}
 .task-cond.yes{color:var(--g)}.task-cond.no{color:var(--pk)}
 .task-cond .item-icon{flex-shrink:0;width:14px;text-align:center}
 
@@ -253,8 +254,10 @@ canvas{display:block}
 .orch-alert-bar.alert-green{background:rgba(5,150,105,.06);color:#059669;border-bottom-color:rgba(5,150,105,.15)}
 .orch-alert-bar .alert-icon{font-size:16px}
 .orch-alert-bar .alert-action{margin-left:auto;font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid;cursor:pointer;background:transparent}
-.orch-decision-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.orch-dcard{border-radius:var(--radius);border:1px solid var(--b);padding:14px 16px;background:#fff}
+.orch-decision-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.orch-dcard{border-radius:var(--radius);border:1px solid var(--b);padding:14px 16px;background:#fff;cursor:pointer;transition:all .15s}
+.orch-dcard:hover{box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+.orch-dcard.filter-active{outline:2px solid var(--bl);outline-offset:2px}
 .orch-dcard .dc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tm);margin-bottom:6px}
 .orch-dcard .dc-value{font-size:28px;font-weight:800;line-height:1.1}
 .orch-dcard .dc-detail{font-size:11px;color:var(--td);margin-top:6px;line-height:1.5}
@@ -264,6 +267,8 @@ canvas{display:block}
 .orch-dcard.card-risk{border-color:rgba(217,132,13,.2);background:rgba(217,132,13,.02)}
 .orch-dcard.card-risk .dc-value{color:var(--y)}
 .orch-dcard.card-velocity .dc-value{color:var(--g)}
+.orch-dcard.card-closed{border-color:rgba(100,116,139,.2);background:rgba(100,116,139,.02)}
+.orch-dcard.card-closed .dc-value{color:var(--tm)}
 .orch-filter-bar{display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--b);background:#fff;flex-shrink:0}
 .orch-filter-pill{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--b);background:#fff;color:var(--td);transition:all .15s}
 .orch-filter-pill:hover{border-color:var(--td)}
@@ -292,8 +297,19 @@ canvas{display:block}
 .orch-rec-card .rec-title{font-size:12px;font-weight:600;color:var(--t)}
 .orch-rec-card .rec-desc{font-size:11px;color:var(--td);margin-top:2px;line-height:1.5}
 .orch-rec-card .rec-var{font-size:10px;color:var(--bl);font-weight:600;margin-top:4px}
-.phase-bucket-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--bl);padding:12px 0 6px;display:flex;align-items:center;gap:8px}
+.phase-bucket-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--bl);padding:8px 12px;margin-top:20px;margin-bottom:4px;display:flex;align-items:center;gap:8px;background:rgba(37,99,235,.03);border-radius:8px}
+.phase-bucket-label:first-child{margin-top:0}
 .phase-bucket-label::after{content:'';flex:1;height:1px;background:var(--b)}
+.orch-row-detail{padding:12px 16px 12px 28px;background:var(--c);border-top:1px solid var(--b);animation:slideDown .2s ease}
+.orch-row-detail .detail-steps{display:grid;gap:3px}
+.orch-row-detail .detail-step{display:flex;align-items:center;gap:8px;font-size:11px;padding:4px 10px;border-radius:6px}
+.orch-row-detail .detail-step.s-done{color:var(--g)}
+.orch-row-detail .detail-step.s-active{color:var(--cy);background:rgba(8,145,178,.06);font-weight:600}
+.orch-row-detail .detail-step.s-pending{color:var(--tm)}
+.orch-row-detail .detail-step .step-icon{flex-shrink:0;width:14px;text-align:center}
+.orch-row{cursor:pointer;transition:background .1s}
+.orch-row:hover{background:var(--c)}
+@keyframes slideDown{from{max-height:0;opacity:0}to{max-height:500px;opacity:1}}
 </style>
 </head>
 <body>
@@ -351,7 +367,7 @@ canvas{display:block}
       </div>
       <div class="nav-item" data-v="orch">
         <span class="nav-icon">🎯</span>
-        <div>Orchestrator<div class="help-hint">Overview of all running tasks</div></div>
+        <div>Orchestrator<div class="help-hint">Overview of all running tasks</div><div style="display:flex;gap:6px;margin-top:2px"><span style="font-size:9px;color:var(--tm)" id="navInstSA">SA: 0</span><span style="font-size:9px;color:var(--tm)" id="navInstCS">CS: 0</span></div></div>
         <span class="nav-badge" id="navInstances">0</span>
       </div>
       <div class="nav-item" data-v="ct">
@@ -1550,8 +1566,33 @@ function toggleTask(id){
 }
 
 // ── ORCHESTRATOR (Mission Control) ──
-let orchFilter='all';
+let orchFilter='all',orchExpanded=null;
 function setOrchFilter(f){orchFilter=f;renderOrchestrator();}
+function toggleOrchDetail(id){orchExpanded=orchExpanded===id?null:id;renderOrchestrator();if(orchExpanded){setTimeout(()=>{const d=document.querySelector('.orch-row-detail');if(d)d.scrollIntoView({behavior:'smooth',block:'center'});},50);}}
+function getOrchDetail(inst,VS){
+  VS=VS||S;
+  if(inst.id.startsWith('SA-')){
+    // Find the HH
+    const parts=inst.id.split('-');const saAbbr=parts[1];const hhIdx=parseInt(parts[2].replace('HH',''))-1;
+    const sa=VS.sas.find(s=>s.abbr===saAbbr);if(!sa||!sa.hhs[hhIdx])return'<div style="font-size:11px;color:var(--tm)">No data</div>';
+    const h=sa.hhs[hhIdx];
+    return`<div class="detail-steps">${STEP_NAMES.map((name,si)=>{
+      const done=h.wfStep>si,active=h.wfStep===si&&h.started&&!h.done;
+      return`<div class="detail-step ${done?'s-done':active?'s-active':'s-pending'}"><span class="step-icon">${done?'✓':active?'▸':'·'}</span>${name}</div>`;
+    }).join('')}${h.blocked?`<div style="margin-top:6px;font-size:11px;color:var(--pk);font-weight:600">⊘ Blocked: ${(h.blockType||'unknown').replace(/_/g,' ')}</div>`:''}</div>`;
+  }
+  if(inst.id.startsWith('CS-')&&!inst.id.includes('-HH')){
+    const pgId=parseInt(inst.id.replace('CS-PG',''));
+    const pg=VS.pgs.find(p=>p.id===pgId);if(!pg)return'<div style="font-size:11px;color:var(--tm)">No data</div>';
+    const cs=pg.cs;const phases=['enrichment','signatures','rapport','baa','ehr','hh_identify','hh_outreach','hh_resolve','complete'];
+    const phIdx=phases.indexOf(cs.phase);
+    return`<div class="detail-steps">${phases.map((p,pi)=>{
+      const done=cs.phase==='complete'||phIdx>pi,active=phIdx===pi&&cs.phase!=='complete';
+      return`<div class="detail-step ${done?'s-done':active?'s-active':'s-pending'}"><span class="step-icon">${done?'✓':active?'▸':'·'}</span>${CS_LABELS[p]||p}</div>`;
+    }).join('')}${cs.blocked?`<div style="margin-top:6px;font-size:11px;color:var(--pk);font-weight:600">⊘ Blocked: ${(cs.blockType||'unknown').replace(/_/g,' ')}</div>`:''}</div>`;
+  }
+  return'<div style="font-size:11px;color:var(--tm)">Expand main workflow for details</div>';
+}
 function renderOrchestrator(VS){
   VS=VS||S;
   // ── Collect all instances ──
@@ -1560,7 +1601,7 @@ function renderOrchestrator(VS){
     const st=getHHStatus(h);
     instances.push({id:`SA-${sa.abbr}-HH${hi+1}`,group:'SA: Home Health Market Analysis',phase:'sa_hh',entity:h.name.replace(' Home Health',''),action:h.started?STEP_NAMES[h.wfStep]:'—',
       status:st.cls,statusLabel:st.label,statusIcon:st.icon,time:h.started?(h.done?h.totalTicks:h.stepTicks):0,
-      bottleneck:h.blocked?h.blockType:''});
+      bottleneck:h.blocked?h.blockType:'',closedEarly:h.wfStep===6&&h.done});
   }));
   VS.pgs.forEach(pg=>{
     if(pg.stage<5)return;const cs=pg.cs;if(cs.phase==='idle')return;
@@ -1568,7 +1609,6 @@ function renderOrchestrator(VS){
     const cls=isDone?'done':isBlocked?'stuck':'active';
     const label=isDone?'Done':isBlocked?'Blocked':'Active';
     const icon=isDone?'✓':isBlocked?'⊘':'▸';
-    // Assign to mental bucket
     let bucket='getting_ready';
     if(['enrichment','signatures'].includes(cs.phase))bucket='getting_ready';
     else if(['rapport','baa'].includes(cs.phase))bucket='building_trust';
@@ -1576,26 +1616,33 @@ function renderOrchestrator(VS){
     else if(['hh_identify','hh_outreach','hh_resolve'].includes(cs.phase))bucket='execution';
     else if(cs.phase==='complete')bucket='complete';
     instances.push({id:`CS-PG${pg.id}`,group:'CS: PG Onboarding',phase:bucket,entity:`PG #${pg.id}`,action:CS_LABELS[cs.phase]||cs.phase,
-      status:cls,statusLabel:label,statusIcon:icon,time:S.tick-cs.tick,bottleneck:isBlocked?cs.blockType:''});
+      status:cls,statusLabel:label,statusIcon:icon,time:S.tick-cs.tick,bottleneck:isBlocked?cs.blockType:'',closedEarly:false});
     if(cs.hhPhase!=='idle'&&cs.hhIdentified>0){
       instances.push({id:`CS-PG${pg.id}-HH`,group:'CS: HH Outreach',phase:'execution',entity:`PG #${pg.id} HHs`,
         action:`${cs.hhOnboarded}/${cs.hhIdentified} onboarded`,
         status:cs.hhDone||cs.phase==='complete'?'done':cs.hhBlocked>0?'stuck':'active',
         statusLabel:cs.hhDone||cs.phase==='complete'?'Done':cs.hhBlocked>0?'Blocked':'Active',
         statusIcon:cs.hhDone||cs.phase==='complete'?'✓':cs.hhBlocked>0?'⊘':'▸',
-        time:0,bottleneck:cs.hhBlocked>0?'hh_blocker':''});
+        time:0,bottleneck:cs.hhBlocked>0?'hh_blocker':'',closedEarly:false});
     }
   });
 
   // ── Counts ──
-  let running=0,completed=0,blocked=0;
-  instances.forEach(i=>{if(i.status==='done')completed++;else if(i.status==='stuck')blocked++;else if(i.status==='active')running++;});
+  let running=0,completed=0,blocked=0,closedEarly=0;
+  instances.forEach(i=>{
+    if(i.closedEarly)closedEarly++;
+    if(i.status==='done'||i.status==='no-locs')completed++;
+    else if(i.status==='stuck')blocked++;
+    else if(i.status==='active')running++;
+  });
   const total=instances.length||1;
   const bottlenecks={};instances.forEach(i=>{if(i.bottleneck)bottlenecks[i.bottleneck]=(bottlenecks[i.bottleneck]||0)+1;});
   const sorted=Object.entries(bottlenecks).sort((a,b)=>b[1]-a[1]);
   const topBlocker=sorted[0];
   const throughput=VS.tick>0?(completed/VS.tick).toFixed(1):'0';
-  const atRisk=instances.filter(i=>i.status!=='done'&&i.time>3).length;
+  const atRisk=instances.filter(i=>i.status!=='done'&&i.status!=='no-locs'&&i.time>3).length;
+  const saCount=instances.filter(i=>i.phase==='sa_hh').length;
+  const csCount=instances.filter(i=>i.phase!=='sa_hh').length;
 
   // ── 1. ALERT BAR ──
   const alertEl=document.getElementById('orchAlert');
@@ -1610,45 +1657,54 @@ function renderOrchestrator(VS){
     alertEl.innerHTML=`<span class="alert-icon">✅</span><span><b>All ${completed} workflows complete!</b> No action needed.</span>`;
   } else if(instances.length===0){
     alertEl.className='orch-alert-bar alert-green';
-    alertEl.innerHTML=`<span class="alert-icon">○</span><span>No workflows running yet. Waiting for physician groups to reach BOFU stage.</span>`;
+    alertEl.innerHTML=`<span class="alert-icon">○</span><span>No workflows running yet — SA: ${saCount} instances, CS: ${csCount} instances. Press Play to begin.</span>`;
   } else {
     alertEl.className='orch-alert-bar alert-green';
-    alertEl.innerHTML=`<span class="alert-icon">✓</span><span><b>All ${running} active workflows on track.</b> ${completed} completed so far.</span>`;
+    alertEl.innerHTML=`<span class="alert-icon">✓</span><span><b>All ${running} active workflows on track.</b> ${completed} completed · SA: ${saCount} · CS: ${csCount}</span>`;
   }
 
-  // ── 2. DECISION CARDS ──
+  // ── 2. DECISION CARDS (clickable) ──
   document.getElementById('orchDecision').innerHTML=`
-    <div class="orch-dcard ${blocked>0?'card-stuck':''}">
+    <div class="orch-dcard ${blocked>0?'card-stuck':''} ${orchFilter==='stuck'?'filter-active':''}" onclick="setOrchFilter('stuck')">
       <div class="dc-label">Stuck [needs help]</div>
       <div class="dc-value">${blocked}</div>
-      <div class="dc-detail">${topBlocker?'Top cause: <b>'+topBlocker[0].replace(/_/g,' ')+'</b> ('+topBlocker[1]+' tasks)':'No blockers right now'}</div>
-      ${blocked>0?`<div class="dc-fix">💡 Try: increase retry rate (currently ${Math.round(V('retry_rate')*100)}%)</div>`:''}
+      <div class="dc-detail">${topBlocker?'Top: <b>'+topBlocker[0].replace(/_/g,' ')+'</b> ('+topBlocker[1]+')':'No blockers'}</div>
+      ${blocked>0?`<div class="dc-fix">Click to view stuck →</div>`:''}
     </div>
-    <div class="orch-dcard ${atRisk>0?'card-risk':''}">
+    <div class="orch-dcard ${atRisk>0?'card-risk':''} ${orchFilter==='at_risk'?'filter-active':''}" onclick="setOrchFilter('at_risk')">
       <div class="dc-label">At Risk [delayed >3 weeks]</div>
       <div class="dc-value">${atRisk}</div>
-      <div class="dc-detail">${atRisk>0?'These workflows are taking longer than expected':'All workflows within expected timeframe'}</div>
+      <div class="dc-detail">${atRisk>0?'Taking longer than expected':'All on schedule'}</div>
+      ${atRisk>0?`<div class="dc-fix">Click to view at risk →</div>`:''}
     </div>
-    <div class="orch-dcard card-velocity">
+    <div class="orch-dcard card-velocity ${orchFilter==='all'?'filter-active':''}" onclick="setOrchFilter('all')">
       <div class="dc-label">Velocity [completions/week]</div>
       <div class="dc-value">${throughput}</div>
-      <div class="dc-detail">${completed}/${instances.length} total completed · ${Math.round(completed/total*100)}% progress</div>
+      <div class="dc-detail">${completed}/${instances.length} done · ${Math.round(completed/total*100)}%</div>
+    </div>
+    <div class="orch-dcard ${closedEarly>0?'card-closed':''} ${orchFilter==='closed_early'?'filter-active':''}" onclick="setOrchFilter('closed_early')">
+      <div class="dc-label">Closed Early [no locations]</div>
+      <div class="dc-value">${closedEarly}</div>
+      <div class="dc-detail">${closedEarly>0?closedEarly+' agencies had no locations':'All agencies have locations'}</div>
+      ${closedEarly>0?`<div class="dc-fix">Click to view →</div>`:''}
     </div>`;
 
   // ── 3. FILTER BAR ──
-  const defaultFilter=blocked>0?'stuck':'all';
-  if(orchFilter==='all'&&blocked>0)orchFilter=defaultFilter;
   document.getElementById('orchFilters').innerHTML=`
     <span class="orch-filter-pill ${orchFilter==='all'?'active':''}" onclick="setOrchFilter('all')">All (${instances.length})</span>
     <span class="orch-filter-pill ${orchFilter==='stuck'?'active-stuck':''}" onclick="setOrchFilter('stuck')">⚠ Stuck (${blocked})</span>
+    <span class="orch-filter-pill ${orchFilter==='at_risk'?'active-stuck':''}" onclick="setOrchFilter('at_risk')">⏳ At Risk (${atRisk})</span>
     <span class="orch-filter-pill ${orchFilter==='active'?'active':''}" onclick="setOrchFilter('active')">⟳ Active (${running})</span>
+    <span class="orch-filter-pill ${orchFilter==='closed_early'?'active':''}" onclick="setOrchFilter('closed_early')">⊘ Closed Early (${closedEarly})</span>
     <span class="orch-filter-pill ${orchFilter==='done'?'active-done':''}" onclick="setOrchFilter('done')">✓ Done (${completed})</span>`;
 
   // ── 4. GROUPED VIEW ──
-  const filtered=orchFilter==='all'?instances.filter(i=>i.status!=='done'):instances.filter(i=>{
+  const filtered=orchFilter==='all'?instances:instances.filter(i=>{
     if(orchFilter==='stuck')return i.status==='stuck';
     if(orchFilter==='active')return i.status==='active';
-    if(orchFilter==='done')return i.status==='done';
+    if(orchFilter==='done')return i.status==='done'||i.status==='no-locs';
+    if(orchFilter==='at_risk')return i.status!=='done'&&i.status!=='no-locs'&&i.time>3;
+    if(orchFilter==='closed_early')return i.closedEarly;
     return true;
   });
 
@@ -1658,76 +1714,63 @@ function renderOrchestrator(VS){
     {key:'building_trust',icon:'🤝',name:'Building Trust [Rapport + BAA]',color:'var(--pu)'},
     {key:'access_activation',icon:'🔑',name:'Access & Activation [EHR]',color:'var(--cy)'},
     {key:'execution',icon:'🚀',name:'Execution [HH Onboarding]',color:'var(--g)'},
+    {key:'complete',icon:'✅',name:'Completed',color:'var(--g)'},
   ];
 
-  let groupsHTML='';
-  // Done summary (collapsed)
+  // Instance summary bar
+  let groupsHTML=`<div style="display:flex;gap:12px;margin-bottom:12px">
+    <div style="flex:1;padding:8px 14px;border-radius:var(--radius);background:rgba(234,88,12,.04);border:1px solid rgba(234,88,12,.15);font-size:12px"><b style="color:var(--o)">${saCount}</b> <span style="color:var(--td)">SA instances</span></div>
+    <div style="flex:1;padding:8px 14px;border-radius:var(--radius);background:rgba(37,99,235,.04);border:1px solid rgba(37,99,235,.15);font-size:12px"><b style="color:var(--bl)">${csCount}</b> <span style="color:var(--td)">CS instances</span></div>
+  </div>`;
+
+  // Done summary (collapsed when viewing all)
   if(orchFilter==='all'&&completed>0){
     groupsHTML+=`<div class="orch-done-summary">✅ <b>${completed}</b> workflow${completed>1?'s':''} completed <span style="margin-left:auto;cursor:pointer;color:var(--bl)" onclick="setOrchFilter('done')">View →</span></div>`;
   }
 
   PHASE_GROUPS.forEach(pg=>{
+    const allInPhase=instances.filter(i=>i.phase===pg.key);
     const items=filtered.filter(i=>i.phase===pg.key);
-    if(!items.length)return;
-    const done=items.filter(i=>i.status==='done').length;
-    const stuck=items.filter(i=>i.status==='stuck').length;
-    const pct=items.length>0?Math.round(done/items.length*100):0;
+    if(!allInPhase.length)return;
+    if(!items.length&&orchFilter!=='all')return;
+    const done=allInPhase.filter(i=>i.status==='done'||i.status==='no-locs').length;
+    const stuck=allInPhase.filter(i=>i.status==='stuck').length;
+    const pct=allInPhase.length>0?Math.round(done/allInPhase.length*100):0;
+    const showItems=orchFilter==='all'?items.filter(i=>i.status!=='done'&&i.status!=='no-locs'):items;
     groupsHTML+=`<div class="orch-phase-group ${stuck>0?'stuck-highlight':''}">
       <div class="orch-phase-header">
         <span class="ph-icon">${pg.icon}</span>
         <span class="ph-name">${pg.name}</span>
-        <span class="ph-count">${done}/${items.length} done${stuck>0?' · <span style="color:var(--pk)">'+stuck+' stuck</span>':''}</span>
+        <span class="ph-count">${done}/${allInPhase.length} done${stuck>0?' · <span style="color:var(--pk)">'+stuck+' stuck</span>':''}</span>
         <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:${pg.color}"></div></div>
       </div>
       <div class="orch-phase-body">
-        ${items.filter(i=>i.status!=='done').map(i=>
-          `<div class="orch-row ${i.status==='stuck'?'row-stuck':''}">
+        ${showItems.map(i=>`<div class="orch-row ${i.status==='stuck'?'row-stuck':''}" onclick="toggleOrchDetail('${i.id}')">
             <span class="or-entity">${i.entity}</span>
             <span class="or-action">${i.action}${i.bottleneck?' · <span style="color:var(--pk);font-weight:600">⊘ '+i.bottleneck.replace(/_/g,' ')+'</span>':''}</span>
             <span class="status-badge ${i.status}">${i.statusIcon} ${i.statusLabel}</span>
             <span class="or-time">${i.time?i.time+'w':'—'}</span>
-          </div>`
+          </div>${orchExpanded===i.id?`<div class="orch-row-detail">${getOrchDetail(i,VS)}</div>`:''}`
         ).join('')}
-        ${orchFilter==='done'?items.filter(i=>i.status==='done').map(i=>
-          `<div class="orch-row" style="opacity:.5">
-            <span class="or-entity">${i.entity}</span>
-            <span class="or-action">${i.action}</span>
-            <span class="status-badge done">✓ Done</span>
-            <span class="or-time">${i.time?i.time+'w':'—'}</span>
-          </div>`
-        ).join(''):''}
+        ${!showItems.length?`<div style="padding:10px 14px;font-size:11px;color:var(--tm)">No items match current filter</div>`:''}
       </div>
     </div>`;
   });
 
-  if(!groupsHTML&&orchFilter!=='all'){
-    groupsHTML=`<div style="text-align:center;padding:40px;color:var(--tm);font-size:13px">${orchFilter==='stuck'?'No stuck workflows — everything is moving!':orchFilter==='done'?'No completed workflows yet.':'No active workflows.'}</div>`;
+  if(!filtered.length&&orchFilter!=='all'){
+    groupsHTML+=`<div style="text-align:center;padding:40px;color:var(--tm);font-size:13px">${orchFilter==='stuck'?'No stuck workflows — everything is moving!':orchFilter==='done'?'No completed workflows yet.':orchFilter==='at_risk'?'No workflows at risk — all on schedule!':orchFilter==='closed_early'?'No agencies closed early — all have valid locations.':'No active workflows.'}</div>`;
   }
   document.getElementById('orchGroups').innerHTML=groupsHTML;
 
   // ── 5. RECOMMENDATIONS ──
   let recs='';
-  if(bottlenecks['ehr_denied']){
-    recs+=`<div class="orch-rec-card"><span class="rec-icon">🔑</span><div class="rec-body"><div class="rec-title">EHR access denied for ${bottlenecks['ehr_denied']} PG(s)</div><div class="rec-desc">40% of physician groups deny EHR access on first attempt. This is the most common CS bottleneck in healthcare.</div><div class="rec-var">💡 Adjust: cs_ehr (currently ${Math.round(V('cs_ehr')*100)}%) in Control Tower</div></div></div>`;
-  }
-  if(bottlenecks['baa_followup']){
-    recs+=`<div class="orch-rec-card"><span class="rec-icon">📋</span><div class="rec-body"><div class="rec-title">BAA not signed by ${bottlenecks['baa_followup']} PG(s)</div><div class="rec-desc">BAA handling involves legal/compliance review and HIPAA officer routing — typical delay is 1-2 weeks.</div><div class="rec-var">💡 Adjust: cs_baa (currently ${Math.round(V('cs_baa')*100)}%) in Control Tower</div></div></div>`;
-  }
-  if(bottlenecks['data_missing']){
-    recs+=`<div class="orch-rec-card"><span class="rec-icon">📊</span><div class="rec-body"><div class="rec-title">Missing data blocking ${bottlenecks['data_missing']} HH analysis</div><div class="rec-desc">Location data is incomplete for these agencies. Retry rate determines how quickly this resolves.</div><div class="rec-var">💡 Adjust: retry_rate (currently ${Math.round(V('retry_rate')*100)}%) or p_block_data (${Math.round(V('p_block_data')*100)}%)</div></div></div>`;
-  }
-  if(bottlenecks['structure_uncertain']){
-    recs+=`<div class="orch-rec-card"><span class="rec-icon">🏢</span><div class="rec-body"><div class="rec-title">Corporate structure unclear for ${bottlenecks['structure_uncertain']} HH(s)</div><div class="rec-desc">Parent organization identification is uncertain — common with multi-branch agencies.</div><div class="rec-var">💡 Adjust: p_block_structure (currently ${Math.round(V('p_block_structure')*100)}%)</div></div></div>`;
-  }
-  if(bottlenecks['no_contacts']){
-    recs+=`<div class="orch-rec-card"><span class="rec-icon">👤</span><div class="rec-body"><div class="rec-title">No key contacts found for ${bottlenecks['no_contacts']} HH(s)</div><div class="rec-desc">Account mapping requires valid contacts — this blocks outreach and relationship building.</div><div class="rec-var">💡 Adjust: p_block_contacts (currently ${Math.round(V('p_block_contacts')*100)}%)</div></div></div>`;
-  }
-  if(!recs&&instances.length>0){
-    recs=`<div class="orch-rec-card"><span class="rec-icon">✅</span><div class="rec-body"><div class="rec-title">No issues detected</div><div class="rec-desc">All workflows are progressing normally. Throughput: ${throughput} completions/week.</div></div></div>`;
-  }
-  if(instances.length===0){
-    recs=`<div class="orch-rec-card"><span class="rec-icon">⏳</span><div class="rec-body"><div class="rec-title">Waiting for physician groups</div><div class="rec-desc">Workflows will start once physician groups reach the BOFU stage in the acquisition funnel. Press Play to begin the simulation.</div></div></div>`;
-  }
+  if(bottlenecks['ehr_denied']) recs+=`<div class="orch-rec-card"><span class="rec-icon">🔑</span><div class="rec-body"><div class="rec-title">EHR access denied for ${bottlenecks['ehr_denied']} PG(s)</div><div class="rec-desc">40% of physician groups deny EHR access on first attempt.</div><div class="rec-var">💡 Adjust: cs_ehr (currently ${Math.round(V('cs_ehr')*100)}%) in Control Tower</div></div></div>`;
+  if(bottlenecks['baa_followup']) recs+=`<div class="orch-rec-card"><span class="rec-icon">📋</span><div class="rec-body"><div class="rec-title">BAA not signed by ${bottlenecks['baa_followup']} PG(s)</div><div class="rec-desc">BAA involves legal/compliance review — typical delay 1-2 weeks.</div><div class="rec-var">💡 Adjust: cs_baa (currently ${Math.round(V('cs_baa')*100)}%)</div></div></div>`;
+  if(bottlenecks['data_missing']) recs+=`<div class="orch-rec-card"><span class="rec-icon">📊</span><div class="rec-body"><div class="rec-title">Missing data blocking ${bottlenecks['data_missing']} HH(s)</div><div class="rec-desc">Location data incomplete — retry rate determines resolution speed.</div><div class="rec-var">💡 Adjust: retry_rate (${Math.round(V('retry_rate')*100)}%) or p_block_data (${Math.round(V('p_block_data')*100)}%)</div></div></div>`;
+  if(bottlenecks['structure_uncertain']) recs+=`<div class="orch-rec-card"><span class="rec-icon">🏢</span><div class="rec-body"><div class="rec-title">Structure unclear for ${bottlenecks['structure_uncertain']} HH(s)</div><div class="rec-desc">Parent org identification uncertain — common with multi-branch agencies.</div><div class="rec-var">💡 Adjust: p_block_structure (${Math.round(V('p_block_structure')*100)}%)</div></div></div>`;
+  if(bottlenecks['no_contacts']) recs+=`<div class="orch-rec-card"><span class="rec-icon">👤</span><div class="rec-body"><div class="rec-title">No contacts for ${bottlenecks['no_contacts']} HH(s)</div><div class="rec-desc">Account mapping requires valid contacts — blocks outreach.</div><div class="rec-var">💡 Adjust: p_block_contacts (${Math.round(V('p_block_contacts')*100)}%)</div></div></div>`;
+  if(!recs&&instances.length>0) recs=`<div class="orch-rec-card"><span class="rec-icon">✅</span><div class="rec-body"><div class="rec-title">No issues detected</div><div class="rec-desc">All workflows progressing normally. Throughput: ${throughput}/week.</div></div></div>`;
+  if(instances.length===0) recs=`<div class="orch-rec-card"><span class="rec-icon">⏳</span><div class="rec-body"><div class="rec-title">Waiting for physician groups</div><div class="rec-desc">Workflows start once physician groups reach BOFU. Press Play to begin.</div></div></div>`;
   document.getElementById('orchIntel').innerHTML=recs;
 }
 
@@ -1910,11 +1953,13 @@ function renderAll(){
     if(el)el.innerHTML=sa.status==='completed'?'✅':sa.status==='in_progress'?'⟳':'○';
   });
 
-  // Orchestrator instance count
-  let instCount=0;
-  VS.sas.forEach(sa=>instCount+=sa.hhs.length);
-  VS.pgs.forEach(pg=>{if(pg.stage>=5&&pg.cs.phase!=='idle')instCount++;});
-  const navInst=document.getElementById('navInstances');if(navInst)navInst.textContent=instCount;
+  // Orchestrator instance count — split SA/CS
+  let saInstCount=0,csInstCount=0;
+  VS.sas.forEach(sa=>saInstCount+=sa.hhs.length);
+  VS.pgs.forEach(pg=>{if(pg.stage>=5&&pg.cs.phase!=='idle')csInstCount++;});
+  const navInst=document.getElementById('navInstances');if(navInst)navInst.textContent=saInstCount+csInstCount;
+  const navSA=document.getElementById('navInstSA');if(navSA)navSA.textContent='SA: '+saInstCount;
+  const navCS=document.getElementById('navInstCS');if(navCS)navCS.textContent='CS: '+csInstCount;
 
   document.getElementById('viewLabel').textContent=isLive?`Week ${S.tick} (LIVE — watching in real time)`:`Looking at Week ${viewWeek} of ${S.tick} [past data]`;
   document.getElementById('viewLabel').style.color=isLive?'var(--g)':'var(--o)';
