@@ -2290,23 +2290,23 @@ function renderCT(VS){
   // Recommendations panel
   const recs=[];
   // SA bottleneck recommendations
-  if(blockTypes.data_missing>0) recs.push({icon:'📊',problem:`${blockTypes.data_missing} agency(s) stuck on missing data`,fix:'Increase retry success rate',variable:'sa_retry',current:V('sa_retry'),suggest:Math.min(V('sa_retry')+0.1,0.9).toFixed(2)});
-  if(blockTypes.structure_uncertain>0) recs.push({icon:'🏗️',problem:`${blockTypes.structure_uncertain} agency(s) stuck on uncertain structure`,fix:'Increase structure verification rate',variable:'sa_structure',current:V('sa_structure'),suggest:Math.min(V('sa_structure')+0.1,0.9).toFixed(2)});
-  if(blockTypes.no_contacts>0) recs.push({icon:'📇',problem:`${blockTypes.no_contacts} agency(s) stuck — no contacts found`,fix:'Increase contact discovery rate',variable:'sa_contacts',current:V('sa_contacts'),suggest:Math.min(V('sa_contacts')+0.1,0.9).toFixed(2)});
+  if(blockTypes.data_missing>0) recs.push({icon:'📊',problem:`${blockTypes.data_missing} agency(s) stuck on missing data`,fix:'Increase retry success rate',variable:'retry_rate',current:V('retry_rate'),suggest:Math.min(V('retry_rate')+0.1,0.9).toFixed(2)});
+  if(blockTypes.structure_uncertain>0) recs.push({icon:'🏗️',problem:`${blockTypes.structure_uncertain} agency(s) stuck on uncertain structure`,fix:'Reduce structure uncertainty probability',variable:'p_block_structure',current:V('p_block_structure'),suggest:Math.max(V('p_block_structure')-0.05,0).toFixed(2)});
+  if(blockTypes.no_contacts>0) recs.push({icon:'📇',problem:`${blockTypes.no_contacts} agency(s) stuck — no contacts found`,fix:'Reduce contact miss probability',variable:'p_block_contacts',current:V('p_block_contacts'),suggest:Math.max(V('p_block_contacts')-0.05,0).toFixed(2)});
   // CS bottleneck recommendations
   let csStuck=0,csEhrDenied=0,csBaaWait=0;
   VS.pgs.forEach(pg=>{
     if(pg.stage>=5&&pg.cs.phase!=='idle'&&pg.cs.phase!=='complete'){
-      if(pg.cs.phase==='ehr'&&pg.cs.ehrDenied) csEhrDenied++;
-      if(pg.cs.phase==='baa'&&pg.cs.baaRouting) csBaaWait++;
-      if(pg.cs.stuckWeeks>=2) csStuck++;
+      if(pg.cs.blocked&&pg.cs.blockType==='ehr_denied') csEhrDenied++;
+      if(pg.cs.blocked&&pg.cs.blockType==='baa_followup') csBaaWait++;
+      if(pg.cs.blocked&&pg.cs.blockTick>=2) csStuck++;
     }
   });
   if(csEhrDenied>0) recs.push({icon:'🔐',problem:`${csEhrDenied} physician group(s) denied EHR access`,fix:'Increase EHR approval rate',variable:'cs_ehr',current:V('cs_ehr'),suggest:Math.min(V('cs_ehr')+0.1,0.9).toFixed(2)});
   if(csBaaWait>0) recs.push({icon:'📋',problem:`${csBaaWait} physician group(s) waiting on BAA routing`,fix:'Increase BAA completion rate',variable:'cs_baa',current:V('cs_baa'),suggest:Math.min(V('cs_baa')+0.1,0.9).toFixed(2)});
   if(csStuck>0) recs.push({icon:'⚠️',problem:`${csStuck} physician group(s) stuck for 2+ weeks in CS workflow`,fix:'Check enrichment and signature rates',variable:'cs_enrich',current:V('cs_enrich'),suggest:Math.min(V('cs_enrich')+0.1,0.9).toFixed(2)});
   // Velocity recommendation
-  if(VS.tick>4&&doneHH/VS.tick<0.5) recs.push({icon:'🐢',problem:'HH completion velocity below 0.5/week',fix:'Increase overall retry and success rates',variable:'sa_retry',current:V('sa_retry'),suggest:Math.min(V('sa_retry')+0.15,0.9).toFixed(2)});
+  if(VS.tick>4&&doneHH/VS.tick<0.5) recs.push({icon:'🐢',problem:'HH completion velocity below 0.5/week',fix:'Increase overall retry and success rates',variable:'retry_rate',current:V('retry_rate'),suggest:Math.min(V('retry_rate')+0.15,0.9).toFixed(2)});
 
   const ctRecs=document.getElementById('ctRecs');
   if(recs.length===0){
