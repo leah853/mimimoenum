@@ -551,7 +551,7 @@ function enterApp(user){
     document.getElementById('userEmail').textContent=user.email||'';
     document.getElementById('userAvatar').textContent=(user.name||'U').charAt(0).toUpperCase();
   }
-  setTimeout(()=>{resizeAll();renderAll();},100);
+  setTimeout(()=>{resizeAll();viewDirty=true;renderAll();},100);
 }
 document.getElementById('logoutBtn').addEventListener('click',()=>{
   AUTH.logout();
