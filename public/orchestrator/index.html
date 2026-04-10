@@ -801,7 +801,7 @@ function initSim(){
   }
   S={tick:0,running:false,speed:3,sas,pgs,events:[],wfRuns:0,narration:[],
     growthHist:[{tick:0,...Object.fromEntries(FUNNELS.map(f=>[f.key,f.key==='prospect'?pgs.length:0]))}]};
-  addNarr('highlight',`<b>Simulation ready!</b> Think of this like a <i>sports recruitment game</i> — we're trying to sign up <b>${pgs.length} physician groups (PGs)</b> across ${sas.length} regions.<br><br><div class="why-box"><b>How it works:</b> Doctor groups move through a pipeline, like a funnel. They start as <b>Prospects</b> [we just know about them], then become <b>Targets</b> [we want them], move through <b>TOFU</b> [first contact], <b>MOFU</b> [getting interested], <b>BOFU</b> [almost ready], and finally <b>Closed</b> [they signed up!].</div><br><b>Our regions:</b> ${sas.map(s=>s.name+' — '+(s.pop/1e6).toFixed(1)+'M people, '+s.totalPGs+' physician groups, '+s.totalHHs+' home health agencies').join('; ')}.<br><br><b>How we find them:</b> Website, Conferences, Emails, Marketing, Branding.<br><b>Success rates:</b> About 60% move from TOFU→MOFU, 60% from MOFU→BOFU, and 80% from BOFU→Closed.<br><b>What happens next:</b> When a physician group reaches BOFU [almost ready], it triggers research tasks — analyzing home health agencies, other physician groups, and the local culture of each area.<br><br>Press <b>Play</b> to start watching it happen!`);
+  addNarr('highlight',`<b>Simulation ready!</b> Think of this like a <i>sports recruitment game</i> — we're trying to sign up <b>${pgs.length} physician groups (PGs)</b> across ${sas.length} regions.<br><br><div class="why-box"><b>How it works:</b> Physician groups move through a pipeline, like a funnel. They start as <b>Prospects</b> [we just know about them], then become <b>Targets</b> [we want them], move through <b>TOFU</b> [first contact], <b>MOFU</b> [getting interested], <b>BOFU</b> [almost ready], and finally <b>Closed</b> [they signed up!].</div><br><b>Our regions:</b> ${sas.map(s=>s.name+' — '+(s.pop/1e6).toFixed(1)+'M people, '+s.totalPGs+' physician groups, '+s.totalHHs+' home health agencies').join('; ')}.<br><br><b>How we find them:</b> Website, Conferences, Emails, Marketing, Branding.<br><b>Success rates:</b> About 60% move from TOFU→MOFU, 60% from MOFU→BOFU, and 80% from BOFU→Closed.<br><b>What happens next:</b> When a physician group reaches BOFU [almost ready], it triggers research tasks — analyzing home health agencies, other physician groups, and the local culture of each area.<br><br>Press <b>Play</b> to start watching it happen!`);
 }
 
 let narrDirty=true,lastNarrCount=0,viewDirty=true,lastTick=-1;
@@ -1898,10 +1898,6 @@ function renderAll(){
   const VS=getViewState();
   const vw=isLive?S.tick:viewWeek;
 
-  // Performance: skip view renders if tick unchanged and no view switch
-  const tickChanged=S.tick!==lastTick;
-  if(tickChanged||viewDirty){
-
   document.getElementById('weekNum').textContent=S.tick;document.getElementById('weekBadge').textContent='Week '+S.tick;
   document.getElementById('sasDone').textContent=S.sas.filter(s=>s.status==='completed').length+'/2';
   document.getElementById('navWeek').textContent='W'+S.tick;
@@ -1934,8 +1930,6 @@ function renderAll(){
   else if(curView==='orch'){renderOrchestrator(VS);}
   else if(curView==='ct'){renderCT(VS);}
 
-  lastTick=S.tick;viewDirty=false;
-  }
 }
 let lastFrame=0;
 function gameLoop(ts){if(S.running){const interval=1000/S.speed;if(ts-lastFrame>=interval){simTick();lastFrame=ts;}}renderAll();requestAnimationFrame(gameLoop);}
