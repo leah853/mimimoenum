@@ -400,6 +400,82 @@ canvas{display:block}
 .hh-tbl tr{cursor:pointer;transition:background .1s}
 .hh-tbl tr:hover{background:rgba(8,145,178,.04)!important}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.phase-tl-card.ptl-selected{outline:2px solid var(--cy);outline-offset:2px}
+/* ── ORCHESTRATOR REDESIGN ── */
+.orch-breadcrumb{display:flex;align-items:center;gap:6px;padding:10px 20px;font-size:12px;color:var(--tm);background:#fff;border-bottom:1px solid var(--b);flex-shrink:0}
+.orch-breadcrumb .bc-seg{cursor:pointer;color:var(--bl);font-weight:600;transition:color .15s}
+.orch-breadcrumb .bc-seg:hover{color:var(--cy);text-decoration:underline}
+.orch-breadcrumb .bc-sep{color:var(--b);font-size:10px}
+.orch-breadcrumb .bc-cur{color:var(--t);font-weight:700;cursor:default}
+.orch-phase-timeline{padding:16px 20px;flex-shrink:0}
+.orch-pt-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tm);margin-bottom:10px}
+.orch-pt-row{display:flex;gap:0;align-items:stretch;margin-bottom:12px}
+.orch-pt-card{flex:1;padding:12px 14px;background:#fff;border:1px solid var(--b);position:relative;cursor:pointer;transition:all .15s}
+.orch-pt-card:first-child{border-radius:10px 0 0 10px}
+.orch-pt-card:last-child{border-radius:0 10px 10px 0}
+.orch-pt-card:not(:first-child){border-left:none}
+.orch-pt-card:hover{background:rgba(37,99,235,.02);border-color:var(--bl);z-index:1}
+.orch-pt-card.opt-active{border-color:var(--cy);background:rgba(8,145,178,.03);box-shadow:0 0 0 2px rgba(8,145,178,.1)}
+.orch-pt-card.opt-stuck{border-color:var(--pk);background:rgba(214,51,108,.02)}
+.orch-pt-card.opt-selected{outline:2px solid var(--bl);outline-offset:2px}
+.orch-pt-name{font-size:12px;font-weight:700;color:var(--t);margin-bottom:3px}
+.orch-pt-count{font-size:11px;color:var(--tm)}
+.orch-pt-count b{font-weight:800}
+.orch-pt-bar{height:3px;border-radius:2px;background:rgba(0,0,0,.06);margin-top:6px}
+.orch-pt-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+.orch-pt-arrow{position:absolute;right:-8px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--b);z-index:2}
+/* Orch focus panel */
+.orch-focus{padding:24px;background:#fff;overflow-y:auto}
+.orch-focus .of-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.orch-focus .of-title{font-size:18px;font-weight:800;color:var(--t);flex:1}
+.orch-focus .of-close{padding:6px 14px;border-radius:8px;border:1px solid var(--b);background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--td);transition:all .15s}
+.orch-focus .of-close:hover{background:var(--c);border-color:var(--td)}
+.orch-focus .of-meta{display:flex;gap:20px;margin-bottom:16px;font-size:12px;color:var(--td);flex-wrap:wrap}
+.orch-focus .of-meta b{color:var(--t)}
+.orch-focus .of-steps{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.orch-focus .of-step{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid var(--b)}
+.orch-focus .of-step.s-done{background:rgba(5,150,105,.04);border-color:rgba(5,150,105,.15);color:var(--g)}
+.orch-focus .of-step.s-active{background:rgba(8,145,178,.06);border-color:rgba(8,145,178,.3);color:var(--cy);font-weight:700}
+.orch-focus .of-step.s-pending{color:var(--tm)}
+.orch-focus .of-step .step-icon{flex-shrink:0;width:14px;text-align:center}
+/* Comparative view */
+.orch-compare{padding:20px;overflow-y:auto}
+.orch-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.orch-compare-card{border:1px solid var(--b);border-radius:var(--radius);padding:16px;background:#fff}
+.orch-compare-card .cc-name{font-size:14px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.orch-compare-card .cc-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.orch-compare-card .cc-metric{text-align:center;padding:8px;border-radius:8px;background:var(--c)}
+.orch-compare-card .cc-mv{font-size:20px;font-weight:800}
+.orch-compare-card .cc-ml{font-size:9px;font-weight:600;text-transform:uppercase;color:var(--tm);margin-top:2px}
+.orch-compare-card .cc-phases{display:flex;gap:0;margin-top:8px}
+.orch-compare-card .cc-phase{flex:1;padding:6px 8px;background:var(--c);border:1px solid var(--b);font-size:10px;text-align:center}
+.orch-compare-card .cc-phase:first-child{border-radius:6px 0 0 6px}
+.orch-compare-card .cc-phase:last-child{border-radius:0 6px 6px 0}
+.orch-compare-card .cc-phase:not(:first-child){border-left:none}
+/* AI Insights */
+.orch-insights{padding:16px 20px;border-top:1px solid var(--b);background:linear-gradient(135deg,rgba(124,58,237,.02),rgba(37,99,235,.02));flex-shrink:0}
+.orch-insight-card{display:flex;gap:10px;padding:10px 14px;margin-bottom:8px;border-radius:10px;border:1px solid var(--b);background:#fff;font-size:12px;align-items:flex-start}
+.orch-insight-card .ins-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.orch-insight-card .ins-body{flex:1}
+.orch-insight-card .ins-title{font-weight:700;color:var(--t);margin-bottom:2px}
+.orch-insight-card .ins-desc{color:var(--td);line-height:1.5}
+.orch-insight-card .ins-action{font-size:11px;color:var(--bl);font-weight:600;margin-top:4px;cursor:pointer}
+.orch-insight-card.ins-warn{border-color:rgba(214,51,108,.15);background:rgba(214,51,108,.02)}
+.orch-insight-card.ins-good{border-color:rgba(5,150,105,.15);background:rgba(5,150,105,.02)}
+.orch-insight-card.ins-info{border-color:rgba(37,99,235,.15);background:rgba(37,99,235,.02)}
+/* Orch view tabs */
+.orch-view-tabs{display:flex;gap:0;border-bottom:1px solid var(--b);flex-shrink:0;background:#fff}
+.orch-view-tab{padding:10px 20px;font-size:12px;font-weight:600;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.orch-view-tab:hover{color:var(--t);background:var(--c)}
+.orch-view-tab.active{color:var(--bl);border-bottom-color:var(--bl)}
+/* Playback controls */
+.playback-bar{display:flex;align-items:center;gap:10px;padding:8px 20px;background:#fff;border-bottom:1px solid var(--b);flex-shrink:0}
+.playback-bar .pb-label{font-size:11px;font-weight:600;color:var(--tm)}
+.playback-bar input[type=range]{flex:1;height:4px}
+.playback-bar .pb-week{font-size:12px;font-weight:700;color:var(--t);min-width:60px;text-align:center}
+.playback-bar .pb-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--b);background:#fff;cursor:pointer;font-size:11px;font-weight:600;color:var(--td)}
+.playback-bar .pb-btn:hover{background:var(--c)}
+.playback-bar .pb-btn.active{background:var(--bl);color:#fff;border-color:var(--bl)}
 </style>
 </head>
 <body>
@@ -517,6 +593,12 @@ canvas{display:block}
       <!-- WORKFLOW DETAIL VIEW -->
       <div class="vw wfd-view" id="v-wfd">
         <div class="wfd-breadcrumb" id="wfdBreadcrumb"></div>
+        <div class="playback-bar" id="wfdPlayback">
+          <span class="pb-label">Timeline</span>
+          <input type="range" id="wfdScrubber" min="0" max="0" value="0" oninput="scrubWfd(this.value)">
+          <span class="pb-week" id="wfdScrubLabel">Week 0</span>
+          <button class="pb-btn" id="wfdLiveBtn" onclick="goWfdLive()">LIVE</button>
+        </div>
         <div class="wfd-top" id="wfdTopBar">
           <div style="flex:1"><div class="wfd-sa-cards" id="wfdSaCards"></div></div>
           <div><div class="wfd-kpi" id="wfdKpi"></div></div>
@@ -544,16 +626,28 @@ canvas{display:block}
       </div>
       <!-- ORCHESTRATOR VIEW -->
       <div class="vw wfd-view" id="v-orch" style="display:flex;flex-direction:column">
+        <div class="orch-breadcrumb" id="orchBreadcrumb"></div>
         <div id="orchAlert" class="orch-alert-bar"></div>
-        <div style="padding:12px 16px;flex-shrink:0">
-          <div id="orchDecision" class="orch-decision-cards"></div>
+        <div class="orch-view-tabs" id="orchViewTabs">
+          <div class="orch-view-tab active" data-orch-tab="overview" onclick="setOrchTab('overview')">Overview</div>
+          <div class="orch-view-tab" data-orch-tab="compare" onclick="setOrchTab('compare')">Compare</div>
+          <div class="orch-view-tab" data-orch-tab="insights" onclick="setOrchTab('insights')">Insights</div>
         </div>
-        <div id="orchFilters" class="orch-filter-bar"></div>
-        <div style="flex:1;overflow-y:auto;padding:0 16px 16px;min-height:0">
-          <div id="orchGroups" style="margin-top:12px"></div>
-          <div class="section-title" style="margin-top:16px">Recommendations <span class="hint">(what to do next)</span></div>
-          <div id="orchIntel"></div>
+        <div id="orchOverviewPanel">
+          <div id="orchPhaseTimeline" class="orch-phase-timeline"></div>
+          <div style="padding:0 16px;flex-shrink:0">
+            <div id="orchDecision" class="orch-decision-cards"></div>
+          </div>
+          <div id="orchFilters" class="orch-filter-bar"></div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px;min-height:0">
+            <div id="orchGroups" style="margin-top:12px"></div>
+            <div class="section-title" style="margin-top:16px">Recommendations <span class="hint">(what to do next)</span></div>
+            <div id="orchIntel"></div>
+          </div>
         </div>
+        <div id="orchComparePanel" style="display:none;flex:1;overflow-y:auto"></div>
+        <div id="orchInsightsPanel" style="display:none;flex:1;overflow-y:auto;padding:16px"></div>
+        <div id="orchFocusPanel" style="display:none;flex:1;overflow-y:auto"></div>
       </div>
       <!-- CONTROL TOWER -->
       <div class="vw ct-view" id="v-ct">
@@ -1620,7 +1714,8 @@ function renderPhaseTimeline(VS){
     const cls=phBlocked?'ptl-blocked':phActive?'ptl-active':phDone===phTotal&&phDone>0?'ptl-done':'';
     const barCol=phBlocked?'var(--pk)':phActive?'var(--cy)':'var(--g)';
     const avgT=timeCount?Math.round(avgTime/timeCount*10)/10:0;
-    html+=`<div class="phase-tl-card ${cls}" onclick="filterPhase('sa',${pi})">
+    const sel=wfdPhaseFilter&&wfdPhaseFilter.type==='sa'&&wfdPhaseFilter.idx===pi;
+    html+=`<div class="phase-tl-card ${cls} ${sel?'ptl-selected':''}" onclick="filterPhase('sa',${pi})">
       <div class="ptl-name">${ph.name}</div>
       <div class="ptl-count"><b>${phDone}</b>/${phTotal} done${phActive?' · '+phActive+' active':''}${phBlocked?' · <span style="color:var(--pk)">'+phBlocked+' stuck</span>':''}</div>
       <div class="ptl-bar"><div class="ptl-bar-fill" style="width:${pct}%;background:${barCol}"></div></div>
@@ -1644,7 +1739,8 @@ function renderPhaseTimeline(VS){
       const pct=csPGs.length?Math.round(phDone/csPGs.length*100):0;
       const cls=phBlocked?'ptl-blocked':phActive?'ptl-active':phDone===csPGs.length&&phDone>0?'ptl-done':'';
       const barCol=phBlocked?'var(--pk)':phActive?'var(--cy)':'var(--g)';
-      html+=`<div class="phase-tl-card ${cls}" onclick="filterPhase('cs',${pi})">
+      const csSel=wfdPhaseFilter&&wfdPhaseFilter.type==='cs'&&wfdPhaseFilter.idx===pi;
+      html+=`<div class="phase-tl-card ${cls} ${csSel?'ptl-selected':''}" onclick="filterPhase('cs',${pi})">
         <div class="ptl-name">${ph.name}</div>
         <div class="ptl-count"><b>${phDone}</b>/${csPGs.length}${phActive?' · '+phActive+' active':''}${phBlocked?' · <span style="color:var(--pk)">'+phBlocked+' stuck</span>':''}</div>
         <div class="ptl-bar"><div class="ptl-bar-fill" style="width:${pct}%;background:${barCol}"></div></div>
@@ -1655,7 +1751,15 @@ function renderPhaseTimeline(VS){
   }
   document.getElementById('wfdPhaseTimeline').innerHTML=html;
 }
-function filterPhase(type,idx){/* future: filter table to instances in this phase */}
+let wfdPhaseFilter=null;
+function filterPhase(type,idx){
+  if(wfdPhaseFilter&&wfdPhaseFilter.type===type&&wfdPhaseFilter.idx===idx){
+    wfdPhaseFilter=null;
+  } else {
+    wfdPhaseFilter={type,idx};
+  }
+  renderWFDetail();
+}
 // Breadcrumb
 function renderBreadcrumb(level,ctx){
   const bc=document.getElementById('wfdBreadcrumb');
@@ -1672,6 +1776,7 @@ function renderBreadcrumb(level,ctx){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(wfdFocusHH){closeFocusHH();e.preventDefault();}
+    else if(orchFocusInstance){closeOrchFocus();e.preventDefault();}
     else if(orchExpanded){orchExpanded=null;renderOrchestrator();e.preventDefault();}
   }
 });
@@ -1695,7 +1800,14 @@ function renderWFDetail(VS){
   sa.hhs.forEach(h=>{if(h.started&&!h.done)TASK_STEP_RANGES.forEach((r,ti)=>{if(h.wfStep>=r.min&&h.wfStep<=r.max)taskCounts[ti]++;});});
   document.getElementById('wfdInstChips').innerHTML=TASK_STEP_RANGES.map((r,ti)=>
     `<span class="wfd-inst-chip" style="${taskCounts[ti]?'border-color:var(--cy);color:var(--cy)':''}">${r.name}: <b>${taskCounts[ti]}</b></span>`).join('');
-  const rows=sa.hhs.filter(h=>h.started);
+  let rows=sa.hhs.filter(h=>h.started);
+  // Apply phase filter
+  if(wfdPhaseFilter){
+    if(wfdPhaseFilter.type==='sa'){
+      const ph=SA_PHASES[wfdPhaseFilter.idx];
+      if(ph) rows=rows.filter(h=>h.wfStep>=ph.steps[0]&&h.wfStep<=ph.steps[ph.steps.length-1]&&!h.done);
+    }
+  }
   const displayRows=rows.length?rows:sa.hhs.slice(0,5);
   if(!wfdFocusHH){
     document.getElementById('wfdTbody').innerHTML=displayRows.map(h=>{
@@ -1870,7 +1982,7 @@ function toggleTask(id){
 }
 
 // ── ORCHESTRATOR (Mission Control) ──
-let orchFilter='all',orchExpanded=null;
+let orchFilter='all',orchExpanded=null,orchFocusInstance=null;
 function setOrchFilter(f){orchFilter=f;renderOrchestrator();}
 function toggleOrchDetail(id){orchExpanded=orchExpanded===id?null:id;renderOrchestrator();if(orchExpanded){setTimeout(()=>{const d=document.querySelector('.orch-row-detail');if(d)d.scrollIntoView({behavior:'smooth',block:'center'});},50);}}
 function getOrchDetail(inst,VS){
@@ -1947,6 +2059,10 @@ function renderOrchestrator(VS){
   const atRisk=instances.filter(i=>i.status!=='done'&&i.status!=='no-locs'&&i.time>3).length;
   const saCount=instances.filter(i=>i.phase==='sa_hh').length;
   const csCount=instances.filter(i=>i.phase!=='sa_hh').length;
+
+  renderOrchBreadcrumb();
+  if(orchFocusInstance)return; // Don't rebuild overview when focused
+  renderOrchPhaseTimeline(instances);
 
   // ── 1. ALERT BAR ──
   const alertEl=document.getElementById('orchAlert');
@@ -2049,7 +2165,7 @@ function renderOrchestrator(VS){
         <div class="ph-bar"><div class="ph-bar-fill" style="width:${pct}%;background:${pg.color}"></div></div>
       </div>
       <div class="orch-phase-body">
-        ${showItems.map(i=>`<div class="orch-row ${i.status==='stuck'?'row-stuck':''}" onclick="toggleOrchDetail('${i.id}')">
+        ${showItems.map(i=>`<div class="orch-row ${i.status==='stuck'?'row-stuck':''}" onclick="toggleOrchDetail('${i.id}')" ondblclick="orchFocusOn('${i.id}')">
             <span class="or-entity">${i.entity}</span>
             <span class="or-action">${i.action}${i.bottleneck?' · <span style="color:var(--pk);font-weight:600">⊘ '+i.bottleneck.replace(/_/g,' ')+'</span>':''}</span>
             <span class="status-badge ${i.status}">${i.statusIcon} ${i.statusLabel}</span>
@@ -2200,6 +2316,226 @@ function renderCT(VS){
   }
 }
 
+// ── ORCHESTRATOR REDESIGN JS ──
+let orchTab='overview';
+function setOrchTab(tab){
+  orchTab=tab;
+  document.querySelectorAll('.orch-view-tab').forEach(t=>t.classList.toggle('active',t.dataset.orchTab===tab));
+  document.getElementById('orchOverviewPanel').style.display=tab==='overview'?'':'none';
+  document.getElementById('orchComparePanel').style.display=tab==='compare'?'':'none';
+  document.getElementById('orchInsightsPanel').style.display=tab==='insights'?'':'none';
+  document.getElementById('orchFocusPanel').style.display='none';
+  orchFocusInstance=null;
+  if(tab==='compare')renderOrchCompare();
+  if(tab==='insights')renderOrchInsights();
+}
+let orchPhaseFilter=null;
+function renderOrchPhaseTimeline(instances){
+  const saInst=instances.filter(i=>i.phase==='sa_hh');
+  const csInst=instances.filter(i=>i.phase!=='sa_hh');
+  const saPhases=[
+    {name:'NPI Query',filter:i=>i.action&&(i.action.includes('NPI')||i.action.includes('Filtering')||i.action.includes('Removing'))},
+    {name:'Locations',filter:i=>i.action&&(i.action.includes('Location')||i.action.includes('Search')||i.action.includes('Branch')||i.action.includes('Addr')||i.action.includes('Dedup'))},
+    {name:'Corp ID',filter:i=>i.action&&(i.action.includes('Parent')||i.action.includes('Confidence'))},
+    {name:'Acct Map',filter:i=>i.action&&(i.action.includes('Account')||i.action.includes('Contact')||i.action.includes('Complete'))}
+  ];
+  const csPhases=[
+    {name:'Enrichment',key:'getting_ready'},
+    {name:'Trust',key:'building_trust'},
+    {name:'Access',key:'access_activation'},
+    {name:'Execution',key:'execution'}
+  ];
+  let html='<div class="orch-pt-label">SA Pipeline</div><div class="orch-pt-row">';
+  saPhases.forEach((ph,pi)=>{
+    const matching=saInst.filter(i=>i.status!=='done'&&i.status!=='no-locs'&&ph.filter(i));
+    const done=saInst.filter(i=>(i.status==='done'||i.status==='no-locs'));
+    const stuck=matching.filter(i=>i.status==='stuck').length;
+    const active=matching.filter(i=>i.status==='active').length;
+    const sel=orchPhaseFilter&&orchPhaseFilter.type==='sa'&&orchPhaseFilter.idx===pi;
+    const cls=stuck?'opt-stuck':active?'opt-active':'';
+    html+=`<div class="orch-pt-card ${cls} ${sel?'opt-selected':''}" onclick="toggleOrchPhaseFilter('sa',${pi})">
+      <div class="orch-pt-name">${ph.name}</div>
+      <div class="orch-pt-count">${active} active${stuck?' · <span style="color:var(--pk)">'+stuck+' stuck</span>':''}</div>
+      <div class="orch-pt-bar"><div class="orch-pt-bar-fill" style="width:${saInst.length?Math.round(done.length/saInst.length*100):0}%;background:${stuck?'var(--pk)':'var(--g)'}"></div></div>
+      ${pi<saPhases.length-1?'<span class="orch-pt-arrow">\u2192</span>':''}
+    </div>`;
+  });
+  html+='</div>';
+  if(csInst.length){
+    html+='<div class="orch-pt-label" style="margin-top:4px">CS Pipeline</div><div class="orch-pt-row">';
+    csPhases.forEach((ph,pi)=>{
+      const items=csInst.filter(i=>i.phase===ph.key);
+      const stuck=items.filter(i=>i.status==='stuck').length;
+      const active=items.filter(i=>i.status==='active').length;
+      const done=items.filter(i=>i.status==='done').length;
+      const sel=orchPhaseFilter&&orchPhaseFilter.type==='cs'&&orchPhaseFilter.idx===pi;
+      const cls=stuck?'opt-stuck':active?'opt-active':'';
+      html+=`<div class="orch-pt-card ${cls} ${sel?'opt-selected':''}" onclick="toggleOrchPhaseFilter('cs',${pi})">
+        <div class="orch-pt-name">${ph.name}</div>
+        <div class="orch-pt-count">${active} active${stuck?' · <span style="color:var(--pk)">'+stuck+' stuck</span>':''}${done?' · '+done+' done':''}</div>
+        <div class="orch-pt-bar"><div class="orch-pt-bar-fill" style="width:${items.length?Math.round(done/items.length*100):0}%;background:${stuck?'var(--pk)':'var(--g)'}"></div></div>
+        ${pi<csPhases.length-1?'<span class="orch-pt-arrow">\u2192</span>':''}
+      </div>`;
+    });
+    html+='</div>';
+  }
+  document.getElementById('orchPhaseTimeline').innerHTML=html;
+}
+function toggleOrchPhaseFilter(type,idx){
+  if(orchPhaseFilter&&orchPhaseFilter.type===type&&orchPhaseFilter.idx===idx){orchPhaseFilter=null;}
+  else{orchPhaseFilter={type,idx};}
+  renderOrchestrator();
+}
+function renderOrchBreadcrumb(){
+  const bc=document.getElementById('orchBreadcrumb');
+  if(!bc)return;
+  if(orchFocusInstance){
+    bc.innerHTML=`<span class="bc-seg" onclick="closeOrchFocus()">Mission Control</span><span class="bc-sep">\u203a</span><span class="bc-cur">${orchFocusInstance.entity} \u2014 ${orchFocusInstance.group}</span><span style="margin-left:auto;font-size:11px;color:var(--tm)">Press Esc to go back</span>`;
+  } else {
+    const VS=getViewState();
+    const total=VS.sas.reduce((s,sa)=>s+sa.hhs.length,0)+VS.pgs.filter(p=>p.stage>=5&&p.cs.phase!=='idle').length;
+    bc.innerHTML=`<span class="bc-cur">Mission Control</span><span style="margin-left:auto;font-size:11px;color:var(--tm)">${total} total instances \u00b7 Click any row for details</span>`;
+  }
+}
+function orchFocusOn(instId){
+  const VS=getViewState();
+  const instances=[];
+  VS.sas.forEach(sa=>sa.hhs.forEach((h,hi)=>{
+    const st=getHHStatus(h);
+    instances.push({id:`SA-${sa.abbr}-HH${hi+1}`,entity:h.name.replace(' Home Health',''),group:'SA: Home Health',
+      status:st.cls,statusLabel:st.label,statusIcon:st.icon,saIdx:sa.id,hhIdx:hi,type:'sa'});
+  }));
+  VS.pgs.forEach(pg=>{
+    if(pg.stage<5)return;const cs=pg.cs;if(cs.phase==='idle')return;
+    const isDone=cs.phase==='complete',isBlocked=cs.blocked;
+    instances.push({id:`CS-PG${pg.id}`,entity:`PG #${pg.id}`,group:'CS: PG Onboarding',
+      status:isDone?'done':isBlocked?'stuck':'active',statusLabel:isDone?'Done':isBlocked?'Blocked':'Active',
+      statusIcon:isDone?'\u2713':isBlocked?'\u2298':'\u25b8',pgId:pg.id,type:'cs'});
+  });
+  const inst=instances.find(i=>i.id===instId);
+  if(!inst)return;
+  orchFocusInstance=inst;
+  document.getElementById('orchOverviewPanel').style.display='none';
+  document.getElementById('orchComparePanel').style.display='none';
+  document.getElementById('orchInsightsPanel').style.display='none';
+  document.getElementById('orchViewTabs').style.display='none';
+  document.getElementById('orchFocusPanel').style.display='';
+  let html='<div class="orch-focus">';
+  html+=`<div class="of-header"><span class="of-title">${inst.entity}</span><span class="status-badge ${inst.status}">${inst.statusIcon} ${inst.statusLabel}</span><button class="of-close" onclick="closeOrchFocus()">\u2715 Close</button></div>`;
+  html+=`<div class="of-meta"><span><b>Group:</b> ${inst.group}</span><span><b>Status:</b> ${inst.statusLabel}</span></div>`;
+  html+=`<div style="margin-top:16px">${getOrchDetail({id:instId},VS)}</div>`;
+  if(inst.type==='sa'){
+    html+=`<div style="margin-top:16px;display:flex;gap:8px">
+      <button class="fb-btn fb-btn-primary" onclick="selSA=${inst.saIdx};focusHH(${inst.saIdx},${inst.hhIdx});switchView('wfd')" style="background:var(--cy);border-color:var(--cy)">View in Workflow Detail \u2192</button>
+      <button class="fb-btn fb-btn-secondary" onclick="closeOrchFocus()">Back to Overview</button>
+    </div>`;
+  }
+  html+='</div>';
+  document.getElementById('orchFocusPanel').innerHTML=html;
+  renderOrchBreadcrumb();
+}
+function closeOrchFocus(){
+  orchFocusInstance=null;
+  document.getElementById('orchFocusPanel').style.display='none';
+  document.getElementById('orchViewTabs').style.display='';
+  setOrchTab(orchTab);
+  renderOrchBreadcrumb();
+}
+function renderOrchCompare(){
+  const VS=getViewState();
+  let html='<div class="orch-compare"><h3 style="font-size:14px;font-weight:800;margin-bottom:16px">Region Comparison</h3><div class="orch-compare-grid">';
+  VS.sas.forEach(sa=>{
+    const hd=sa.hhs.filter(h=>h.done).length;
+    const hb=sa.hhs.filter(h=>h.blocked).length;
+    const ha=sa.hhs.filter(h=>h.started&&!h.done&&!h.blocked).length;
+    const pct=sa.hhs.length?Math.round(hd/sa.hhs.length*100):0;
+    const csPGs=VS.pgs.filter(p=>p.saId===sa.id&&p.stage>=5&&p.cs.phase!=='idle');
+    const csDone=csPGs.filter(p=>p.cs.phase==='complete').length;
+    const csBlocked=csPGs.filter(p=>p.cs.blocked).length;
+    const col=sa.status==='completed'?'var(--g)':sa.status==='in_progress'?'var(--cy)':'var(--tm)';
+    html+=`<div class="orch-compare-card">
+      <div class="cc-name"><span style="color:${col}">${sa.status==='completed'?'\u2705':sa.status==='in_progress'?'\u27f3':'\u25cb'}</span> ${sa.name}</div>
+      <div class="cc-metrics">
+        <div class="cc-metric"><div class="cc-mv" style="color:var(--g)">${hd}</div><div class="cc-ml">Done</div></div>
+        <div class="cc-metric"><div class="cc-mv" style="color:var(--cy)">${ha}</div><div class="cc-ml">Active</div></div>
+        <div class="cc-metric"><div class="cc-mv" style="color:var(--pk)">${hb}</div><div class="cc-ml">Stuck</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--td);margin-bottom:8px">
+        <b>SA Coverage:</b> ${pct}% (${hd}/${sa.hhs.length}) \u00b7 <b>CS:</b> ${csDone}/${csPGs.length} done${csBlocked?' \u00b7 <span style="color:var(--pk)">'+csBlocked+' blocked</span>':''}
+      </div>
+      <div style="height:6px;background:rgba(0,0,0,.06);border-radius:3px;margin-bottom:8px"><div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width .3s"></div></div>
+      <div class="cc-phases">${SA_PHASES.map(ph=>{
+        let d=0,a=0;sa.hhs.forEach(h=>{const past=h.wfStep>ph.steps[ph.steps.length-1]||h.done;if(past)d++;else if(h.wfStep>=ph.steps[0]&&h.started)a++;});
+        return '<div class="cc-phase" style="'+(a?'color:var(--cy);font-weight:700':d===sa.hhs.length?'color:var(--g)':'color:var(--tm)')+'">'+ph.name.split(' ')[0]+'<br><b>'+d+'</b>/'+sa.hhs.length+'</div>';
+      }).join('')}</div>
+      <div style="margin-top:10px;font-size:11px">
+        <b>Velocity:</b> ${VS.tick>0?(hd/VS.tick).toFixed(1):'0'} HH/week \u00b7 <b>Status:</b> ${sa.status==='completed'?'\u2705 Complete':sa.status==='in_progress'?'\u27f3 In Progress':'\u25cb Not Started'}
+      </div>
+    </div>`;
+  });
+  html+='</div></div>';
+  document.getElementById('orchComparePanel').innerHTML=html;
+}
+function renderOrchInsights(){
+  const VS=getViewState();
+  let insights=[];
+  const allHHs=[];VS.sas.forEach(sa=>sa.hhs.forEach(h=>allHHs.push({...h,saName:sa.name})));
+  const blocked=allHHs.filter(h=>h.blocked);
+  const avgTime=allHHs.filter(h=>h.started).reduce((s,h)=>s+h.totalTicks,0)/(allHHs.filter(h=>h.started).length||1);
+  const blockTypes={};blocked.forEach(h=>{blockTypes[h.blockType]=(blockTypes[h.blockType]||0)+1;});
+  if(blocked.length>0){
+    const top=Object.entries(blockTypes).sort((a,b)=>b[1]-a[1])[0];
+    insights.push({icon:'\uD83D\uDD34',type:'warn',title:'Bottleneck: '+top[0].replace(/_/g,' '),
+      desc:top[1]+' of '+blocked.length+' blocked instances are stuck on "'+top[0].replace(/_/g,' ')+'". This is your #1 priority.',
+      action:'Adjust '+(top[0]==='data_missing'?'p_block_data':top[0]==='structure_uncertain'?'p_block_structure':'p_block_contacts')+' in Control Tower',
+      onclick:"switchView('ct')"});
+  }
+  if(VS.tick>3){
+    const recent=allHHs.filter(h=>h.done&&h.totalTicks<=3).length;
+    const slow=allHHs.filter(h=>h.started&&!h.done&&h.totalTicks>5).length;
+    if(slow>2)insights.push({icon:'\uD83D\uDC22',type:'warn',title:slow+' instances running slow',desc:'These instances have been active for 5+ weeks without completing. Consider increasing retry_rate.',action:'View slow instances',onclick:"setOrchFilter('at_risk')"});
+    if(recent>0)insights.push({icon:'\uD83D\uDE80',type:'good',title:recent+' fast completions',desc:recent+' instances completed in 3 weeks or less \u2014 above average pace of '+avgTime.toFixed(1)+' weeks.',action:null});
+  }
+  const csActive=VS.pgs.filter(p=>p.stage>=5&&p.cs.phase!=='idle'&&p.cs.phase!=='complete');
+  const csBlocked=csActive.filter(p=>p.cs.blocked);
+  if(csBlocked.length>0){
+    const csBlockTypes={};csBlocked.forEach(p=>{csBlockTypes[p.cs.blockType]=(csBlockTypes[p.cs.blockType]||0)+1;});
+    const csTop=Object.entries(csBlockTypes).sort((a,b)=>b[1]-a[1])[0];
+    insights.push({icon:'\u26a0',type:'warn',title:'CS Bottleneck: '+csTop[0].replace(/_/g,' '),
+      desc:csTop[1]+' PG(s) blocked in Customer Success at "'+csTop[0].replace(/_/g,' ')+'".',
+      action:'Adjust CS settings',onclick:"switchView('ct')"});
+  }
+  const done=allHHs.filter(h=>h.done).length;
+  const total=allHHs.length;
+  if(done>0&&done<total&&VS.tick>0){
+    const rate=done/VS.tick;
+    const remaining=total-done;
+    const weeksLeft=Math.ceil(remaining/rate);
+    insights.push({icon:'\uD83D\uDCC8',type:'info',title:'Estimated '+weeksLeft+' weeks to full coverage',
+      desc:'At current velocity ('+rate.toFixed(1)+' completions/week), all '+total+' HH instances should finish by week '+(VS.tick+weeksLeft)+'.',action:null});
+  }
+  if(blocked.length===0&&csBlocked.length===0&&allHHs.some(h=>h.started)){
+    insights.push({icon:'\u2705',type:'good',title:'All systems healthy',desc:'No blockers detected across SA and CS workflows. All instances progressing normally.',action:null});
+  }
+  if(!insights.length){
+    insights.push({icon:'\u23f3',type:'info',title:'Waiting for data',desc:'Press Play to start the simulation. Insights will appear once workflows begin processing.',action:null});
+  }
+  let html='<h3 style="font-size:14px;font-weight:800;margin-bottom:4px">AI Insights</h3><p style="font-size:11px;color:var(--tm);margin-bottom:16px">Pattern detection and recommendations based on current simulation state</p>';
+  insights.forEach(ins=>{
+    html+=`<div class="orch-insight-card ins-${ins.type}"><span class="ins-icon">${ins.icon}</span><div class="ins-body"><div class="ins-title">${ins.title}</div><div class="ins-desc">${ins.desc}</div>${ins.action?`<div class="ins-action" onclick="${ins.onclick||''}">${ins.action}</div>`:''}</div></div>`;
+  });
+  document.getElementById('orchInsightsPanel').innerHTML=html;
+}
+// Scrubber functions
+function scrubWfd(val){
+  val=parseInt(val);
+  if(val>=S.tick){viewWeek=-1;}
+  else{viewWeek=val;}
+  narrDirty=true;viewDirty=true;
+  renderAll();
+}
+function goWfdLive(){viewWeek=-1;narrDirty=true;viewDirty=true;renderAll();}
+
 // ── CONTROLS ──
 function initControls(){
   document.getElementById('btnPlay').onclick=()=>{
@@ -2274,6 +2610,18 @@ function renderAll(){
   document.querySelector('.sim-canvas-wrap').setAttribute('data-vw',viewWeek);
 
   updateSummaryBar(VS);
+
+  // Update WFD scrubber
+  const scrubber=document.getElementById('wfdScrubber');
+  if(scrubber){
+    scrubber.max=S.tick;
+    scrubber.value=viewWeek<0?S.tick:viewWeek;
+    const scrubLabel=document.getElementById('wfdScrubLabel');
+    if(scrubLabel)scrubLabel.textContent=viewWeek<0?'Week '+S.tick+' (LIVE)':'Week '+viewWeek;
+    const liveBtn=document.getElementById('wfdLiveBtn');
+    if(liveBtn)liveBtn.classList.toggle('active',viewWeek<0);
+  }
+
   if(curView==='sim'){updateFunnel(VS);updateVerts(VS);renderMap(VS);renderGrowth(VS);renderNarration(vw);updateWFChips(VS);}
   else if(curView==='wfd'){renderWFDetail(VS);if(wfdTab==='diagram'&&!wfdFocusHH)renderWFGraph(wfdX,wfdC,VS.sas[selSA]);}
   else if(curView==='orch'){renderOrchestrator(VS);}
