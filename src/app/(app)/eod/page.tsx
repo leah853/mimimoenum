@@ -119,7 +119,7 @@ export default function EODPage() {
         </div>
         <div className="px-4 py-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-red-200/60 dark:border-red-800/40 rounded-xl shadow-sm flex items-center gap-2">
           <span className="text-lg font-bold text-red-500 dark:text-red-400">{eodStats.withBlockers}</span>
-          <span className="text-xs text-gray-500">with blockers</span>
+          <span className="text-xs text-gray-500">with obstacles</span>
         </div>
       </div>
 
