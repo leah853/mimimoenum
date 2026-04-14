@@ -18,7 +18,7 @@ type FullTask = Task & {
   owner?: { id: string; full_name: string };
 };
 
-type FilterType = "all" | "unacknowledged" | "awaiting_review" | null;
+type FilterType = "all" | "unacknowledged" | "awaiting_review" | "new_messages" | null;
 
 type WeekReport = {
   id: string;
@@ -78,7 +78,7 @@ export default function FeedbackTrailPage() {
   }, [all]);
 
   // Stats (must be before any early return)
-  const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables } = useMemo(() => {
+  const { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, newForMe } = useMemo(() => {
     const totalThreads = threads.length;
     const taskFeedbackCount = threads.reduce((s, t) => s + t.feedbacks.filter((f) => !isReplyComment(f.comment)).length, 0);
     const wrList = weekReports || [];
@@ -88,8 +88,21 @@ export default function FeedbackTrailPage() {
     const awaitingReviewTasks = all.filter((t) => (t.deliverables?.length || 0) > 0 && !(t.feedback?.length));
     const weekReportsAwaitingReview = wrList.filter((wr) => !(wr.feedback?.length));
     const tasksWithDeliverables = awaitingReviewTasks.length + weekReportsAwaitingReview.length;
-    return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables };
-  }, [threads, all, weekReports]);
+
+    // New messages: threads where last message is from the other side
+    const myEmail = dbUser?.email || "";
+    const iAmRep = myEmail.endsWith("@mimimomentum.com");
+    let newForMe = 0;
+    for (const t of threads) {
+      if (t.feedbacks.length === 0) continue;
+      const last = t.feedbacks[t.feedbacks.length - 1];
+      const lastIsRep = last.reviewer?.full_name === "Rep 1" || last.reviewer?.full_name === "Rep 2";
+      if (iAmRep && !lastIsRep) newForMe++; // doer replied, rep hasn't responded
+      if (!iAmRep && lastIsRep) newForMe++; // rep sent feedback, doer hasn't replied
+    }
+
+    return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, newForMe };
+  }, [threads, all, weekReports, dbUser?.email]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -109,6 +122,16 @@ export default function FeedbackTrailPage() {
     if (!activeFilter || activeFilter === "all") return threads;
     if (activeFilter === "unacknowledged") {
       return threads.filter(t => t.feedbacks.some(f => !f.acknowledged && !isReplyComment(f.comment)));
+    }
+    if (activeFilter === "new_messages") {
+      const myEmail = dbUser?.email || "";
+      const iAmRep = myEmail.endsWith("@mimimomentum.com");
+      return threads.filter(t => {
+        if (t.feedbacks.length === 0) return false;
+        const last = t.feedbacks[t.feedbacks.length - 1];
+        const lastIsRep = last.reviewer?.full_name === "Rep 1" || last.reviewer?.full_name === "Rep 2";
+        return iAmRep ? !lastIsRep : lastIsRep;
+      });
     }
     return threads;
   }
@@ -220,7 +243,7 @@ export default function FeedbackTrailPage() {
       </div>
 
       {/* KPI Cards — clickable filters */}
-      <div className="grid grid-cols-4 gap-4 stagger-children">
+      <div className="grid grid-cols-5 gap-4 stagger-children">
         <button onClick={() => toggleFilter("all")}
           className={`text-left bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border rounded-2xl p-4 interactive transition-all ${
             activeFilter === "all" || !activeFilter ? "border-gray-300 dark:border-gray-600 ring-1 ring-gray-300 dark:ring-gray-600" : "border-gray-200/60 dark:border-gray-800/60"
@@ -232,6 +255,16 @@ export default function FeedbackTrailPage() {
           <p className="text-xs text-gray-500">Total Feedback</p>
           <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{totalFeedback}</p>
         </div>
+        <button onClick={() => toggleFilter("new_messages")}
+          className={`text-left rounded-2xl p-4 interactive transition-all ${
+            activeFilter === "new_messages"
+              ? "bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/20 dark:to-green-900/15 border-2 border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400"
+              : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-emerald-200/60 dark:border-emerald-800/30 bg-gradient-to-br from-emerald-50 to-green-50/50 dark:from-emerald-900/10 dark:to-green-900/5"
+          }`}>
+          <p className="text-xs text-emerald-600 dark:text-emerald-400">New for You</p>
+          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{newForMe}</p>
+          {activeFilter === "new_messages" && <p className="text-[9px] text-emerald-500 mt-1">Filter active</p>}
+        </button>
         <button onClick={() => toggleFilter("unacknowledged")}
           className={`text-left rounded-2xl p-4 interactive transition-all ${
             activeFilter === "unacknowledged"
@@ -259,7 +292,7 @@ export default function FeedbackTrailPage() {
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Filtering by:</span>
           <span className="text-xs px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full font-medium">
-            {activeFilter === "unacknowledged" ? "Unacknowledged feedback" : "Awaiting review"}
+            {activeFilter === "unacknowledged" ? "Unacknowledged feedback" : activeFilter === "new_messages" ? "New messages for you" : "Awaiting review"}
           </span>
           <button onClick={() => setActiveFilter(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><HiX className="w-3.5 h-3.5" /></button>
         </div>
@@ -443,8 +476,14 @@ export default function FeedbackTrailPage() {
                   </h2>
                   {filteredThreads.map(({ task, feedbacks }) => {
                     const unack = feedbacks.filter((f) => !f.acknowledged && !isReplyComment(f.comment)).length;
+                    // Check if last message is from the other side (= new for me)
+                    const myEmail = dbUser?.email || "";
+                    const iAmRep = myEmail.endsWith("@mimimomentum.com");
+                    const lastFb = feedbacks[feedbacks.length - 1];
+                    const lastIsRep = lastFb?.reviewer?.full_name === "Rep 1" || lastFb?.reviewer?.full_name === "Rep 2";
+                    const hasNewForMe = feedbacks.length > 0 && (iAmRep ? !lastIsRep : lastIsRep);
                     return (
-                      <div key={task.id} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+                      <div key={task.id} className={`bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md ${hasNewForMe ? "border-emerald-300/60 dark:border-emerald-700/40 ring-1 ring-emerald-200/50 dark:ring-emerald-800/30" : "border-gray-200/60 dark:border-gray-800/60"}`}>
                         {/* Task header — clickable card */}
                         <Link href={`/tasks/${task.id}`} className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 dark:border-gray-800 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all">
                           <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[task.status] }} />
@@ -452,7 +491,6 @@ export default function FeedbackTrailPage() {
                             <span className="text-sm font-medium text-gray-800 dark:text-white truncate block">{task.title}</span>
                             <span className="text-[10px] text-gray-400">{task.category} · {task.owner?.full_name || "Unassigned"}</span>
                           </div>
-                          {/* Deliverable indicators */}
                           <div className="flex gap-1">
                             {(task.deliverables || []).map((d) => (
                               <span key={d.id} className={`w-2.5 h-2.5 rounded-full ${d.viewed ? "bg-green-500" : "bg-blue-500"}`} title={d.viewed ? "Viewed" : "Not viewed"} />
@@ -460,7 +498,8 @@ export default function FeedbackTrailPage() {
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="text-[10px] text-gray-400">{feedbacks.length} msgs</span>
-                            {unack > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-full font-semibold">{unack} new</span>}
+                            {hasNewForMe && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-full font-bold animate-pulse">NEW</span>}
+                            {unack > 0 && !hasNewForMe && <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-full font-semibold">{unack} unack</span>}
                             <HiArrowRight className="w-3.5 h-3.5 text-gray-400" />
                           </div>
                         </Link>

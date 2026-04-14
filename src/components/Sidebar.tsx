@@ -13,7 +13,7 @@ import {
   HiOutlineVideoCamera,
 } from "react-icons/hi";
 
-type Stats = { feedbackCount: number; unacknowledged: number; awaitingReview: number; eodNeedsReview: number };
+type Stats = { feedbackCount: number; unacknowledged: number; awaitingReview: number; eodNeedsReview: number; newMessages: number };
 
 export default function Sidebar() {
   const pathname = usePathname();
