@@ -16,7 +16,7 @@ type UserOption = { id: string; full_name: string };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
 type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
 type QuarterOption = { id: string; name: string; iterations: IterOption[] };
-type WeekReport = { id: string; report_type: string; content: string; file_url?: string; feedback?: { id: string; rating: number; comment?: string; reviewer?: { full_name: string } }[] };
+type WeekReport = { id: string; report_type: string; content: string; file_url?: string; feedback?: { id: string; reviewer_id: string; rating: number; comment?: string; reviewer?: { id: string; full_name: string } }[] };
 
 const CATEGORIES = ["Customer Success & PG Acquisition", "Product / Engineering / Workflows", "Cybersecurity", "Continuous Learning", "Talent Acquisition", "Branding"];
 
@@ -150,6 +150,23 @@ export default function WeekDetail() {
     } catch (e) { toast(handleApiError(e), "error"); }
   }
 
+  async function editReportFeedback(fbId: string, rating: number, comment: string) {
+    try {
+      await apiPatch(`/api/week-reports/feedback/${fbId}`, { rating, comment: comment || null });
+      await refetchReports();
+      toast("Feedback updated", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
+  async function deleteReportFeedback(fbId: string) {
+    if (!confirm("Delete this feedback?")) return;
+    try {
+      await apiDelete(`/api/week-reports/feedback/${fbId}`);
+      await refetchReports();
+      toast("Feedback deleted", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
   async function submitFeedback() {
     if (!fbTarget || !dbUser) return;
     try {
@@ -264,13 +281,15 @@ export default function WeekDetail() {
             files={wedFiles} setFiles={setWedFiles} onSubmit={() => submitReport("wednesday")}
             onAddFiles={(newFiles) => wedReportData && addFilesToReport("wednesday", wedReportData, newFiles)}
             onEdit={(id, content) => editReport(id, content)} onDelete={(id) => deleteReport(id)}
-            isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} isDoer={!isInvestor} />
+            onEditFeedback={editReportFeedback} onDeleteFeedback={deleteReportFeedback}
+            currentUserId={dbUser?.id || ""} isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} isDoer={!isInvestor} />
           <ReportSection title="Saturday End-of-Week Report" type="saturday"
             reportData={satReportData} report={satReport} setReport={setSatReport}
             files={satFiles} setFiles={setSatFiles} onSubmit={() => submitReport("saturday")}
             onAddFiles={(newFiles) => satReportData && addFilesToReport("saturday", satReportData, newFiles)}
             onEdit={(id, content) => editReport(id, content)} onDelete={(id) => deleteReport(id)}
-            isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} isDoer={!isInvestor} />
+            onEditFeedback={editReportFeedback} onDeleteFeedback={deleteReportFeedback}
+            currentUserId={dbUser?.id || ""} isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} isDoer={!isInvestor} />
 
           {fbTarget && (
             <div className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -294,16 +313,20 @@ export default function WeekDetail() {
   );
 }
 
-function ReportSection({ title, type, reportData, report, setReport, files, setFiles, onSubmit, onAddFiles, onEdit, onDelete, isInvestor, onRate, isDoer }: {
+function ReportSection({ title, type, reportData, report, setReport, files, setFiles, onSubmit, onAddFiles, onEdit, onDelete, onEditFeedback, onDeleteFeedback, currentUserId, isInvestor, onRate, isDoer }: {
   title: string; type: string; reportData?: WeekReport; report: string; setReport: (v: string) => void;
   files: File[]; setFiles: (f: File[]) => void; onSubmit: () => void; onAddFiles: (files: File[]) => void;
   onEdit: (id: string, content: string) => void; onDelete: (id: string) => void;
-  isInvestor: boolean; onRate: (rid: string) => void; isDoer: boolean;
+  onEditFeedback: (fbId: string, rating: number, comment: string) => void; onDeleteFeedback: (fbId: string) => void;
+  currentUserId: string; isInvestor: boolean; onRate: (rid: string) => void; isDoer: boolean;
 }) {
   const [addingMore, setAddingMore] = useState(false);
   const [moreFiles, setMoreFiles] = useState<File[]>([]);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [editingFbId, setEditingFbId] = useState<string | null>(null);
+  const [editFbRating, setEditFbRating] = useState(5);
+  const [editFbComment, setEditFbComment] = useState("");
   const existingUrls = parseFileUrls(reportData?.file_url);
 
   return (
@@ -393,12 +416,41 @@ function ReportSection({ title, type, reportData, report, setReport, files, setF
           {/* Feedback */}
           {(reportData.feedback?.length || 0) > 0 && (
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              {reportData.feedback!.map((fb) => (
-                <div key={fb.id} className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl px-3 py-2">
-                  <div className="flex justify-between"><span className="text-xs text-gray-600 dark:text-gray-300">{fb.reviewer?.full_name}</span><span className="text-xs font-bold">{fb.rating}/10</span></div>
-                  {fb.comment && <p className="text-xs text-gray-500 mt-1">{fb.comment}</p>}
-                </div>
-              ))}
+              {reportData.feedback!.map((fb) => {
+                const isOwner = fb.reviewer_id === currentUserId || fb.reviewer?.id === currentUserId;
+                return (
+                  <div key={fb.id} className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl px-3 py-2">
+                    {editingFbId === fb.id ? (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <div><label className="text-[9px] text-gray-400">Rating</label><input type="number" min={1} max={10} value={editFbRating} onChange={(e) => setEditFbRating(parseInt(e.target.value))} className="w-16 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs" /></div>
+                        </div>
+                        <textarea value={editFbComment} onChange={(e) => setEditFbComment(e.target.value)} rows={2} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-white" />
+                        <div className="flex gap-2">
+                          <button onClick={() => { onEditFeedback(fb.id, editFbRating, editFbComment); setEditingFbId(null); }} className="text-[10px] text-green-600 hover:text-green-500">Save</button>
+                          <button onClick={() => setEditingFbId(null)} className="text-[10px] text-gray-400">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-600 dark:text-gray-300">{fb.reviewer?.full_name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold">{fb.rating}/10</span>
+                            {isOwner && (
+                              <>
+                                <button onClick={() => { setEditingFbId(fb.id); setEditFbRating(fb.rating); setEditFbComment(fb.comment || ""); }} className="text-[9px] text-indigo-500 hover:text-indigo-400">Edit</button>
+                                <button onClick={() => onDeleteFeedback(fb.id)} className="text-[9px] text-red-400 hover:text-red-500">Delete</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {fb.comment && <p className="text-xs text-gray-500 mt-1">{fb.comment}</p>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           {isInvestor && (
