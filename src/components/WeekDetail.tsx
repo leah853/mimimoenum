@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useApi, apiPost, apiPatch, apiUpload } from "@/lib/use-api";
+import { useApi, apiPost, apiPatch, apiUpload, apiDelete } from "@/lib/use-api";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus } from "@/lib/types";
 import { HiArrowLeft, HiOutlineChatAlt, HiPlus, HiCheck, HiOutlinePaperClip, HiTrash } from "react-icons/hi";
@@ -133,6 +133,23 @@ export default function WeekDetail() {
     } catch (e) { toast(handleApiError(e), "error"); }
   }
 
+  async function editReport(reportId: string, newContent: string) {
+    try {
+      await apiPatch(`/api/week-reports/${reportId}`, { content: newContent });
+      await refetchReports();
+      toast("Report updated", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
+  async function deleteReport(reportId: string) {
+    if (!confirm("Delete this report and all its feedback?")) return;
+    try {
+      await apiDelete(`/api/week-reports/${reportId}`);
+      await refetchReports();
+      toast("Report deleted", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
   async function submitFeedback() {
     if (!fbTarget || !dbUser) return;
     try {
@@ -246,12 +263,14 @@ export default function WeekDetail() {
             reportData={wedReportData} report={wedReport} setReport={setWedReport}
             files={wedFiles} setFiles={setWedFiles} onSubmit={() => submitReport("wednesday")}
             onAddFiles={(newFiles) => wedReportData && addFilesToReport("wednesday", wedReportData, newFiles)}
-            isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} />
+            onEdit={(id, content) => editReport(id, content)} onDelete={(id) => deleteReport(id)}
+            isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} isDoer={!isInvestor} />
           <ReportSection title="Saturday End-of-Week Report" type="saturday"
             reportData={satReportData} report={satReport} setReport={setSatReport}
             files={satFiles} setFiles={setSatFiles} onSubmit={() => submitReport("saturday")}
             onAddFiles={(newFiles) => satReportData && addFilesToReport("saturday", satReportData, newFiles)}
-            isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} />
+            onEdit={(id, content) => editReport(id, content)} onDelete={(id) => deleteReport(id)}
+            isInvestor={isInvestor} onRate={(rid) => setFbTarget(rid)} isDoer={!isInvestor} />
 
           {fbTarget && (
             <div className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -275,24 +294,49 @@ export default function WeekDetail() {
   );
 }
 
-function ReportSection({ title, type, reportData, report, setReport, files, setFiles, onSubmit, onAddFiles, isInvestor, onRate }: {
+function ReportSection({ title, type, reportData, report, setReport, files, setFiles, onSubmit, onAddFiles, onEdit, onDelete, isInvestor, onRate, isDoer }: {
   title: string; type: string; reportData?: WeekReport; report: string; setReport: (v: string) => void;
   files: File[]; setFiles: (f: File[]) => void; onSubmit: () => void; onAddFiles: (files: File[]) => void;
-  isInvestor: boolean; onRate: (rid: string) => void;
+  onEdit: (id: string, content: string) => void; onDelete: (id: string) => void;
+  isInvestor: boolean; onRate: (rid: string) => void; isDoer: boolean;
 }) {
   const [addingMore, setAddingMore] = useState(false);
   const [moreFiles, setMoreFiles] = useState<File[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
   const existingUrls = parseFileUrls(reportData?.file_url);
 
   return (
     <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800 dark:text-white">{title}</h3>
-        {reportData && <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">Submitted</span>}
+        <div className="flex items-center gap-2">
+          {reportData && isDoer && !editing && (
+            <>
+              <button onClick={() => { setEditing(true); setEditContent(reportData.content); }}
+                className="text-[10px] text-indigo-500 hover:text-indigo-400 transition-colors">Edit</button>
+              <button onClick={() => onDelete(reportData.id)}
+                className="text-[10px] text-red-400 hover:text-red-500 transition-colors">Delete</button>
+            </>
+          )}
+          {reportData && <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">Submitted</span>}
+        </div>
       </div>
       {reportData ? (
         <>
-          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{reportData.content}</p>
+          {editing ? (
+            <div className="space-y-2">
+              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={4}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white" />
+              <div className="flex gap-2">
+                <button onClick={() => { onEdit(reportData.id, editContent); setEditing(false); }}
+                  className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:brightness-110 text-white text-xs rounded-lg transition-all">Save</button>
+                <button onClick={() => setEditing(false)} className="text-xs text-gray-400">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{reportData.content}</p>
+          )}
 
           {/* Attachments list */}
           {existingUrls.length > 0 && (
