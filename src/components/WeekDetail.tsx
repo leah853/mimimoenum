@@ -357,7 +357,12 @@ function ReportSection({ title, type, reportData, report, setReport, files, setF
               ))}
             </div>
           )}
-          {isInvestor && <button onClick={() => onRate(reportData.id)} className="text-xs text-blue-500 flex items-center gap-1"><HiOutlineChatAlt className="w-3 h-3" /> Rate</button>}
+          {isInvestor && (
+            <button onClick={() => onRate(reportData.id)}
+              className="w-full mt-2 px-4 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:brightness-110 text-white text-sm font-semibold rounded-xl shadow-lg shadow-violet-500/25 transition-all active:scale-[0.97] flex items-center justify-center gap-2">
+              <HiOutlineChatAlt className="w-4 h-4" /> Rate This Report
+            </button>
+          )}
         </>
       ) : (
         <div className="space-y-3">

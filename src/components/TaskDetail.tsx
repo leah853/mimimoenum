@@ -8,7 +8,7 @@ import { useApi, apiPatch, apiPost, apiUpload, apiDelete, invalidateCache } from
 import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, canGiveFeedback, canEditFeedback, canDeleteFeedback, canDeleteDeliverables } from "@/lib/roles";
 import { getCompletionBlockers } from "@/lib/business-rules";
-import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye } from "react-icons/hi";
+import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye, HiOutlineChatAlt } from "react-icons/hi";
 import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError, isReplyComment } from "@/lib/utils";
 
@@ -265,6 +265,13 @@ export default function TaskDetail() {
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[task.status] + "18", color: STATUS_COLORS[task.status] }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[task.status] }} />{STATUS_LABELS[task.status]}
           </span>
+          {/* Prominent "Give Feedback" CTA for reps */}
+          {isAssessor && (
+            <button onClick={() => { set("activeTab", "details"); setTimeout(() => document.getElementById("feedback-form")?.scrollIntoView({ behavior: "smooth" }), 100); }}
+              className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:brightness-110 text-white text-sm font-semibold rounded-xl shadow-lg shadow-violet-500/25 transition-all active:scale-[0.97] flex items-center gap-2">
+              <HiOutlineChatAlt className="w-4 h-4" /> Give Feedback
+            </button>
+          )}
           {canModifyTask && !ui.editing && <button onClick={startEdit} className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-xl hover:brightness-105 transition-all">Edit</button>}
           {ui.editing && (
             <div className="flex gap-2">
@@ -275,10 +282,14 @@ export default function TaskDetail() {
         </div>
       </div>
 
-      {/* Role + lock indicator */}
+      {/* Rep action banner */}
       {appRole === "assessor" && (
-        <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-200/60 dark:border-violet-800/30 rounded-xl px-4 py-2 text-xs text-violet-700 dark:text-violet-400">
-          👁️ You are viewing as <strong>Rep</strong> — you can review and provide feedback but cannot edit task details.
+        <div className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/15 dark:to-purple-900/10 border border-violet-200/60 dark:border-violet-800/30 rounded-xl px-4 py-3 flex items-center justify-between">
+          <span className="text-xs text-violet-700 dark:text-violet-400">You&apos;re reviewing this task as a <strong>Rep</strong>. Scroll down or click the button to give feedback.</span>
+          <button onClick={() => document.getElementById("feedback-form")?.scrollIntoView({ behavior: "smooth" })}
+            className="px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-xs font-semibold rounded-lg shadow-sm hover:brightness-110 transition-all flex-shrink-0 ml-3">
+            Jump to Feedback
+          </button>
         </div>
       )}
       {needsReview && (
@@ -506,16 +517,36 @@ export default function TaskDetail() {
               )}
             </div>
 
-            {/* Quick feedback — assessors only */}
+            {/* Feedback form — assessors only, loud and prominent */}
             {isAssessor && (
-              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-violet-200/60 dark:border-violet-800/30 rounded-2xl shadow-sm p-6 space-y-3">
-                <h3 className="text-sm font-medium text-violet-600 dark:text-violet-400 uppercase tracking-wider">Add Feedback</h3>
-                <div className="flex gap-2">
-                  <div className="flex-1"><label className="text-xs text-gray-500">Rating</label><input type="number" min={1} max={10} value={ui.fbRating} onChange={(e) => set("fbRating", parseInt(e.target.value))} className="w-full px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
-                  <div className="flex-1"><label className="text-xs text-gray-500">Tag</label><select value={ui.fbTag} onChange={(e) => set("fbTag", e.target.value)} className="w-full px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"><option value="approved">Approved</option><option value="needs_improvement">Needs Improvement</option><option value="blocked">Obstacle</option></select></div>
+              <div id="feedback-form" className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/15 border-2 border-violet-300/60 dark:border-violet-700/40 rounded-2xl shadow-lg shadow-violet-500/10 p-6 space-y-3 ring-1 ring-violet-200/50 dark:ring-violet-800/30">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                    <HiOutlineChatAlt className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-violet-700 dark:text-violet-300">Give Your Feedback</h3>
+                    <p className="text-[10px] text-violet-500 dark:text-violet-400">Rate this task and leave your review</p>
+                  </div>
                 </div>
-                <textarea value={ui.fbComment} onChange={(e) => set("fbComment", e.target.value)} placeholder="Your feedback..." rows={2} className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-                <button onClick={submitFeedback} className="px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-500 hover:brightness-110 text-white text-xs rounded-xl shadow-sm transition-all">Submit Feedback</button>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-xs font-medium text-violet-600 dark:text-violet-400 mb-1 block">Rating</label>
+                    <input type="number" min={1} max={10} value={ui.fbRating} onChange={(e) => set("fbRating", parseInt(e.target.value))} className="w-full px-3 py-2 bg-white/80 dark:bg-gray-800/80 border border-violet-200 dark:border-violet-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500/30" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs font-medium text-violet-600 dark:text-violet-400 mb-1 block">Status</label>
+                    <select value={ui.fbTag} onChange={(e) => set("fbTag", e.target.value)} className="w-full px-3 py-2 bg-white/80 dark:bg-gray-800/80 border border-violet-200 dark:border-violet-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500/30">
+                      <option value="approved">Approved</option>
+                      <option value="needs_improvement">Needs Improvement</option>
+                      <option value="blocked">Obstacle</option>
+                    </select>
+                  </div>
+                </div>
+                <textarea value={ui.fbComment} onChange={(e) => set("fbComment", e.target.value)} placeholder="Write your feedback here..." rows={3} className="w-full px-3 py-2 bg-white/80 dark:bg-gray-800/80 border border-violet-200 dark:border-violet-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500/30" />
+                <button onClick={submitFeedback} className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:brightness-110 text-white text-sm font-semibold rounded-xl shadow-lg shadow-violet-500/25 transition-all active:scale-[0.97]">
+                  Submit Feedback
+                </button>
               </div>
             )}
           </div>
