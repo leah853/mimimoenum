@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks } from "@/lib/roles";
 import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck } from "react-icons/hi";
 import Link from "next/link";
-import { FIXED_CATEGORIES, OWNER_STYLE } from "@/lib/constants";
+import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT } from "@/lib/constants";
 import { formatDate, isReplyComment } from "@/lib/utils";
 import { Skeleton, SkeletonRows } from "@/components/ui";
 
@@ -181,42 +181,84 @@ function TasksInner() {
         </div>
       </div>
 
-      {/* Filters — compact, modern */}
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-4 space-y-3">
-        {/* Row 1: Search + dropdowns */}
-        <div className="flex gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..."
-              className="w-full pl-8 pr-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all" />
-            <svg className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      {/* ── Navigation Filters ── */}
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-4 space-y-4">
+
+        {/* Row 1: Primary filters — Iteration, Category, Week as prominent button groups */}
+        <div className="space-y-2.5">
+          {/* Iteration selector — large, always visible */}
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Iteration</label>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => { setIterFilter("all"); setWeekFilter("all"); }}
+                className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${iterFilter === "all" ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                All
+              </button>
+              {iterations.map((i) => {
+                const count = all.filter(t => t.iteration_id === i.id && (catFilter === "all" || t.category === catFilter)).length;
+                return (
+                  <button key={i.id} onClick={() => { setIterFilter(i.id); setWeekFilter("all"); }}
+                    className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${iterFilter === i.id ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                    {i.name} <span className={iterFilter === i.id ? "text-white/60" : "text-gray-400"}>({count})</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/30 transition-all">
-            <option value="all">All Categories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={iterFilter} onChange={(e) => { setIterFilter(e.target.value); setWeekFilter("all"); }}
-            className="px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/30 transition-all">
-            <option value="all">All Iterations</option>
-            {iterations.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-          </select>
-          <select value={weekFilter} onChange={(e) => setWeekFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/30 transition-all">
-            <option value="all">All Weeks</option>
-            {iterations.flatMap((iter) => (iter.weeks || []).map((w) => (
-              <option key={w.id} value={w.id}>{iter.name} · W{w.week_number}</option>
-            )))}
-          </select>
-          {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || search) && (
-            <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setSearch(""); }}
-              className="px-3 py-2 text-xs text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all">
-              Clear all
-            </button>
-          )}
+
+          {/* Week selector — shows weeks for selected iteration, or all weeks */}
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Week</label>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => setWeekFilter("all")}
+                className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${weekFilter === "all" ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                All Weeks
+              </button>
+              {(iterFilter !== "all"
+                ? (iterations.find(i => i.id === iterFilter)?.weeks || [])
+                : iterations.flatMap(i => (i.weeks || []).map(w => ({ ...w, iterName: i.name })))
+              ).map((w) => {
+                const weekCount = all.filter(t => t.week_id === w.id && (catFilter === "all" || t.category === catFilter)).length;
+                const label = "iterName" in w ? `${(w as { iterName: string }).iterName} · W${w.week_number}` : `Week ${w.week_number}`;
+                return (
+                  <button key={w.id} onClick={() => setWeekFilter(w.id)}
+                    className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${weekFilter === w.id ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                    {label} {weekCount > 0 && <span className={weekFilter === w.id ? "text-white/60" : "text-gray-400"}>({weekCount})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Category selector — pill buttons */}
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Category</label>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => setCatFilter("all")}
+                className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${catFilter === "all" ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                All
+              </button>
+              {categories.map((c) => {
+                const count = all.filter(t => t.category === c && (iterFilter === "all" || t.iteration_id === iterFilter) && (weekFilter === "all" || t.week_id === weekFilter)).length;
+                return (
+                  <button key={c} onClick={() => setCatFilter(c)}
+                    className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${catFilter === c ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                    {CAT_SHORT[c] || c} <span className={catFilter === c ? "text-white/60" : "text-gray-400"}>({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* Row 2: Status pills + alert badges */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Row 2: Search + Status pills + alerts */}
+        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-200/60 dark:border-gray-800/40">
+          <div className="relative min-w-[180px] max-w-[220px]">
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks..."
+              className="w-full pl-8 pr-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all" />
+            <svg className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </div>
+          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
           {[{ key: "all", label: "All" }, ...Object.entries(STATUS_LABELS).map(([k, l]) => ({ key: k, label: l }))].map(({ key, label }) => {
             const isActive = statusFilter === key;
             const color = key !== "all" ? STATUS_COLORS[key as TaskStatus] : undefined;
@@ -226,25 +268,30 @@ function TasksInner() {
               <button key={key} onClick={() => setStatusFilter(key as TaskStatus | "all")}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all duration-200 ${
                   isActive
-                    ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm"
+                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm"
                     : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"
                 }`}>
-                {color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isActive ? "white" : color }} />}
-                {label} <span className={`${isActive ? "text-white/60" : "text-gray-400"}`}>{count}</span>
+                {color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isActive ? (color === "#9CA3AF" ? "white" : color) : color }} />}
+                {label} <span className={`${isActive ? "opacity-60" : "text-gray-400"}`}>{count}</span>
               </button>
             );
           })}
-          {/* Overdue + Due Today badges */}
           <div className="flex items-center gap-2 ml-auto">
             {dueTodayCount > 0 && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
-                ⏰ Due Today: {dueTodayCount}
+                Due Today: {dueTodayCount}
               </span>
             )}
             {overdueCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg animate-pulse-subtle">
-                🔴 Overdue: {overdueCount}
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg">
+                Overdue: {overdueCount}
               </span>
+            )}
+            {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || search) && (
+              <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setSearch(""); }}
+                className="px-2.5 py-1 text-[10px] text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all font-medium">
+                Clear all
+              </button>
             )}
           </div>
         </div>
