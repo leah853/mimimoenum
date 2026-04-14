@@ -201,7 +201,7 @@ export default function TaskDetail() {
     try { await apiDelete(`/api/deliverables/${delId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function submitFeedback() {
-    if (!dbUser) return;
+    if (!dbUser) { toast("Session not ready — please refresh", "error"); return; }
     try { await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: ui.fbRating, comment: ui.fbComment || null, tag: ui.fbTag }); dispatch({ type: "RESET_FEEDBACK_FORM" }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); }
     catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
@@ -213,7 +213,8 @@ export default function TaskDetail() {
     try { await apiDelete(`/api/feedback/${fbId}`); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function replyToFeedback() {
-    if (!dbUser || !ui.replyText || !ui.replyTo) return;
+    if (!ui.replyText || !ui.replyTo) return;
+    if (!dbUser) { toast("Session not ready — please refresh", "error"); return; }
     const orig = task!.feedback?.find(f => f.id === ui.replyTo);
     try {
       await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: orig?.rating || 5, comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${ui.replyText}`, tag: "approved" });

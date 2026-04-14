@@ -162,7 +162,8 @@ export default function FeedbackTrailPage() {
   }
 
   async function submitReply() {
-    if (!replyTo || !replyText || !dbUser) return;
+    if (!replyTo || !replyText) return;
+    if (!dbUser) { toast("Session not ready — please refresh the page", "error"); return; }
     setReplyError("");
     try {
       const orig = threads.find((t) => t.task.id === replyTo.taskId)?.feedbacks.find((f) => f.id === replyTo.fbId);
@@ -203,7 +204,8 @@ export default function FeedbackTrailPage() {
   }
 
   async function sendChat() {
-    if (!chatMsg.trim() || !dbUser) return;
+    if (!chatMsg.trim()) return;
+    if (!dbUser) { toast("Session not ready — please refresh the page", "error"); return; }
     setChatSending(true);
     try {
       const mentions = extractMentionIds(chatMsg);
