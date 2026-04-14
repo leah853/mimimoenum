@@ -301,12 +301,15 @@ export default function FeedbackTrailPage() {
       {/* Tabs: Task Feedback / General Chat */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
         <button onClick={() => setActiveTab("task_feedback")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === "task_feedback" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "task_feedback" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
           Task Feedback
+          {newForMe > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500 text-white rounded-full font-bold min-w-[18px] text-center">{newForMe}</span>}
+          {newForMe === 0 && totalFeedback > 0 && <span className="text-[10px] text-gray-400">({totalFeedback})</span>}
         </button>
         <button onClick={() => setActiveTab("general_chat")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === "general_chat" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "general_chat" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
           General Chat
+          {chatMessages.length > 0 && <span className="text-[10px] text-gray-400">({chatMessages.length})</span>}
         </button>
       </div>
 
