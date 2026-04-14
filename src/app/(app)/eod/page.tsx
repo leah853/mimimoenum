@@ -156,21 +156,32 @@ export default function EODPage() {
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-              const hasUpdate = updatesByDate.has(dateStr);
+              const eodEntry = updatesByDate.get(dateStr);
+              const hasUpdate = !!eodEntry;
+              const hasComments = hasUpdate && (eodEntry.comments?.length || 0) > 0;
               const isSelected = selectedDate === dateStr;
               const isToday = dateStr === todayStr;
+              // Dot color: green = reviewed (has comments), amber = needs review (no comments)
+              const dotColor = hasUpdate ? (hasComments ? "bg-green-500" : "bg-amber-400 animate-pulse") : "";
               return (
                 <button key={day} onClick={() => setSelectedDate(dateStr)}
                   className={`h-10 rounded-lg text-sm flex flex-col items-center justify-center transition-colors ${
                     isSelected ? "bg-gradient-to-r from-indigo-100 to-violet-100 dark:from-indigo-600/30 dark:to-violet-600/30 border border-indigo-400/50 dark:border-indigo-500/40 text-indigo-700 dark:text-white"
+                    : hasUpdate && !hasComments ? "bg-amber-50/60 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 font-medium"
+                    : hasUpdate && hasComments ? "bg-green-50/60 dark:bg-green-900/10 text-green-700 dark:text-green-400"
                     : isToday ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white font-medium"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   }`}>
                   <span className="text-xs">{day}</span>
-                  {hasUpdate && <span className="w-1 h-1 rounded-full bg-green-500 mt-0.5" />}
+                  {hasUpdate && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${dotColor}`} />}
                 </button>
               );
             })}
+          </div>
+          {/* Calendar legend */}
+          <div className="flex items-center gap-4 mt-3 px-1">
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[9px] text-gray-400">Reviewed</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-[9px] text-gray-400">Needs review</span></div>
           </div>
         </div>
 
@@ -230,19 +241,62 @@ export default function EODPage() {
                 </>
               )}
 
-              {/* Comments */}
-              {(selectedUpdate.comments?.length || 0) > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-800 pt-2 space-y-1">
-                  {selectedUpdate.comments!.map((c) => (
-                    <div key={c.id} className="text-xs"><span className="font-medium text-gray-600 dark:text-gray-300">{c.user?.full_name}:</span> <span className="text-gray-500">{c.comment}</span></div>
-                  ))}
+              {/* Feedback & Conversation Thread */}
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Feedback & Replies ({selectedUpdate.comments?.length || 0})
+                  </h4>
+                  {(selectedUpdate.comments?.length || 0) === 0 && (
+                    <span className="text-[9px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full">Awaiting review</span>
+                  )}
                 </div>
-              )}
-              <div className="flex gap-2">
-                <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add comment..."
-                  className="flex-1 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-white"
-                  onKeyDown={(e) => e.key === "Enter" && addComment(selectedUpdate.id)} />
-                <button onClick={() => addComment(selectedUpdate.id)} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 rounded-lg">Reply</button>
+
+                {(selectedUpdate.comments?.length || 0) > 0 ? (
+                  <div className="space-y-2.5">
+                    {selectedUpdate.comments!.map((c) => {
+                      const isRep = c.user?.full_name === "Rep 1" || c.user?.full_name === "Rep 2";
+                      return (
+                        <div key={c.id} className={`flex gap-2.5 ${isRep ? "" : "flex-row-reverse"}`}>
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${
+                            isRep ? "bg-gradient-to-br from-violet-500 to-purple-500" : "bg-gradient-to-br from-indigo-500 to-blue-500"
+                          }`}>
+                            {c.user?.full_name?.[0] || "?"}
+                          </div>
+                          <div className={`max-w-[80%] ${isRep ? "" : "text-right"}`}>
+                            <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isRep ? "flex-start" : "flex-end" }}>
+                              <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{c.user?.full_name}</span>
+                              <span className="text-[9px] text-gray-400">{new Date(c.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                            </div>
+                            <div className={`inline-block px-3 py-2 rounded-xl text-sm ${
+                              isRep ? "bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-300 border border-violet-200/40 dark:border-violet-800/30"
+                                : "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 border border-indigo-200/40 dark:border-indigo-800/30"
+                            }`}>
+                              {c.comment}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No feedback yet. {isAssessor ? "Add your review below." : "Waiting for rep review."}</p>
+                )}
+
+                {/* Reply input — visible to both doers and reps */}
+                <div className="flex gap-2 pt-1">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                    {dbUser?.full_name?.[0] || "?"}
+                  </div>
+                  <input value={commentText} onChange={(e) => setCommentText(e.target.value)}
+                    placeholder={isAssessor ? "Add your feedback..." : "Reply to feedback..."}
+                    className="flex-1 px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
+                    onKeyDown={(e) => e.key === "Enter" && addComment(selectedUpdate.id)} />
+                  <button onClick={() => addComment(selectedUpdate.id)} disabled={!commentText.trim()}
+                    className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-xs rounded-xl transition-all">
+                    Send
+                  </button>
+                </div>
               </div>
             </div>
           )}
