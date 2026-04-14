@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useApi, apiPost, apiPatch, apiUpload } from "@/lib/use-api";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus } from "@/lib/types";
@@ -34,6 +34,7 @@ function parseFileUrls(fileUrl?: string | null): string[] {
 export default function WeekDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { dbUser } = useAuth();
   const { toast } = useToast();
   const isInvestor = dbUser?.role === "mimimomentum" || dbUser?.role === "admin";
@@ -43,7 +44,9 @@ export default function WeekDetail() {
   const { data: users } = useApi<UserOption[]>("/api/users/owners");
   const { data: reports, refetch: refetchReports } = useApi<WeekReport[]>(id ? `/api/week-reports?week_id=${id}` : null);
 
-  const [activeTab, setActiveTab] = useState<"tasks" | "reports">("tasks");
+  // Default to "reports" tab if navigated from feedback page (?tab=reports)
+  const defaultTab = searchParams.get("tab") === "reports" ? "reports" : "tasks";
+  const [activeTab, setActiveTab] = useState<"tasks" | "reports">(defaultTab);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [wedReport, setWedReport] = useState("");

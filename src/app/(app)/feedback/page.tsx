@@ -576,7 +576,7 @@ export default function FeedbackTrailPage() {
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Awaiting review
                           </span>
                         )}
-                        <Link href={`/weeks/${wr.week_id}`} className="text-[10px] text-teal-500 hover:text-teal-400 flex items-center gap-1 transition-colors">
+                        <Link href={`/weeks/${wr.week_id}?tab=reports`} className="text-[10px] text-teal-500 hover:text-teal-400 flex items-center gap-1 transition-colors">
                           Open week <HiArrowRight className="w-3 h-3" />
                         </Link>
                       </div>
