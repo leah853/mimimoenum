@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
   let query = sb
     .from("week_reports")
-    .select("*, submitted_by_user:users!week_reports_submitted_by_fkey(id, full_name), feedback:week_report_feedback(*, reviewer:users!week_report_feedback_reviewer_id_fkey(id, full_name))");
+    .select("*, submitted_by_user:users!week_reports_submitted_by_fkey(id, full_name), feedback:week_report_feedback(id, reviewer_id, rating, comment, created_at, reviewer:users!week_report_feedback_reviewer_id_fkey(id, full_name))");
 
   if (weekId) query = query.eq("week_id", weekId);
 
