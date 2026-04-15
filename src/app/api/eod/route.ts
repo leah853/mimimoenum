@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { ok, err, validate } from "@/lib/api-helpers";
+import { ok, err, validate, safeJson } from "@/lib/api-helpers";
 import { isDoerOrAdmin } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
   if (!isDoerOrAdmin(request)) return err("Only doers can submit EOD updates", 403);
 
   const sb = createServiceClient();
-  const body = await request.json();
+  const body = await safeJson(request);
+  if (!body) return err("Invalid JSON", 400);
   const { linked_task_ids, ...eodData } = body;
 
   const missing = validate(eodData, ["user_id", "what_was_done"]);

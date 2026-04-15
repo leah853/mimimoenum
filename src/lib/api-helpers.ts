@@ -22,6 +22,7 @@ export function validate(body: Record<string, unknown>, required: string[]): str
 }
 
 /** Safely parse request JSON — returns parsed body or null on malformed input */
-export async function safeJson(request: Request): Promise<Record<string, unknown> | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function safeJson(request: Request): Promise<any | null> {
   try { return await request.json(); } catch { return null; }
 }

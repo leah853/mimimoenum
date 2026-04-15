@@ -1,9 +1,12 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { ok, err, validate } from "@/lib/api-helpers";
+import { ok, err, validate, safeJson } from "@/lib/api-helpers";
+import { getCallerRole } from "@/lib/api-auth";
 
 // GET — fetch all score overrides
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const { data, error } = await sb
     .from("score_overrides")
@@ -16,8 +19,11 @@ export async function GET() {
 
 // POST — upsert a score override (default is cumulative, this overrides)
 export async function POST(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
-  const body = await request.json();
+  const body = await safeJson(request);
+  if (!body) return err("Invalid JSON", 400);
 
   const missing = validate(body, ["target_type", "target_id", "score"]);
   if (missing) return err(missing);
@@ -47,6 +53,8 @@ export async function POST(request: NextRequest) {
 
 // DELETE — remove override, revert to cumulative
 export async function DELETE(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
   const { searchParams } = new URL(request.url);
   const targetType = searchParams.get("target_type");

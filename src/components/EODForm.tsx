@@ -35,7 +35,7 @@ export default function EODForm({ onSubmitted }: EODFormProps) {
       });
       setWhatWasDone(""); setWhatsNext(""); setBlockers(""); setSelectedTasks([]);
       onSubmitted();
-    } catch {}
+    } catch (e) { console.error(e); }
     setSubmitting(false);
   }
 

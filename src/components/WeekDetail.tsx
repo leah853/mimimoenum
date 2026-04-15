@@ -416,7 +416,7 @@ function ReportSection({ title, type, reportData, report, setReport, files, setF
           {/* Feedback */}
           {(reportData.feedback?.length || 0) > 0 && (
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              {reportData.feedback!.map((fb) => {
+              {(reportData.feedback || []).map((fb) => {
                 const isOwner = fb.reviewer_id === currentUserId || fb.reviewer?.id === currentUserId;
                 return (
                   <div key={fb.id} className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl px-3 py-2">

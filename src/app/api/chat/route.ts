@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { ok, err } from "@/lib/api-helpers";
+import { ok, err, safeJson } from "@/lib/api-helpers";
 import { getCallerRole } from "@/lib/api-auth";
 
 // Ensure general_chat table exists
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
   const tableExists = await ensureTable(sb);
   if (!tableExists) return err("Chat table not initialized. Please create the general_chat table in Supabase.", 500);
 
-  const body = await request.json();
+  const body = await safeJson(request);
+  if (!body) return err("Invalid JSON", 400);
   const { user_id, message, mentions, parent_id } = body;
 
   if (!user_id || !message) return err("user_id and message required");

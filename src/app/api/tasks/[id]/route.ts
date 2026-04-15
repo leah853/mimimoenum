@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { ok, err } from "@/lib/api-helpers";
+import { ok, err, safeJson } from "@/lib/api-helpers";
 import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -47,7 +47,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
-  const body = await request.json();
+  const body = await safeJson(request);
+  if (!body) return err("Invalid JSON", 400);
 
   // Business rule: if trying to complete, check deliverables + feedback
   if (body.status === "completed") {

@@ -254,7 +254,7 @@ export default function EODPage() {
 
                 {(selectedUpdate.comments?.length || 0) > 0 ? (
                   <div className="space-y-2.5">
-                    {selectedUpdate.comments!.map((c) => {
+                    {(selectedUpdate.comments || []).map((c) => {
                       const isRep = c.user?.full_name === "Rep 1" || c.user?.full_name === "Rep 2";
                       return (
                         <div key={c.id} className={`flex gap-2.5 ${isRep ? "" : "flex-row-reverse"}`}>

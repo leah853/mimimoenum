@@ -11,7 +11,8 @@ import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaper
 import Link from "next/link";
 import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT } from "@/lib/constants";
 import { formatDate, isReplyComment } from "@/lib/utils";
-import { Skeleton, SkeletonRows } from "@/components/ui";
+import { Skeleton, SkeletonRows, useToast } from "@/components/ui";
+import { handleApiError } from "@/lib/utils";
 
 type FullTask = Task & {
   owner?: { id: string; full_name: string };
@@ -29,6 +30,7 @@ export default function TasksPage() {
 }
 
 function TasksInner() {
+  const { toast } = useToast();
   const { appRole } = useAuth();
   const isDoer = canCreateTasks(appRole);
   const searchParams = useSearchParams();
@@ -127,15 +129,15 @@ function TasksInner() {
   async function updateField(taskId: string, field: string, value: string) {
     if (field === "status" && value === "completed") {
       const task = all.find((t) => t.id === taskId);
-      if (task && !task.deliverables?.length) { alert("Cannot complete: no deliverable uploaded"); return; }
-      if (task && !task.feedback?.length) { alert("Cannot complete: no feedback received"); return; }
+      if (task && !task.deliverables?.length) { toast("Cannot complete: no deliverable uploaded", "error"); return; }
+      if (task && !task.feedback?.length) { toast("Cannot complete: no feedback received", "error"); return; }
     }
     // Optimistic update — instant UI, no flash
     setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, [field]: value || null } : t) : prev);
     // Sync to API in background
     try { await apiPatch(`/api/tasks/${taskId}`, { [field]: value || null }); }
     catch (e) {
-      alert(e instanceof Error ? e.message : "Update failed");
+      toast(handleApiError(e), "error");
       await refetch(); // Revert on error
     }
   }
@@ -151,7 +153,7 @@ function TasksInner() {
         quarter_id: quarter?.id || null, iteration_id: iterationId, status: "not_started",
       });
       setTasks((prev) => prev ? [...prev, { ...created, owner: allUsers[0], subtasks: [], deliverables: [], feedback: [] }] : prev);
-    } catch (e) { alert(e instanceof Error ? e.message : "Failed"); await refetch(); }
+    } catch (e) { toast(handleApiError(e), "error"); await refetch(); }
   }
 
   async function quickAddWeekTask(category: string, iterationId: string, weekId: string) {
@@ -166,7 +168,7 @@ function TasksInner() {
         quarter_id: quarter?.id || null, iteration_id: iterationId, week_id: weekId, status: "not_started",
       });
       setTasks((prev) => prev ? [...prev, { ...created, owner: allUsers[0], subtasks: [], deliverables: [], feedback: [] }] : prev);
-    } catch (e) { alert(e instanceof Error ? e.message : "Failed"); await refetch(); }
+    } catch (e) { toast(handleApiError(e), "error"); await refetch(); }
   }
 
   return (

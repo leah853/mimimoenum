@@ -6,7 +6,8 @@ import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus, Dependency } from "@/lib/types";
 import Link from "next/link";
 import { HiChevronDown, HiChevronRight, HiViewGrid, HiViewList, HiCalendar, HiZoomIn, HiZoomOut, HiExclamationCircle } from "react-icons/hi";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, useToast } from "@/components/ui";
+import { handleApiError } from "@/lib/utils";
 
 type FullTask = Task & { subtasks?: { id: string; title: string; status: TaskStatus }[]; owner?: { full_name: string } };
 type Iter = { id: string; name: string; iteration_number: number; start_date: string; end_date: string; weeks?: { id: string; week_number: number; start_date: string; end_date: string }[] };
@@ -24,6 +25,7 @@ const OWNER_COLORS: Record<string, { border: string; bg: string; label: string }
 
 function daysBetween(a: string, b: string) { return Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 86400000); }
 export default function GanttPage() {
+  const { toast } = useToast();
   const { data: tasks, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: deps } = useApi<Dependency[]>("/api/dependencies");
   const { data: quarters } = useApi<Quarter[]>("/api/quarters");
@@ -172,7 +174,7 @@ export default function GanttPage() {
       const addDays = (ds: string, n: number) => { const dt = new Date(ds); dt.setDate(dt.getDate() + n); return dt.toISOString().split("T")[0]; };
       const updates = type === "move" ? { start_date: addDays(origStart, daysDelta), end_date: addDays(origEnd, daysDelta) } : { end_date: addDays(origEnd, daysDelta) };
       setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, ...updates } : t) : prev);
-      try { await apiPatch(`/api/tasks/${taskId}`, updates); } catch {}
+      try { await apiPatch(`/api/tasks/${taskId}`, updates); } catch (e) { toast(handleApiError(e), "error"); }
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -181,7 +183,7 @@ export default function GanttPage() {
   async function addDep() {
     if (!depFrom || !depTo || depFrom === depTo) return;
     try { await apiPost("/api/dependencies", { task_id: depFrom, depends_on_task_id: depTo }); setShowDepModal(false); }
-    catch (e) { alert(e instanceof Error ? e.message : "Failed"); }
+    catch (e) { toast(handleApiError(e), "error"); }
   }
 
   if (!quarter) return (
