@@ -43,6 +43,7 @@ function TasksInner() {
   const [catFilter, setCatFilter] = useState<string>("all");
   const [iterFilter, setIterFilter] = useState<string>("all");
   const [weekFilter, setWeekFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -57,7 +58,7 @@ function TasksInner() {
   const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...dynamicCats])], [all]);
 
   // Auto-expand — runs on first load AND whenever filters change
-  const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}`;
+  const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}`;
   if (!initialized && (categories.length > 0 || iterations.length > 0)) {
     queueMicrotask(() => { expandForCurrentView(); setInitialized(true); });
   }
@@ -69,6 +70,7 @@ function TasksInner() {
       if (catFilter !== "all" && t.category !== catFilter) return false;
       if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
       if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
+      if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
       return true;
     });
@@ -119,6 +121,7 @@ function TasksInner() {
     if (catFilter !== "all" && t.category !== catFilter) return false;
     if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
     if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
+    if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -251,6 +254,26 @@ function TasksInner() {
               })}
             </div>
           </div>
+
+          {/* Owner selector */}
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Owner</label>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => setOwnerFilter("all")}
+                className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${ownerFilter === "all" ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                Everyone
+              </button>
+              {allUsers.map((u) => {
+                const count = all.filter(t => t.owner_id === u.id && (catFilter === "all" || t.category === catFilter) && (iterFilter === "all" || t.iteration_id === iterFilter) && (weekFilter === "all" || t.week_id === weekFilter)).length;
+                return (
+                  <button key={u.id} onClick={() => setOwnerFilter(u.id)}
+                    className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${ownerFilter === u.id ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
+                    {u.full_name} {count > 0 && <span className={ownerFilter === u.id ? "text-white/60" : "text-gray-400"}>({count})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Row 2: Search + Status pills + alerts */}
@@ -289,8 +312,8 @@ function TasksInner() {
                 Overdue: {overdueCount}
               </span>
             )}
-            {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || search) && (
-              <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setSearch(""); }}
+            {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || ownerFilter !== "all" || search) && (
+              <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setOwnerFilter("all"); setSearch(""); }}
                 className="px-2.5 py-1 text-[10px] text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all font-medium">
                 Clear all
               </button>
