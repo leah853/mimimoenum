@@ -49,7 +49,7 @@ export default function FeedbackTrailPage() {
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
-  const [activeTab, setActiveTab] = useState<"task_feedback" | "general_chat">("task_feedback");
+  const [activeTab, setActiveTab] = useState<"task_feedback" | "team_scores" | "general_chat">("task_feedback");
 
   // General Chat state
   const [chatMsg, setChatMsg] = useState("");
@@ -103,6 +103,29 @@ export default function FeedbackTrailPage() {
 
     return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, newForMe };
   }, [threads, all, weekReports, dbUser?.email]);
+
+  // Per-owner feedback scores
+  const ownerScores = useMemo(() => {
+    const scores = new Map<string, { name: string; ratings: number[]; taskCount: number; feedbackCount: number }>();
+    for (const t of threads) {
+      const ownerName = t.task.owner?.full_name || "Unassigned";
+      if (!scores.has(ownerName)) scores.set(ownerName, { name: ownerName, ratings: [], taskCount: 0, feedbackCount: 0 });
+      const entry = scores.get(ownerName)!;
+      entry.taskCount++;
+      const repFeedback = t.feedbacks.filter(f => !isReplyComment(f.comment));
+      entry.feedbackCount += repFeedback.length;
+      repFeedback.forEach(f => entry.ratings.push(f.rating));
+    }
+    return [...scores.values()].map(s => ({
+      ...s,
+      avgRating: s.ratings.length > 0 ? s.ratings.reduce((a, b) => a + b, 0) / s.ratings.length : 0,
+    })).sort((a, b) => b.avgRating - a.avgRating);
+  }, [threads]);
+
+  const overallAvg = useMemo(() => {
+    const allRatings = ownerScores.flatMap(s => s.ratings);
+    return allRatings.length > 0 ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length : 0;
+  }, [ownerScores]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -308,12 +331,80 @@ export default function FeedbackTrailPage() {
           {newForMe > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500 text-white rounded-full font-bold min-w-[18px] text-center">{newForMe}</span>}
           {newForMe === 0 && totalFeedback > 0 && <span className="text-[10px] text-gray-400">({totalFeedback})</span>}
         </button>
+        <button onClick={() => setActiveTab("team_scores")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "team_scores" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Team Scores
+          {overallAvg > 0 && <span className="text-[10px] font-bold text-gray-400">({overallAvg.toFixed(1)}/10)</span>}
+        </button>
         <button onClick={() => setActiveTab("general_chat")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "general_chat" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
           General Chat
           {chatMessages.length > 0 && <span className="text-[10px] text-gray-400">({chatMessages.length})</span>}
         </button>
       </div>
+
+      {/* ===== TEAM SCORES TAB ===== */}
+      {activeTab === "team_scores" && (
+        <div className="space-y-6 max-w-2xl">
+          {/* Overall score card */}
+          <div className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/15 dark:to-violet-900/10 border border-indigo-200/60 dark:border-indigo-800/30 rounded-2xl p-6 text-center">
+            <p className="text-xs text-indigo-500 dark:text-indigo-400 uppercase font-semibold tracking-wider mb-1">Overall Team Score</p>
+            <p className="text-5xl font-bold text-indigo-600 dark:text-indigo-400">{overallAvg.toFixed(1)}<span className="text-lg text-indigo-400 dark:text-indigo-500">/10</span></p>
+            <p className="text-xs text-gray-500 mt-2">Based on {ownerScores.reduce((s, o) => s + o.feedbackCount, 0)} feedback entries across {ownerScores.reduce((s, o) => s + o.taskCount, 0)} tasks</p>
+          </div>
+
+          {/* Per-owner breakdown */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Individual Scores</h3>
+            {ownerScores.length === 0 ? (
+              <div className="bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center">
+                <p className="text-sm text-gray-400">No feedback scores yet</p>
+              </div>
+            ) : ownerScores.map((owner) => {
+              const scoreColor = owner.avgRating >= 7 ? "text-green-600 dark:text-green-400" : owner.avgRating >= 4 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
+              const barColor = owner.avgRating >= 7 ? "bg-green-500" : owner.avgRating >= 4 ? "bg-yellow-500" : "bg-red-500";
+              const barWidth = Math.round((owner.avgRating / 10) * 100);
+              return (
+                <div key={owner.name} className="bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                        owner.name === "Leah" ? "bg-gradient-to-br from-pink-500 to-rose-500" : owner.name === "Chloe" ? "bg-gradient-to-br from-cyan-500 to-blue-500" : "bg-gradient-to-br from-gray-400 to-gray-500"
+                      }`}>
+                        {owner.name[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{owner.name}</p>
+                        <p className="text-[10px] text-gray-400">{owner.taskCount} tasks reviewed · {owner.feedbackCount} feedback entries</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${scoreColor}`}>{owner.avgRating.toFixed(1)}</p>
+                      <p className="text-[9px] text-gray-400">avg / 10</p>
+                    </div>
+                  </div>
+                  {/* Score bar */}
+                  <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${barWidth}%` }} />
+                  </div>
+                  {/* Rating breakdown */}
+                  {owner.ratings.length > 0 && (
+                    <div className="flex gap-1 flex-wrap">
+                      {owner.ratings.map((r, i) => (
+                        <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded ${
+                          r >= 7 ? "bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400" :
+                          r >= 4 ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400" :
+                          "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                        }`}>{r}/10</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ===== GENERAL CHAT TAB ===== */}
       {activeTab === "general_chat" && (
