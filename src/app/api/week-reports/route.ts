@@ -24,6 +24,27 @@ export async function POST(request: NextRequest) {
   const role = getCallerRole(request);
   if (!role) return err("Not authenticated", 401);
   const sb = createServiceClient();
+
+  // Support JSON payload (when files were uploaded directly to storage first)
+  const contentType = request.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const body = await request.json().catch(() => null);
+    if (!body) return err("Invalid JSON", 400);
+    const { week_id, report_type, content, submitted_by, file_urls } = body as {
+      week_id?: string; report_type?: string; content?: string;
+      submitted_by?: string; file_urls?: string[];
+    };
+    if (!week_id || !report_type || !content || !submitted_by) {
+      return err("Missing required fields: week_id, report_type, content, submitted_by");
+    }
+    const fileUrlValue = file_urls && file_urls.length > 0 ? JSON.stringify(file_urls) : null;
+    const { data, error } = await sb.from("week_reports").upsert({
+      week_id, report_type, content, file_url: fileUrlValue, submitted_by,
+    }, { onConflict: "week_id,report_type" }).select().single();
+    if (error) return err(error.message, 400);
+    return ok(data, 201);
+  }
+
   const formData = await request.formData();
 
   const weekId = formData.get("week_id") as string;

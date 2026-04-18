@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useApi, apiPost, apiPatch, apiDelete, apiUpload } from "@/lib/use-api";
+import { useApi, apiPost, apiPatch, apiDelete, uploadDirect } from "@/lib/use-api";
 import { canAddEOD, canGiveFeedback } from "@/lib/roles";
 import type { EODUpdate } from "@/lib/types";
 import { HiChevronLeft, HiChevronRight, HiOutlineFilm, HiTrash } from "react-icons/hi";
@@ -82,14 +82,11 @@ export default function EODPage() {
     if (!whatWasDone || !addedBy) return;
     setSubmitting(true);
     try {
-      // Upload video first if provided
+      // Upload video directly to Supabase storage (bypasses Vercel 4.5 MB limit)
       let videoUrl: string | null = null;
       if (videoFile) {
         setUploadingVideo(true);
-        const fd = new FormData();
-        fd.append("file", videoFile);
-        fd.append("folder", "eod-videos");
-        const res = await apiUpload("/api/upload-video", fd);
+        const res = await uploadDirect(videoFile, "eod-videos");
         videoUrl = res.url;
         setUploadingVideo(false);
       }
@@ -111,10 +108,7 @@ export default function EODPage() {
   async function attachVideoToExisting(eodId: string, file: File) {
     try {
       setUploadingVideo(true);
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "eod-videos");
-      const res = await apiUpload("/api/upload-video", fd);
+      const res = await uploadDirect(file, "eod-videos");
       await apiPatch(`/api/eod/${eodId}`, { video_url: res.url });
       await refetch();
       toast("Video attached", "success");

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useReducer } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Task, TaskStatus, Subtask, Deliverable, Feedback } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
-import { useApi, apiPatch, apiPost, apiUpload, apiDelete, invalidateCache } from "@/lib/use-api";
+import { useApi, apiPatch, apiPost, apiDelete, invalidateCache, uploadDirect } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, canGiveFeedback, canEditFeedback, canDeleteFeedback, canDeleteDeliverables } from "@/lib/roles";
 import { getCompletionBlockers } from "@/lib/business-rules";
@@ -187,10 +187,17 @@ export default function TaskDetail() {
           uploaded_by: dbUser?.id,
         });
       } else {
-        const fd = new FormData(); fd.append("file", ui.file!); fd.append("task_id", id); fd.append("title", ui.fileTitle || ui.file!.name);
-        if (ui.deliverableDesc) fd.append("description", ui.deliverableDesc);
-        if (dbUser) fd.append("uploaded_by", dbUser.id);
-        await apiUpload("/api/deliverables", fd);
+        // Direct upload to Supabase storage (bypasses Vercel 4.5 MB limit)
+        const file = ui.file!;
+        const uploaded = await uploadDirect(file, `deliverables/${id}`);
+        await apiPost("/api/deliverables/record", {
+          task_id: id,
+          title: ui.fileTitle || file.name,
+          file_url: uploaded.url,
+          file_name: file.name,
+          file_size_bytes: file.size,
+          uploaded_by: dbUser?.id,
+        });
       }
       dispatch({ type: "RESET_UPLOAD" }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); toast("File uploaded", "success");
     } catch (e) { set("error", e instanceof Error ? e.message : "Upload failed"); }

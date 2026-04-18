@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useApi, apiPost, apiPatch, apiUpload, apiDelete } from "@/lib/use-api";
+import { useApi, apiPost, apiPatch, apiDelete, uploadDirect } from "@/lib/use-api";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus } from "@/lib/types";
 import { HiArrowLeft, HiOutlineChatAlt, HiPlus, HiCheck, HiOutlinePaperClip, HiTrash, HiOutlineFilm } from "react-icons/hi";
@@ -97,16 +97,17 @@ export default function WeekDetail() {
     const content = type === "wednesday" ? wedReport : satReport;
     const files = type === "wednesday" ? wedFiles : satFiles;
     if (!content || !dbUser) return;
-    const fd = new FormData();
-    fd.append("week_id", id);
-    fd.append("report_type", type);
-    fd.append("content", content);
-    fd.append("submitted_by", dbUser.id);
-    for (const f of files) {
-      fd.append("files", f);
-    }
     try {
-      await apiUpload("/api/week-reports", fd);
+      // Upload all files directly to Supabase storage (bypasses Vercel 4.5 MB limit)
+      const fileUrls: string[] = [];
+      for (const f of files) {
+        const res = await uploadDirect(f, `reports/${id}`);
+        fileUrls.push(res.url);
+      }
+      await apiPost("/api/week-reports", {
+        week_id: id, report_type: type, content,
+        submitted_by: dbUser.id, file_urls: fileUrls,
+      });
       if (type === "wednesday") { setWedReport(""); setWedFiles([]); }
       else { setSatReport(""); setSatFiles([]); }
       await refetchReports();
@@ -117,17 +118,17 @@ export default function WeekDetail() {
   async function addFilesToReport(type: "wednesday" | "saturday", existingReport: WeekReport, newFiles: File[]) {
     if (!dbUser || newFiles.length === 0) return;
     const existingUrls = parseFileUrls(existingReport.file_url);
-    const fd = new FormData();
-    fd.append("week_id", id);
-    fd.append("report_type", type);
-    fd.append("content", existingReport.content);
-    fd.append("submitted_by", dbUser.id);
-    fd.append("existing_file_urls", JSON.stringify(existingUrls));
-    for (const f of newFiles) {
-      fd.append("files", f);
-    }
     try {
-      await apiUpload("/api/week-reports", fd);
+      // Upload new files directly then combine with existing URLs
+      const newUrls: string[] = [];
+      for (const f of newFiles) {
+        const res = await uploadDirect(f, `reports/${id}`);
+        newUrls.push(res.url);
+      }
+      await apiPost("/api/week-reports", {
+        week_id: id, report_type: type, content: existingReport.content,
+        submitted_by: dbUser.id, file_urls: [...existingUrls, ...newUrls],
+      });
       await refetchReports();
       toast(`${newFiles.length} file(s) added`, "success");
     } catch (e) { toast(handleApiError(e), "error"); }

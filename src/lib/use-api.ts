@@ -114,3 +114,23 @@ export async function apiUpload(url: string, formData: FormData) {
   if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
   return json;
 }
+
+/** Upload a file directly to Supabase storage via a signed URL, bypassing
+ *  Vercel's 4.5 MB body limit. Returns the public URL of the uploaded file. */
+export async function uploadDirect(file: File, folder: string): Promise<{ url: string; path: string; name: string; size: number }> {
+  // Get a signed upload URL from our backend
+  const signed = await apiPost("/api/upload-url", { filename: file.name, folder });
+
+  // PUT the file directly to Supabase storage
+  const uploadRes = await fetch(signed.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text().catch(() => "");
+    throw new Error(`Direct upload failed (${uploadRes.status}): ${text.slice(0, 200)}`);
+  }
+
+  return { url: signed.publicUrl, path: signed.path, name: file.name, size: file.size };
+}
