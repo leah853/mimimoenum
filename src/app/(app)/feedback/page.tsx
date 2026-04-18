@@ -7,9 +7,9 @@ import type { Task, Feedback, Deliverable } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import Link from "next/link";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol } from "react-icons/hi";
+import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol, HiOutlineFilm } from "react-icons/hi";
 import { useToast, Skeleton, SkeletonRows } from "@/components/ui";
-import { handleApiError, isReplyComment } from "@/lib/utils";
+import { handleApiError, isReplyComment, isVideoUrl } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -104,23 +104,28 @@ export default function FeedbackTrailPage() {
     return { totalThreads, totalFeedback, unacknowledged, awaitingReviewTasks, tasksWithDeliverables, newForMe };
   }, [threads, all, weekReports, dbUser?.email]);
 
-  // Per-owner feedback scores
+  // Per-owner feedback scores with task-level drilldown
   const ownerScores = useMemo(() => {
-    const scores = new Map<string, { name: string; ratings: number[]; taskCount: number; feedbackCount: number }>();
+    const scores = new Map<string, { name: string; ratings: number[]; taskCount: number; feedbackCount: number; tasks: { task: FullTask; avgRating: number; feedbacks: FeedbackItem[] }[] }>();
     for (const t of threads) {
       const ownerName = t.task.owner?.full_name || "Unassigned";
-      if (!scores.has(ownerName)) scores.set(ownerName, { name: ownerName, ratings: [], taskCount: 0, feedbackCount: 0 });
+      if (!scores.has(ownerName)) scores.set(ownerName, { name: ownerName, ratings: [], taskCount: 0, feedbackCount: 0, tasks: [] });
       const entry = scores.get(ownerName)!;
       entry.taskCount++;
       const repFeedback = t.feedbacks.filter(f => !isReplyComment(f.comment));
       entry.feedbackCount += repFeedback.length;
       repFeedback.forEach(f => entry.ratings.push(f.rating));
+      const taskAvg = repFeedback.length > 0 ? repFeedback.reduce((a, f) => a + f.rating, 0) / repFeedback.length : 0;
+      entry.tasks.push({ task: t.task, avgRating: taskAvg, feedbacks: repFeedback });
     }
     return [...scores.values()].map(s => ({
       ...s,
       avgRating: s.ratings.length > 0 ? s.ratings.reduce((a, b) => a + b, 0) / s.ratings.length : 0,
+      tasks: s.tasks.sort((a, b) => b.avgRating - a.avgRating),
     })).sort((a, b) => b.avgRating - a.avgRating);
   }, [threads]);
+
+  const [expandedOwner, setExpandedOwner] = useState<string | null>(null);
 
   const overallAvg = useMemo(() => {
     const allRatings = ownerScores.flatMap(s => s.ratings);
@@ -364,39 +369,76 @@ export default function FeedbackTrailPage() {
               const scoreColor = owner.avgRating >= 7 ? "text-green-600 dark:text-green-400" : owner.avgRating >= 4 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
               const barColor = owner.avgRating >= 7 ? "bg-green-500" : owner.avgRating >= 4 ? "bg-yellow-500" : "bg-red-500";
               const barWidth = Math.round((owner.avgRating / 10) * 100);
+              const isExpanded = expandedOwner === owner.name;
               return (
-                <div key={owner.name} className="bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                        owner.name === "Leah" ? "bg-gradient-to-br from-pink-500 to-rose-500" : owner.name === "Chloe" ? "bg-gradient-to-br from-cyan-500 to-blue-500" : "bg-gradient-to-br from-gray-400 to-gray-500"
-                      }`}>
-                        {owner.name[0]}
+                <div key={owner.name} className="bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl overflow-hidden">
+                  <button onClick={() => setExpandedOwner(isExpanded ? null : owner.name)}
+                    className="w-full p-5 space-y-3 text-left hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          owner.name === "Leah" ? "bg-gradient-to-br from-pink-500 to-rose-500" : owner.name === "Chloe" ? "bg-gradient-to-br from-cyan-500 to-blue-500" : "bg-gradient-to-br from-gray-400 to-gray-500"
+                        }`}>
+                          {owner.name[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            {owner.name}
+                            <span className="text-[10px] text-indigo-500">{isExpanded ? "▼ Hide tasks" : `▶ View ${owner.taskCount} tasks`}</span>
+                          </p>
+                          <p className="text-[10px] text-gray-400">{owner.taskCount} tasks reviewed · {owner.feedbackCount} feedback entries</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{owner.name}</p>
-                        <p className="text-[10px] text-gray-400">{owner.taskCount} tasks reviewed · {owner.feedbackCount} feedback entries</p>
+                      <div className="text-right">
+                        <p className={`text-2xl font-bold ${scoreColor}`}>{owner.avgRating.toFixed(1)}</p>
+                        <p className="text-[9px] text-gray-400">avg / 10</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-2xl font-bold ${scoreColor}`}>{owner.avgRating.toFixed(1)}</p>
-                      <p className="text-[9px] text-gray-400">avg / 10</p>
+                    {/* Score bar */}
+                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${barWidth}%` }} />
                     </div>
-                  </div>
-                  {/* Score bar */}
-                  <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${barWidth}%` }} />
-                  </div>
-                  {/* Rating breakdown */}
-                  {owner.ratings.length > 0 && (
-                    <div className="flex gap-1 flex-wrap">
-                      {owner.ratings.map((r, i) => (
-                        <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded ${
-                          r >= 7 ? "bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400" :
-                          r >= 4 ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400" :
-                          "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
-                        }`}>{r}/10</span>
-                      ))}
+                  </button>
+
+                  {/* Drilldown: individual tasks with feedback */}
+                  {isExpanded && owner.tasks.length > 0 && (
+                    <div className="border-t border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+                      {owner.tasks.map(({ task, avgRating, feedbacks }) => {
+                        const taskScoreColor = avgRating >= 7 ? "text-green-600 dark:text-green-400" : avgRating >= 4 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
+                        return (
+                          <div key={task.id} className="px-5 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                            <div className="flex items-center justify-between mb-1">
+                              <Link href={`/tasks/${task.id}`} className="flex-1 min-w-0 pr-3">
+                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate hover:text-indigo-500 transition-colors">{task.title}</p>
+                                <p className="text-[10px] text-gray-400">{task.category}</p>
+                              </Link>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-sm font-bold ${taskScoreColor}`}>{avgRating.toFixed(1)}</span>
+                                <span className="text-[9px] text-gray-400">/10</span>
+                              </div>
+                            </div>
+                            {/* Individual feedback entries */}
+                            <div className="space-y-1 mt-2 pl-2 border-l-2 border-indigo-200 dark:border-indigo-800">
+                              {feedbacks.map((fb) => (
+                                <div key={fb.id} className="flex items-start gap-2 text-xs">
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
+                                    fb.rating >= 7 ? "bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400" :
+                                    fb.rating >= 4 ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400" :
+                                    "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                                  }`}>{fb.rating}/10</span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{fb.reviewer?.full_name}</span>
+                                      <span className="text-[9px] text-gray-400">· {fmtTime(fb.created_at)}</span>
+                                    </div>
+                                    {fb.comment && <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{fb.comment}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -540,6 +582,7 @@ export default function FeedbackTrailPage() {
                   <Link key={t.id} href={`/tasks/${t.id}`} className="flex items-center gap-3 py-2 px-3 hover:bg-violet-100/50 dark:hover:bg-violet-900/10 rounded-xl transition-all">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[t.status] }} />
                     <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{t.title}</span>
+                    {(t.deliverables || []).some(d => isVideoUrl(d.file_url || d.file_name)) && <HiOutlineFilm className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" title="Video attached" />}
                     {(t.deliverables || []).map((d) => (
                       <span key={d.id} className={`w-3 h-3 rounded-full flex-shrink-0 ${d.viewed ? "bg-green-500" : "bg-blue-500 animate-pulse-subtle"}`} title={d.viewed ? "Viewed" : "Not yet viewed"} />
                     ))}
@@ -587,7 +630,8 @@ export default function FeedbackTrailPage() {
                             <span className="text-sm font-medium text-gray-800 dark:text-white truncate block">{task.title}</span>
                             <span className="text-[10px] text-gray-400">{task.category} · {task.owner?.full_name || "Unassigned"}</span>
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 items-center">
+                            {(task.deliverables || []).some(d => isVideoUrl(d.file_url || d.file_name)) && <HiOutlineFilm className="w-3 h-3 text-purple-500" title="Video attached" />}
                             {(task.deliverables || []).map((d) => (
                               <span key={d.id} className={`w-2.5 h-2.5 rounded-full ${d.viewed ? "bg-green-500" : "bg-blue-500"}`} title={d.viewed ? "Viewed" : "Not viewed"} />
                             ))}

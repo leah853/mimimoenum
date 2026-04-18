@@ -10,7 +10,7 @@ import { canEditTasks, canCreateTasks, canUploadDeliverables, canDeleteTasks, ca
 import { getCompletionBlockers } from "@/lib/business-rules";
 import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye, HiOutlineChatAlt } from "react-icons/hi";
 import { useToast, Skeleton } from "@/components/ui";
-import { handleApiError, isReplyComment } from "@/lib/utils";
+import { handleApiError, isReplyComment, isVideoUrl } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -474,11 +474,13 @@ export default function TaskDetail() {
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Deliverables</h3>
               {(task.deliverables || []).map((d) => {
                 const isTextOnly = d.file_url?.startsWith("text-only://");
+                const isVideo = !isTextOnly && isVideoUrl(d.file_url || d.file_name);
                 return (
-                  <div key={d.id} className={`rounded-xl px-3 py-2.5 space-y-1 ${isTextOnly ? "bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/40 dark:border-amber-800/20" : "bg-gray-50/80 dark:bg-gray-800/40"}`}>
+                  <div key={d.id} className={`rounded-xl px-3 py-2.5 space-y-2 ${isTextOnly ? "bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/40 dark:border-amber-800/20" : isVideo ? "bg-purple-50/50 dark:bg-purple-900/10 border border-purple-200/40 dark:border-purple-800/20" : "bg-gray-50/80 dark:bg-gray-800/40"}`}>
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
                         {isTextOnly && <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded mr-2">Text Only</span>}
+                        {isVideo && <span className="text-[9px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded mr-2">🎥 Video</span>}
                         <span className="text-sm text-gray-800 dark:text-white">{d.title}</span>
                         <span className="text-xs text-gray-500 ml-2">v{d.version}</span>
                         {d.viewed ? <span className="ml-2 w-2 h-2 rounded-full bg-green-500 inline-block" title="Viewed" /> : <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block" title="Not viewed" />}
@@ -493,6 +495,13 @@ export default function TaskDetail() {
                         {canDeleteDeliverables(appRole) && <button onClick={() => deleteDeliverable(d.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiTrash className="w-3 h-3" /></button>}
                       </div>
                     </div>
+                    {/* Inline video preview */}
+                    {isVideo && d.file_url && (
+                      <video controls preload="metadata" className="w-full rounded-lg max-h-64 bg-black">
+                        <source src={d.file_url} />
+                        Your browser does not support video playback.
+                      </video>
+                    )}
                     <p className="text-[10px] text-gray-400">{new Date(d.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
                   </div>
                 );

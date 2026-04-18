@@ -29,3 +29,10 @@ export function handleApiError(e: unknown): string {
   if (typeof e === "string") return e;
   return "An unexpected error occurred";
 }
+
+/** Detect if a file URL or filename points to a video (mp4, mov, webm, m4v, avi) */
+export function isVideoUrl(urlOrName?: string | null): boolean {
+  if (!urlOrName) return false;
+  const s = urlOrName.toLowerCase().split("?")[0];
+  return /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(s);
+}

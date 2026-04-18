@@ -116,6 +116,7 @@ export interface EODUpdate {
   what_was_done: string;
   whats_next?: string;
   blockers?: string;
+  video_url?: string;
   created_at: string;
   user?: User;
   linked_tasks?: Task[];

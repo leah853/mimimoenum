@@ -5,11 +5,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useApi, apiPost, apiPatch, apiUpload, apiDelete } from "@/lib/use-api";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus } from "@/lib/types";
-import { HiArrowLeft, HiOutlineChatAlt, HiPlus, HiCheck, HiOutlinePaperClip, HiTrash } from "react-icons/hi";
+import { HiArrowLeft, HiOutlineChatAlt, HiPlus, HiCheck, HiOutlinePaperClip, HiTrash, HiOutlineFilm } from "react-icons/hi";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ui";
 import Link from "next/link";
-import { calcScore, formatDate, handleApiError } from "@/lib/utils";
+import { calcScore, formatDate, handleApiError, isVideoUrl } from "@/lib/utils";
 
 type FullTask = Task & { owner?: { id: string; full_name: string }; subtasks?: { id: string }[]; deliverables?: { id: string }[]; feedback?: { id: string }[] };
 type UserOption = { id: string; full_name: string };
@@ -363,16 +363,26 @@ function ReportSection({ title, type, reportData, report, setReport, files, setF
 
           {/* Attachments list */}
           {existingUrls.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-2">
               <p className="text-[10px] text-gray-400 uppercase font-medium">Attachments ({existingUrls.length})</p>
               {existingUrls.map((url, i) => {
                 const filename = url.split("/").pop()?.split("?")[0] || `File ${i + 1}`;
+                const isVideo = isVideoUrl(url);
                 return (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-blue-500 hover:text-blue-400 transition-colors py-1">
-                    <HiOutlinePaperClip className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="truncate">{decodeURIComponent(filename)}</span>
-                  </a>
+                  <div key={i} className="space-y-1.5">
+                    <a href={url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs text-blue-500 hover:text-blue-400 transition-colors py-1">
+                      {isVideo ? <HiOutlineFilm className="w-3.5 h-3.5 flex-shrink-0 text-purple-500" /> : <HiOutlinePaperClip className="w-3.5 h-3.5 flex-shrink-0" />}
+                      <span className="truncate">{decodeURIComponent(filename)}</span>
+                      {isVideo && <span className="text-[9px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded">🎥 Video</span>}
+                    </a>
+                    {isVideo && (
+                      <video controls preload="metadata" className="w-full rounded-lg max-h-64 bg-black">
+                        <source src={url} />
+                        Your browser does not support video playback.
+                      </video>
+                    )}
+                  </div>
                 );
               })}
             </div>

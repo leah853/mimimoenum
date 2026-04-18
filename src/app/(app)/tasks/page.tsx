@@ -7,17 +7,17 @@ import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import { useApi, apiPost, apiPatch } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks } from "@/lib/roles";
-import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck } from "react-icons/hi";
+import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck, HiOutlineFilm } from "react-icons/hi";
 import Link from "next/link";
 import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT } from "@/lib/constants";
-import { formatDate, isReplyComment } from "@/lib/utils";
+import { formatDate, isReplyComment, isVideoUrl } from "@/lib/utils";
 import { Skeleton, SkeletonRows, useToast } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
 type FullTask = Task & {
   owner?: { id: string; full_name: string };
   subtasks?: { id: string }[];
-  deliverables?: { id: string }[];
+  deliverables?: { id: string; file_url?: string; file_name?: string }[];
   feedback?: { id: string; rating: number; acknowledged?: boolean; comment?: string }[];
 };
 type UserOption = { id: string; full_name: string; email: string };
@@ -491,6 +491,7 @@ function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullT
         <Link href={`/tasks/${task.id}`} className="text-sm text-gray-700 dark:text-gray-200 hover:text-indigo-500 truncate transition-all duration-200">{task.title}</Link>
         {(task.subtasks?.length || 0) > 0 && <span className="text-[9px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded flex-shrink-0">{task.subtasks!.length}</span>}
         {(task.deliverables?.length || 0) > 0 && <HiOutlinePaperClip className="w-3 h-3 text-blue-500 flex-shrink-0" />}
+        {(task.deliverables || []).some(d => isVideoUrl(d.file_url || d.file_name)) && <HiOutlineFilm className="w-3 h-3 text-purple-500 flex-shrink-0" title="Video attached" />}
         {(task.feedback?.length || 0) > 0 && <HiOutlineChatAlt className="w-3 h-3 text-violet-400 flex-shrink-0" />}
         {isOverdue && <span className="text-[8px] font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded flex-shrink-0">OVERDUE</span>}
         {isDueToday && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex-shrink-0">DUE TODAY</span>}

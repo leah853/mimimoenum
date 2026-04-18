@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useApi, apiPost, apiPatch, apiDelete } from "@/lib/use-api";
+import { useApi, apiPost, apiPatch, apiDelete, apiUpload } from "@/lib/use-api";
 import { canAddEOD, canGiveFeedback } from "@/lib/roles";
 import type { EODUpdate } from "@/lib/types";
-import { HiChevronLeft, HiChevronRight } from "react-icons/hi";
+import { HiChevronLeft, HiChevronRight, HiOutlineFilm, HiTrash } from "react-icons/hi";
 import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
@@ -35,6 +35,8 @@ export default function EODPage() {
   const [whatsNext, setWhatsNext] = useState("");
   const [blockers, setBlockers] = useState("");
   const [addedBy, setAddedBy] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [editingEod, setEditingEod] = useState(false);
@@ -80,18 +82,53 @@ export default function EODPage() {
     if (!whatWasDone || !addedBy) return;
     setSubmitting(true);
     try {
+      // Upload video first if provided
+      let videoUrl: string | null = null;
+      if (videoFile) {
+        setUploadingVideo(true);
+        const fd = new FormData();
+        fd.append("file", videoFile);
+        fd.append("folder", "eod-videos");
+        const res = await apiUpload("/api/upload-video", fd);
+        videoUrl = res.url;
+        setUploadingVideo(false);
+      }
       await apiPost("/api/eod", {
         user_id: addedBy,
         date: selectedDate,
         what_was_done: whatWasDone,
         whats_next: whatsNext || null,
         blockers: blockers || null,
+        video_url: videoUrl,
       });
-      setWhatWasDone(""); setWhatsNext(""); setBlockers("");
+      setWhatWasDone(""); setWhatsNext(""); setBlockers(""); setVideoFile(null);
       await refetch();
       toast("EOD update saved", "success");
-    } catch (e) { toast(handleApiError(e), "error"); }
+    } catch (e) { toast(handleApiError(e), "error"); setUploadingVideo(false); }
     setSubmitting(false);
+  }
+
+  async function attachVideoToExisting(eodId: string, file: File) {
+    try {
+      setUploadingVideo(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "eod-videos");
+      const res = await apiUpload("/api/upload-video", fd);
+      await apiPatch(`/api/eod/${eodId}`, { video_url: res.url });
+      await refetch();
+      toast("Video attached", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+    setUploadingVideo(false);
+  }
+
+  async function removeVideoFromEod(eodId: string) {
+    if (!confirm("Remove video from this update?")) return;
+    try {
+      await apiPatch(`/api/eod/${eodId}`, { video_url: null });
+      await refetch();
+      toast("Video removed", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
 
   async function addComment(eodId: string) {
@@ -163,6 +200,7 @@ export default function EODPage() {
               const isToday = dateStr === todayStr;
               // Dot color: green = reviewed (has comments), amber = needs review (no comments)
               const dotColor = hasUpdate ? (hasComments ? "bg-green-500" : "bg-amber-400 animate-pulse") : "";
+              const hasVideo = hasUpdate && !!eodEntry.video_url;
               return (
                 <button key={day} onClick={() => setSelectedDate(dateStr)}
                   className={`h-10 rounded-lg text-sm flex flex-col items-center justify-center transition-colors ${
@@ -173,7 +211,10 @@ export default function EODPage() {
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   }`}>
                   <span className="text-xs">{day}</span>
-                  {hasUpdate && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${dotColor}`} />}
+                  <div className="flex items-center gap-0.5 mt-0.5">
+                    {hasUpdate && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
+                    {hasVideo && <HiOutlineFilm className="w-2.5 h-2.5 text-purple-500" />}
+                  </div>
                 </button>
               );
             })}
@@ -238,6 +279,40 @@ export default function EODPage() {
                   <div><p className="text-xs text-gray-400 uppercase mb-1">What was done</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.what_was_done}</p></div>
                   {selectedUpdate.whats_next && <div><p className="text-xs text-gray-400 uppercase mb-1">What&apos;s next</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.whats_next}</p></div>}
                   {selectedUpdate.blockers && <div><p className="text-xs text-red-500 dark:text-red-400 uppercase mb-1">Obstacles</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.blockers}</p></div>}
+                  {/* Video preview */}
+                  {selectedUpdate.video_url && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs text-purple-500 dark:text-purple-400 uppercase flex items-center gap-1">
+                          <HiOutlineFilm className="w-3.5 h-3.5" /> Video Summary
+                        </p>
+                        {isDoer && (
+                          <button onClick={() => removeVideoFromEod(selectedUpdate.id)} className="text-[10px] text-red-400 hover:text-red-500 flex items-center gap-1">
+                            <HiTrash className="w-3 h-3" /> Remove
+                          </button>
+                        )}
+                      </div>
+                      <video controls preload="metadata" className="w-full rounded-lg max-h-80 bg-black">
+                        <source src={selectedUpdate.video_url} />
+                        Your browser does not support video playback.
+                      </video>
+                    </div>
+                  )}
+                  {/* Attach video to existing update */}
+                  {!selectedUpdate.video_url && isDoer && (
+                    <div>
+                      <label className="text-xs text-purple-500 dark:text-purple-400 mb-1 flex items-center gap-1 cursor-pointer">
+                        <HiOutlineFilm className="w-3.5 h-3.5" /> Attach 1-Min Video Summary
+                      </label>
+                      <input type="file" accept="video/*" onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) attachVideoToExisting(selectedUpdate.id, f);
+                      }}
+                        disabled={uploadingVideo}
+                        className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-purple-100 dark:file:bg-purple-900/30 file:text-purple-700 dark:file:text-purple-300" />
+                      {uploadingVideo && <p className="text-[10px] text-purple-500 mt-1">Uploading...</p>}
+                    </div>
+                  )}
                 </>
               )}
 
@@ -327,9 +402,24 @@ export default function EODPage() {
                 <textarea value={blockers} onChange={(e) => setBlockers(e.target.value)} rows={2}
                   className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
               </div>
-              <button onClick={submitUpdate} disabled={!whatWasDone || !addedBy || submitting}
+              <div>
+                <label className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                  <HiOutlineFilm className="w-3.5 h-3.5 text-purple-500" /> 1-Min Video Summary (Optional)
+                </label>
+                <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                  className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-purple-100 dark:file:bg-purple-900/30 file:text-purple-700 dark:file:text-purple-300" />
+                {videoFile && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <HiOutlineFilm className="w-3 h-3 text-purple-500" />
+                    <span className="text-[10px] text-gray-500 truncate">{videoFile.name}</span>
+                    <span className="text-[9px] text-gray-400">({(videoFile.size / 1024 / 1024).toFixed(1)} MB)</span>
+                    <button onClick={() => setVideoFile(null)} className="text-gray-400 hover:text-red-500"><HiTrash className="w-3 h-3" /></button>
+                  </div>
+                )}
+              </div>
+              <button onClick={submitUpdate} disabled={!whatWasDone || !addedBy || submitting || uploadingVideo}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-sm rounded-xl shadow-md transition-all active:scale-[0.97]">
-                {submitting ? "Submitting..." : "Submit"}
+                {uploadingVideo ? "Uploading video..." : submitting ? "Submitting..." : "Submit"}
               </button>
             </div>
           )}
