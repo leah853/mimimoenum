@@ -226,11 +226,40 @@ function areaHeadline(ownerName: string, clusters: ReturnType<typeof clusterTask
   return `${ownerName} owns ${themeText} — ${done}/${total} done (${donePct}%).`;
 }
 
+// Tokenize a title for similarity scoring.
+const STOPWORDS = new Set(["a", "an", "the", "and", "or", "of", "to", "for", "in", "on", "with", "by", "at", "from", "as", "is", "are", "be", "was", "were"]);
+function tokenize(s: string): string[] {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+// Jaccard similarity over meaningful tokens — 0 (nothing in common) to 1 (identical bag of words).
+function titleSimilarity(a: string, b: string): number {
+  const ta = new Set(tokenize(a));
+  const tb = new Set(tokenize(b));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  const union = ta.size + tb.size - shared;
+  return union > 0 ? shared / union : 0;
+}
+
+// Pick the iteration goal that best matches a given week task title.
+// Ties go to the first goal (stable with `goals` array order).
+function pickBestGoal(weekTaskTitle: string, goals: FullTask[]): FullTask {
+  let best = goals[0];
+  let bestScore = -1;
+  for (const g of goals) {
+    const score = titleSimilarity(weekTaskTitle, g.title);
+    if (score > bestScore) { best = g; bestScore = score; }
+  }
+  return best;
+}
+
 // Build an iteration-first hierarchy for one owner's tasks in one category.
-// Iteration goals (no week_id) are top-level bullets. Week-level tasks attempt
-// to nest under a goal whose theme matches; otherwise they fall into a
-// per-iteration "Weekly execution" bucket clustered by theme.
-type IterBullet = { label: string; goalTask: FullTask | null; childTasks: FullTask[] };
+// Every week task MUST nest under an iteration goal (no invented goals). If no
+// goals exist at all for an iteration+owner+category, surface a warning bullet
+// so the gap is visible instead of silently hidden.
+type IterBullet = { label: string; goalTask: FullTask | null; childTasks: FullTask[]; warning?: boolean };
 type IterBlock = { iterationId: string | null; iterationName: string; bullets: IterBullet[]; totalTasks: number; doneTasks: number };
 
 function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): IterBlock[] {
@@ -242,7 +271,6 @@ function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): I
   }
 
   const blocks: IterBlock[] = [];
-  // Iterate in the order we have iterations (from quarters fetch), then any "__none__" last
   const orderedKeys = [...iterations.map((i) => i.id), ...[...byIter.keys()].filter((k) => k === "__none__" || !iterations.some((i) => i.id === k))];
   const seen = new Set<string>();
   for (const key of orderedKeys) {
@@ -253,27 +281,34 @@ function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): I
 
     const goalTasks = iterTasks.filter((t) => !t.week_id);
     const weekTasks = iterTasks.filter((t) => t.week_id);
-    const unmatched = new Set(weekTasks);
 
     const bullets: IterBullet[] = [];
 
-    // Goal-driven bullets: each iteration goal becomes a bullet; pull week tasks
-    // whose theme matches the goal's theme as its children.
-    for (const goal of goalTasks) {
-      const goalKey = themeOf(goal.title).key;
-      const children: FullTask[] = [];
-      for (const w of [...unmatched]) {
-        if (themeOf(w.title).key === goalKey) { children.push(w); unmatched.delete(w); }
+    if (goalTasks.length === 0) {
+      // No iteration goals for this owner+category+iteration. Surface the gap
+      // explicitly instead of faking a goal.
+      if (weekTasks.length > 0) {
+        bullets.push({
+          label: "No iteration goal defined — week tasks need a parent goal",
+          goalTask: null,
+          childTasks: weekTasks,
+          warning: true,
+        });
       }
-      bullets.push({ label: goal.title, goalTask: goal, childTasks: children });
-    }
+    } else {
+      // Each iteration goal becomes a bullet. Every week task gets assigned to
+      // the best-matching goal via Jaccard similarity over title tokens; if no
+      // tokens overlap, the first goal is used as the deterministic fallback.
+      const goalBucket = new Map<string, FullTask[]>();
+      for (const g of goalTasks) goalBucket.set(g.id, []);
 
-    // Residual week tasks (no matching goal) — cluster them by theme
-    if (unmatched.size > 0) {
-      const leftover = [...unmatched];
-      const clusters = clusterTasks(leftover);
-      for (const c of clusters) {
-        bullets.push({ label: c.label, goalTask: null, childTasks: c.tasks });
+      for (const w of weekTasks) {
+        const best = pickBestGoal(w.title, goalTasks);
+        goalBucket.get(best.id)!.push(w);
+      }
+
+      for (const g of goalTasks) {
+        bullets.push({ label: g.title, goalTask: g, childTasks: goalBucket.get(g.id) || [] });
       }
     }
 
@@ -418,10 +453,12 @@ function OwnerMap({ categories, tasks, iterations }: { categories: string[]; tas
                                   const total = bullet.childTasks.length + (bullet.goalTask ? 1 : 0);
                                   return (
                                     <li key={bi} className="flex items-start gap-2">
-                                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: style?.dot }} />
+                                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: bullet.warning ? "#f59e0b" : style?.dot }} />
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                          {bullet.goalTask ? (
+                                          {bullet.warning ? (
+                                            <span className="text-[12px] font-medium text-amber-700 dark:text-amber-400">⚠ {bullet.label}</span>
+                                          ) : bullet.goalTask ? (
                                             <Link href={`/tasks/${bullet.goalTask.id}`}
                                               className="text-[12px] font-medium text-gray-800 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                                               {bullet.label}
