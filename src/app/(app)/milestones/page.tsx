@@ -7,6 +7,7 @@ import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import type { Task, TaskStatus } from "@/lib/types";
 import { HiChevronDown, HiChevronRight, HiOutlineChatAlt, HiOutlinePaperClip, HiPlus } from "react-icons/hi";
 import { SkeletonRows, EmptyState } from "@/components/ui";
+import OwnerMaps from "@/components/OwnerMaps";
 
 type FullTask = Task & { subtasks?: { id: string; title: string; status: TaskStatus }[]; deliverables?: { id: string }[]; feedback?: { id: string }[]; owner?: { id: string; full_name: string } };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
@@ -40,7 +41,7 @@ export default function MilestonesPage() {
   const { data: goals } = useApi<{ id: string; category: string; goal: string }[]>("/api/quarter-goals");
   const [expandedIters, setExpandedIters] = useState<Set<string>>(new Set());
   const [initialized, setInitialized] = useState(false);
-  const [activeTab, setActiveTab] = useState<"timeline" | "owner_map">("timeline");
+  const [activeTab, setActiveTab] = useState<"timeline" | "owner_map" | "owner_maps">("timeline");
 
   const all = tasks || [];
   const quarter = quarters?.[0];
@@ -89,7 +90,7 @@ export default function MilestonesPage() {
         )}
       </div>
 
-      {/* Tabs: Timeline / Owner Map */}
+      {/* Tabs: Timeline / By Owner (Tasks) / Owner Maps */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
         <button onClick={() => setActiveTab("timeline")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === "timeline" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
@@ -97,11 +98,17 @@ export default function MilestonesPage() {
         </button>
         <button onClick={() => setActiveTab("owner_map")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === "owner_map" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-          Owner Map
+          By Owner (Tasks)
+        </button>
+        <button onClick={() => setActiveTab("owner_maps")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === "owner_maps" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Owner Maps
         </button>
       </div>
 
       {activeTab === "owner_map" && <OwnerMap categories={categories} tasks={all} />}
+
+      {activeTab === "owner_maps" && <OwnerMaps />}
 
       {activeTab === "timeline" && (all.length === 0 ? (
         <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center">
