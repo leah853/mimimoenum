@@ -179,97 +179,210 @@ export default function MilestonesPage() {
   );
 }
 
+// Extract a short "theme" from a task title so we can group similar tasks into
+// one readable bullet instead of dumping every title as its own line.
+// Heuristic: take the chunk before a colon/parenthesis, strip common prefixes,
+// then normalize. Tasks that share the same theme key get clustered.
+function themeOf(title: string): { key: string; label: string } {
+  const trimmed = title.trim();
+  // Take text before first colon or open paren — usually the core subject
+  const head = trimmed.split(/[:(\-–—]/)[0].trim();
+  // Strip common action prefixes so "Analyse Data" and "Data Analysis" collapse
+  const cleaned = head
+    .replace(/^(setup|build|create|launch|draft|design|review|plan|analyse|analyze|prepare|develop|define|start|begin|finalize|finalise|ship|publish|document|write)\s+/i, "")
+    .replace(/\s+(setup|plan|draft|review)$/i, "")
+    .replace(/[.,;]+$/g, "")
+    .trim();
+  const core = cleaned || head || trimmed;
+  return { key: core.toLowerCase(), label: core };
+}
+
+// Group tasks into thought-through themes; return sorted clusters.
+function clusterTasks(tasks: FullTask[]) {
+  const buckets = new Map<string, { label: string; tasks: FullTask[] }>();
+  for (const t of tasks) {
+    const { key, label } = themeOf(t.title);
+    if (!buckets.has(key)) buckets.set(key, { label, tasks: [] });
+    buckets.get(key)!.tasks.push(t);
+  }
+  // Sort clusters: larger groups first, then singletons alphabetically
+  return [...buckets.values()].sort((a, b) => {
+    const sizeDiff = b.tasks.length - a.tasks.length;
+    if (sizeDiff !== 0) return sizeDiff;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+// Short summary headline per area based on the biggest theme.
+function areaHeadline(ownerName: string, clusters: ReturnType<typeof clusterTasks>, total: number, done: number): string {
+  if (total === 0) return `No work assigned to ${ownerName} yet in this area.`;
+  const top = clusters[0];
+  const donePct = total > 0 ? Math.round((done / total) * 100) : 0;
+  if (clusters.length === 1) {
+    return `${ownerName} is driving ${top.label.toLowerCase()} — ${done}/${total} done (${donePct}%).`;
+  }
+  const themes = clusters.slice(0, 3).map((c) => c.label.toLowerCase());
+  const themeText = themes.length === 2 ? `${themes[0]} and ${themes[1]}` : `${themes.slice(0, -1).join(", ")}, and ${themes[themes.length - 1]}`;
+  return `${ownerName} owns ${themeText} — ${done}/${total} done (${donePct}%).`;
+}
+
+// Emoji per area for a bit of visual interest.
+const AREA_EMOJI: Record<string, string> = {
+  "Customer Success & PG Acquisition": "🎯",
+  "Product / Engineering / Workflows": "⚙️",
+  "Cybersecurity": "🛡️",
+  "Continuous Learning": "📚",
+  "Talent Acquisition": "👥",
+  "Branding": "🎨",
+};
+
+// The two canonical owners; anything else is treated as "yet to be defined".
+const CANONICAL_OWNERS = ["Leah", "Chloe"] as const;
+
 function OwnerMap({ categories, tasks }: { categories: string[]; tasks: FullTask[] }) {
-  // Build per-category owner breakdown. Only include categories actually in FIXED_CATEGORIES
-  // so we stick to the six areas the reps care about.
   const cats = categories.filter((c) => FIXED_CATEGORIES.includes(c as typeof FIXED_CATEGORIES[number]));
 
-  // Collect unique owners across all tasks (sorted by task count desc, primary names first)
-  const ownerMap = new Map<string, { id: string; name: string }>();
+  // Pull the two canonical owners' DB rows from the tasks we already have,
+  // so we can render even if one of them hasn't been assigned yet.
+  const ownerLookup = new Map<string, { id: string; name: string }>();
   for (const t of tasks) {
-    if (t.owner?.id && !ownerMap.has(t.owner.id)) {
-      ownerMap.set(t.owner.id, { id: t.owner.id, name: t.owner.full_name });
+    if (t.owner?.full_name && CANONICAL_OWNERS.includes(t.owner.full_name as typeof CANONICAL_OWNERS[number])) {
+      ownerLookup.set(t.owner.full_name, { id: t.owner.id!, name: t.owner.full_name });
     }
   }
-  const owners = [...ownerMap.values()].sort((a, b) => {
-    // Pin Leah + Chloe first so the map always reads Leah → Chloe when present
-    const order = (n: string) => n === "Leah" ? 0 : n === "Chloe" ? 1 : 2;
-    const o = order(a.name) - order(b.name);
-    if (o !== 0) return o;
-    return a.name.localeCompare(b.name);
+  const owners = CANONICAL_OWNERS.map((name) => ownerLookup.get(name) || { id: name, name });
+
+  // Identify tasks owned by someone other than the two canonical owners
+  const undefinedOwnerTasks = tasks.filter((t) => {
+    if (!t.owner?.full_name) return true;
+    return !CANONICAL_OWNERS.includes(t.owner.full_name as typeof CANONICAL_OWNERS[number]);
   });
 
   return (
-    <div className="space-y-4">
-      {/* Legend */}
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-4">
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-          Who owns what across the six milestone areas this quarter. Tap any task to open it.
-        </p>
-        <div className="flex gap-3 flex-wrap text-[11px]">
-          {owners.map((o) => {
-            const style = OWNER_STYLE[o.name];
-            return (
-              <span key={o.id} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg ${style?.bg || "bg-gray-100 dark:bg-gray-800"}`}>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: style?.dot || "#9CA3AF" }} />
-                <span className={style?.text || "text-gray-600"}>{o.name}</span>
-              </span>
-            );
-          })}
-          {owners.length === 0 && <span className="text-gray-400">No owners assigned yet.</span>}
+    <div className="space-y-5">
+      {/* Header callout */}
+      <div className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/15 dark:to-violet-900/10 border border-indigo-200/60 dark:border-indigo-800/30 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-base">🗺️</span>
+          <h3 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Ownership Map</h3>
         </div>
+        <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-relaxed">
+          Two active owners this quarter: <span className="font-semibold" style={{ color: OWNER_STYLE.Leah?.dot }}>Leah</span> and <span className="font-semibold" style={{ color: OWNER_STYLE.Chloe?.dot }}>Chloe</span>. All other roles across the six areas are <span className="italic text-gray-500">yet to be defined</span>.
+        </p>
+        {undefinedOwnerTasks.length > 0 && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+            {undefinedOwnerTasks.length} task{undefinedOwnerTasks.length === 1 ? "" : "s"} currently assigned outside Leah / Chloe — review and reassign.
+          </p>
+        )}
       </div>
 
-      {/* Category cards */}
+      {/* Six area cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {cats.map((cat) => {
           const catTasks = tasks.filter((t) => t.category === cat);
           const displayName = CATEGORY_ALIAS[cat] || cat;
+          const emoji = AREA_EMOJI[cat] || "📋";
+
           return (
-            <div key={cat} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-200/60 dark:border-gray-800/60 flex items-center justify-between">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{displayName}</h3>
-                  {displayName !== cat && <p className="text-[10px] text-gray-400 truncate">({cat})</p>}
+            <div key={cat} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+              {/* Area header */}
+              <div className="px-5 py-3 border-b border-gray-200/60 dark:border-gray-800/60 flex items-center justify-between bg-gradient-to-r from-gray-50/60 to-white/30 dark:from-gray-800/30 dark:to-gray-900/20">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-lg">{emoji}</span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{displayName}</h3>
+                    {displayName !== cat && <p className="text-[10px] text-gray-400 truncate">{cat}</p>}
+                  </div>
                 </div>
                 <ScorePill tasks={catTasks} />
               </div>
+
+              {/* Two owner panels */}
               <div className="p-4 space-y-3">
                 {owners.map((o) => {
-                  const ownedHere = catTasks.filter((t) => t.owner_id === o.id);
+                  const ownedHere = catTasks.filter((t) => t.owner_id === o.id || t.owner?.full_name === o.name);
                   const done = ownedHere.filter((t) => t.status === "completed").length;
+                  const clusters = clusterTasks(ownedHere);
+                  const headline = areaHeadline(o.name, clusters, ownedHere.length, done);
                   const style = OWNER_STYLE[o.name];
+                  const gradientBg = o.name === "Leah"
+                    ? "bg-gradient-to-br from-pink-50/70 to-rose-50/40 dark:from-pink-900/15 dark:to-rose-900/10"
+                    : "bg-gradient-to-br from-cyan-50/70 to-sky-50/40 dark:from-cyan-900/15 dark:to-sky-900/10";
+
                   return (
-                    <div key={o.id} className={`rounded-xl border border-gray-200/50 dark:border-gray-800/40 ${style?.bg || "bg-gray-50/50 dark:bg-gray-800/20"}`}>
+                    <div key={o.id} className={`rounded-xl border border-gray-200/50 dark:border-gray-800/40 ${gradientBg} overflow-hidden`}>
                       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/40 dark:border-gray-800/30">
                         <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: style?.dot || "#9CA3AF" }} />
+                          <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: `linear-gradient(135deg, ${style?.dot}, ${style?.dot}aa)` }}>
+                            {o.name[0]}
+                          </span>
                           <span className={`text-xs font-semibold ${style?.text || "text-gray-700 dark:text-gray-300"}`}>{o.name}</span>
                         </div>
-                        <span className="text-[10px] text-gray-500">
-                          {ownedHere.length === 0 ? "No tasks" : `${done}/${ownedHere.length} done`}
-                        </span>
+                        {ownedHere.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-gray-200/70 dark:bg-gray-800 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{
+                                width: `${(done / Math.max(ownedHere.length, 1)) * 100}%`,
+                                backgroundColor: style?.dot,
+                              }} />
+                            </div>
+                            <span className="text-[10px] text-gray-500 whitespace-nowrap">{done}/{ownedHere.length}</span>
+                          </div>
+                        )}
                       </div>
-                      {ownedHere.length > 0 ? (
-                        <ul className="divide-y divide-gray-100 dark:divide-gray-800/40">
-                          {ownedHere.map((t) => (
-                            <li key={t.id} className="px-3 py-1.5 hover:bg-white/60 dark:hover:bg-gray-900/40 transition-colors">
-                              <Link href={`/tasks/${t.id}`} className="flex items-start gap-2 min-w-0">
-                                <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: STATUS_COLORS[t.status] }} />
-                                <span className="text-[11px] leading-tight text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400">{t.title}</span>
-                              </Link>
-                            </li>
-                          ))}
+
+                      {/* Thoughtful summary headline */}
+                      <p className="px-3 pt-2.5 pb-1 text-[11.5px] leading-snug text-gray-700 dark:text-gray-300 italic">
+                        {headline}
+                      </p>
+
+                      {/* Clustered bullets */}
+                      {clusters.length > 0 ? (
+                        <ul className="px-3 pb-3 pt-1 space-y-1.5">
+                          {clusters.map((cluster, i) => {
+                            const doneInCluster = cluster.tasks.filter((t) => t.status === "completed").length;
+                            return (
+                              <li key={i} className="flex items-start gap-2 group">
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: style?.dot }} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[12px] font-medium text-gray-800 dark:text-gray-200">{cluster.label}</span>
+                                    {cluster.tasks.length > 1 && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/60 dark:bg-gray-800/60 text-gray-500">
+                                        {doneInCluster}/{cluster.tasks.length}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {cluster.tasks.map((t) => (
+                                      <Link key={t.id} href={`/tasks/${t.id}`}
+                                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/70 dark:bg-gray-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors border border-gray-200/50 dark:border-gray-700/40">
+                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[t.status] }} />
+                                        <span className="truncate max-w-[160px]">{t.title}</span>
+                                      </Link>
+                                    ))}
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       ) : (
-                        <p className="px-3 py-2 text-[10px] text-gray-400 italic">Nothing assigned here.</p>
+                        <p className="px-3 pb-3 text-[10px] text-gray-400 italic">Yet to be defined.</p>
                       )}
                     </div>
                   );
                 })}
-                {owners.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-2">No owners for this area yet.</p>
-                )}
+
+                {/* Yet-to-be-defined placeholder for roles beyond Leah + Chloe */}
+                <div className="rounded-xl border border-dashed border-gray-300/60 dark:border-gray-700/40 bg-gray-50/30 dark:bg-gray-800/10 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[10px] text-gray-500">?</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 italic">
+                      Additional roles for this area — <span className="font-medium not-italic">yet to be defined</span>
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           );
