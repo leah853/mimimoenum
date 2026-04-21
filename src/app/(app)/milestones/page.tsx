@@ -101,7 +101,7 @@ export default function MilestonesPage() {
         </button>
       </div>
 
-      {activeTab === "owner_map" && <OwnerMap categories={categories} tasks={all} />}
+      {activeTab === "owner_map" && <OwnerMap categories={categories} tasks={all} iterations={iterations} />}
 
       {activeTab === "timeline" && (all.length === 0 ? (
         <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center">
@@ -226,6 +226,65 @@ function areaHeadline(ownerName: string, clusters: ReturnType<typeof clusterTask
   return `${ownerName} owns ${themeText} — ${done}/${total} done (${donePct}%).`;
 }
 
+// Build an iteration-first hierarchy for one owner's tasks in one category.
+// Iteration goals (no week_id) are top-level bullets. Week-level tasks attempt
+// to nest under a goal whose theme matches; otherwise they fall into a
+// per-iteration "Weekly execution" bucket clustered by theme.
+type IterBullet = { label: string; goalTask: FullTask | null; childTasks: FullTask[] };
+type IterBlock = { iterationId: string | null; iterationName: string; bullets: IterBullet[]; totalTasks: number; doneTasks: number };
+
+function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): IterBlock[] {
+  const byIter = new Map<string, FullTask[]>();
+  for (const t of tasks) {
+    const key = t.iteration_id || "__none__";
+    if (!byIter.has(key)) byIter.set(key, []);
+    byIter.get(key)!.push(t);
+  }
+
+  const blocks: IterBlock[] = [];
+  // Iterate in the order we have iterations (from quarters fetch), then any "__none__" last
+  const orderedKeys = [...iterations.map((i) => i.id), ...[...byIter.keys()].filter((k) => k === "__none__" || !iterations.some((i) => i.id === k))];
+  const seen = new Set<string>();
+  for (const key of orderedKeys) {
+    if (seen.has(key) || !byIter.has(key)) continue;
+    seen.add(key);
+    const iterTasks = byIter.get(key)!;
+    const iterName = key === "__none__" ? "Unassigned iteration" : (iterations.find((i) => i.id === key)?.name || "Iteration");
+
+    const goalTasks = iterTasks.filter((t) => !t.week_id);
+    const weekTasks = iterTasks.filter((t) => t.week_id);
+    const unmatched = new Set(weekTasks);
+
+    const bullets: IterBullet[] = [];
+
+    // Goal-driven bullets: each iteration goal becomes a bullet; pull week tasks
+    // whose theme matches the goal's theme as its children.
+    for (const goal of goalTasks) {
+      const goalKey = themeOf(goal.title).key;
+      const children: FullTask[] = [];
+      for (const w of [...unmatched]) {
+        if (themeOf(w.title).key === goalKey) { children.push(w); unmatched.delete(w); }
+      }
+      bullets.push({ label: goal.title, goalTask: goal, childTasks: children });
+    }
+
+    // Residual week tasks (no matching goal) — cluster them by theme
+    if (unmatched.size > 0) {
+      const leftover = [...unmatched];
+      const clusters = clusterTasks(leftover);
+      for (const c of clusters) {
+        bullets.push({ label: c.label, goalTask: null, childTasks: c.tasks });
+      }
+    }
+
+    const totalTasks = iterTasks.length;
+    const doneTasks = iterTasks.filter((t) => t.status === "completed").length;
+    blocks.push({ iterationId: key === "__none__" ? null : key, iterationName: iterName, bullets, totalTasks, doneTasks });
+  }
+
+  return blocks;
+}
+
 // Emoji per area for a bit of visual interest.
 const AREA_EMOJI: Record<string, string> = {
   "Customer Success & PG Acquisition": "🎯",
@@ -239,7 +298,7 @@ const AREA_EMOJI: Record<string, string> = {
 // The two canonical owners; anything else is treated as "yet to be defined".
 const CANONICAL_OWNERS = ["Leah", "Chloe"] as const;
 
-function OwnerMap({ categories, tasks }: { categories: string[]; tasks: FullTask[] }) {
+function OwnerMap({ categories, tasks, iterations }: { categories: string[]; tasks: FullTask[]; iterations: IterOption[] }) {
   const cats = categories.filter((c) => FIXED_CATEGORIES.includes(c as typeof FIXED_CATEGORIES[number]));
 
   // Pull the two canonical owners' DB rows from the tasks we already have,
@@ -336,37 +395,68 @@ function OwnerMap({ categories, tasks }: { categories: string[]; tasks: FullTask
                         {headline}
                       </p>
 
-                      {/* Clustered bullets */}
-                      {clusters.length > 0 ? (
-                        <ul className="px-3 pb-3 pt-1 space-y-1.5">
-                          {clusters.map((cluster, i) => {
-                            const doneInCluster = cluster.tasks.filter((t) => t.status === "completed").length;
-                            return (
-                              <li key={i} className="flex items-start gap-2 group">
-                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: style?.dot }} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[12px] font-medium text-gray-800 dark:text-gray-200">{cluster.label}</span>
-                                    {cluster.tasks.length > 1 && (
-                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/60 dark:bg-gray-800/60 text-gray-500">
-                                        {doneInCluster}/{cluster.tasks.length}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {cluster.tasks.map((t) => (
-                                      <Link key={t.id} href={`/tasks/${t.id}`}
-                                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/70 dark:bg-gray-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors border border-gray-200/50 dark:border-gray-700/40">
-                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[t.status] }} />
-                                        <span className="truncate max-w-[160px]">{t.title}</span>
-                                      </Link>
-                                    ))}
-                                  </div>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                      {/* Iteration-first hierarchy: iteration goals (no week_id) are primary
+                          bullets; week-level tasks nest under the matching goal by theme,
+                          otherwise show under "Weekly execution" for that iteration. */}
+                      {ownedHere.length > 0 ? (
+                        <div className="px-3 pb-3 pt-1 space-y-3">
+                          {buildIterationHierarchy(ownedHere, iterations).map((iterBlock) => (
+                            <div key={iterBlock.iterationId || "no-iter"} className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                  {iterBlock.iterationName}
+                                </span>
+                                {iterBlock.totalTasks > 0 && (
+                                  <span className="text-[9px] text-gray-400">
+                                    {iterBlock.doneTasks}/{iterBlock.totalTasks}
+                                  </span>
+                                )}
+                              </div>
+                              <ul className="space-y-1.5 pl-1">
+                                {iterBlock.bullets.map((bullet, bi) => {
+                                  const doneIn = bullet.childTasks.filter((t) => t.status === "completed").length + (bullet.goalTask && bullet.goalTask.status === "completed" ? 1 : 0);
+                                  const total = bullet.childTasks.length + (bullet.goalTask ? 1 : 0);
+                                  return (
+                                    <li key={bi} className="flex items-start gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: style?.dot }} />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {bullet.goalTask ? (
+                                            <Link href={`/tasks/${bullet.goalTask.id}`}
+                                              className="text-[12px] font-medium text-gray-800 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                                              {bullet.label}
+                                            </Link>
+                                          ) : (
+                                            <span className="text-[12px] font-medium text-gray-700 dark:text-gray-300">{bullet.label}</span>
+                                          )}
+                                          {total > 1 && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/60 dark:bg-gray-800/60 text-gray-500">
+                                              {doneIn}/{total}
+                                            </span>
+                                          )}
+                                          {bullet.goalTask && (
+                                            <span className="text-[8px] uppercase tracking-wider text-gray-400">goal</span>
+                                          )}
+                                        </div>
+                                        {bullet.childTasks.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {bullet.childTasks.map((t) => (
+                                              <Link key={t.id} href={`/tasks/${t.id}`}
+                                                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/70 dark:bg-gray-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors border border-gray-200/50 dark:border-gray-700/40">
+                                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[t.status] }} />
+                                                <span className="truncate max-w-[180px]">{t.title}</span>
+                                              </Link>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <p className="px-3 pb-3 text-[10px] text-gray-400 italic">Yet to be defined.</p>
                       )}
