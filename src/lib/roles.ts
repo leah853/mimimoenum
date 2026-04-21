@@ -37,6 +37,3 @@ export function canGiveFeedback(role: AppRole): boolean { return role === "asses
 export function canEditFeedback(role: AppRole): boolean { return role === "assessor"; }
 export function canDeleteFeedback(role: AppRole): boolean { return role === "assessor"; }
 export function canOverrideScores(role: AppRole): boolean { return role === "assessor"; }
-
-// Owner Maps — admin-only edits
-export function canEditOwnerMaps(role: AppRole): boolean { return role === "admin"; }
