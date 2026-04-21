@@ -259,7 +259,7 @@ function pickBestGoal(weekTaskTitle: string, goals: FullTask[]): FullTask {
 // Every week task MUST nest under an iteration goal (no invented goals). If no
 // goals exist at all for an iteration+owner+category, surface a warning bullet
 // so the gap is visible instead of silently hidden.
-type IterBullet = { label: string; goalTask: FullTask | null; childTasks: FullTask[]; warning?: boolean };
+type IterBullet = { label: string; goalTask: FullTask | null; childTasks: FullTask[] };
 type IterBlock = { iterationId: string | null; iterationName: string; bullets: IterBullet[]; totalTasks: number; doneTasks: number };
 
 function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): IterBlock[] {
@@ -285,16 +285,11 @@ function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): I
     const bullets: IterBullet[] = [];
 
     if (goalTasks.length === 0) {
-      // No iteration goals for this owner+category+iteration. Surface the gap
-      // explicitly instead of faking a goal.
-      if (weekTasks.length > 0) {
-        bullets.push({
-          label: "No iteration goal defined — week tasks need a parent goal",
-          goalTask: null,
-          childTasks: weekTasks,
-          warning: true,
-        });
-      }
+      // No iteration goals for this owner+category+iteration — we don't
+      // invent a parent. Week tasks in this situation are intentionally not
+      // rendered here (see chat: user prefers to map them manually once the
+      // goal is defined). The iteration header for this block is skipped
+      // below when bullets is empty.
     } else {
       // Each iteration goal becomes a bullet. Every week task gets assigned to
       // the best-matching goal via Jaccard similarity over title tokens; if no
@@ -430,12 +425,14 @@ function OwnerMap({ categories, tasks, iterations }: { categories: string[]; tas
                         {headline}
                       </p>
 
-                      {/* Iteration-first hierarchy: iteration goals (no week_id) are primary
-                          bullets; week-level tasks nest under the matching goal by theme,
-                          otherwise show under "Weekly execution" for that iteration. */}
+                      {/* Iteration-first hierarchy: iteration goals (no week_id) are
+                          the only top-level bullets. Every week task nests under the
+                          best-matching goal in the same iteration+category+owner. When
+                          no goal exists, week tasks are deliberately NOT shown here —
+                          surfaced as gaps in chat so we can map them manually. */}
                       {ownedHere.length > 0 ? (
                         <div className="px-3 pb-3 pt-1 space-y-3">
-                          {buildIterationHierarchy(ownedHere, iterations).map((iterBlock) => (
+                          {buildIterationHierarchy(ownedHere, iterations).filter((b) => b.bullets.length > 0).map((iterBlock) => (
                             <div key={iterBlock.iterationId || "no-iter"} className="space-y-1.5">
                               <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -453,12 +450,10 @@ function OwnerMap({ categories, tasks, iterations }: { categories: string[]; tas
                                   const total = bullet.childTasks.length + (bullet.goalTask ? 1 : 0);
                                   return (
                                     <li key={bi} className="flex items-start gap-2">
-                                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: bullet.warning ? "#f59e0b" : style?.dot }} />
+                                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: style?.dot }} />
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                          {bullet.warning ? (
-                                            <span className="text-[12px] font-medium text-amber-700 dark:text-amber-400">⚠ {bullet.label}</span>
-                                          ) : bullet.goalTask ? (
+                                          {bullet.goalTask ? (
                                             <Link href={`/tasks/${bullet.goalTask.id}`}
                                               className="text-[12px] font-medium text-gray-800 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                                               {bullet.label}
