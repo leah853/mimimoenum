@@ -44,6 +44,7 @@ function TasksInner() {
   const [iterFilter, setIterFilter] = useState<string>("all");
   const [weekFilter, setWeekFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "due_today">("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -58,7 +59,7 @@ function TasksInner() {
   const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...dynamicCats])], [all]);
 
   // Auto-expand — runs on first load AND whenever filters change
-  const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}`;
+  const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}|${urgencyFilter}`;
   if (!initialized && (categories.length > 0 || iterations.length > 0)) {
     queueMicrotask(() => { expandForCurrentView(); setInitialized(true); });
   }
@@ -66,12 +67,15 @@ function TasksInner() {
   function expandForCurrentView() {
     const auto = new Set<string>();
     auto.add("q");
+    const todayStr = new Date().toISOString().split("T")[0];
     const tasksToShow = all.filter((t) => {
       if (catFilter !== "all" && t.category !== catFilter) return false;
       if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
       if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
       if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      if (urgencyFilter === "overdue" && !(t.deadline && t.deadline < todayStr && t.status !== "completed")) return false;
+      if (urgencyFilter === "due_today" && !(t.deadline === todayStr && t.status !== "completed")) return false;
       return true;
     });
     // Expand categories that have matching tasks
@@ -116,12 +120,19 @@ function TasksInner() {
 
   const toggle = (k: string) => { const n = new Set(expanded); n.has(k) ? n.delete(k) : n.add(k); setExpanded(n); };
 
+  const todayISO = new Date().toISOString().split("T")[0];
   const filtered = all.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (catFilter !== "all" && t.category !== catFilter) return false;
     if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
     if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
     if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
+    if (urgencyFilter === "overdue") {
+      if (!(t.deadline && t.deadline < todayISO && t.status !== "completed")) return false;
+    }
+    if (urgencyFilter === "due_today") {
+      if (!(t.deadline === todayISO && t.status !== "completed")) return false;
+    }
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -303,17 +314,33 @@ function TasksInner() {
           })}
           <div className="flex items-center gap-2 ml-auto">
             {dueTodayCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
+              <button
+                onClick={() => setUrgencyFilter(urgencyFilter === "due_today" ? "all" : "due_today")}
+                aria-pressed={urgencyFilter === "due_today"}
+                title={urgencyFilter === "due_today" ? "Showing only tasks due today — click to clear" : "Show only tasks due today"}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all ${
+                  urgencyFilter === "due_today"
+                    ? "bg-amber-500 text-white shadow-sm ring-1 ring-amber-400"
+                    : "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/30"
+                }`}>
                 Due Today: {dueTodayCount}
-              </span>
+              </button>
             )}
             {overdueCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg">
+              <button
+                onClick={() => setUrgencyFilter(urgencyFilter === "overdue" ? "all" : "overdue")}
+                aria-pressed={urgencyFilter === "overdue"}
+                title={urgencyFilter === "overdue" ? "Showing only overdue tasks — click to clear" : "Show only overdue tasks"}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all ${
+                  urgencyFilter === "overdue"
+                    ? "bg-red-500 text-white shadow-sm ring-1 ring-red-400"
+                    : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/30"
+                }`}>
                 Overdue: {overdueCount}
-              </span>
+              </button>
             )}
-            {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || ownerFilter !== "all" || search) && (
-              <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setOwnerFilter("all"); setSearch(""); }}
+            {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || ownerFilter !== "all" || urgencyFilter !== "all" || search) && (
+              <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setOwnerFilter("all"); setUrgencyFilter("all"); setSearch(""); }}
                 className="px-2.5 py-1 text-[10px] text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all font-medium">
                 Clear all
               </button>
