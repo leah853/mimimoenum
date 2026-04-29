@@ -58,7 +58,7 @@ export default function FeedbackTrailPage() {
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editChatText, setEditChatText] = useState("");
   const [chatReplyTo, setChatReplyTo] = useState<{ id: string; userName: string; preview: string } | null>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const chatMessages = chatData || [];
@@ -530,16 +530,22 @@ export default function FeedbackTrailPage() {
                           </div>
                           {editingChat === msg.id ? (
                             <div className="space-y-1">
-                              <input value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
-                                onKeyDown={(e) => { if (e.key === "Enter") updateChatMsg(msg.id); if (e.key === "Escape") setEditingChat(null); }}
-                                className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                              <textarea value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
+                                rows={Math.min(Math.max(editChatText.split("\n").length, 2), 8)}
+                                onKeyDown={(e) => {
+                                  // Save on Enter; Shift+Enter inserts a newline
+                                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); updateChatMsg(msg.id); }
+                                  if (e.key === "Escape") setEditingChat(null);
+                                }}
+                                className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed resize-none" />
                               <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
                                 <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
                                 <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
+                                <span className="text-[9px] text-gray-400">Shift+Enter for new line</span>
                               </div>
                             </div>
                           ) : (
-                            <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                            <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left whitespace-pre-wrap leading-relaxed break-words ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
                               {renderMentions(msg.message)}
                             </div>
                           )}
@@ -604,12 +610,19 @@ export default function FeedbackTrailPage() {
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <div className="relative flex-1">
-                  <input ref={chatInputRef} value={chatMsg}
+                  <textarea ref={chatInputRef} value={chatMsg}
+                    rows={1}
                     onChange={(e) => {
                       setChatMsg(e.target.value);
+                      // Auto-grow up to ~6 lines, then scroll
+                      const ta = e.target;
+                      ta.style.height = "auto";
+                      ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
                       const val = e.target.value;
+                      // @-mention detection still works the same — looks for the last @
+                      // followed by no space yet
                       const lastAt = val.lastIndexOf("@");
                       if (lastAt >= 0 && (lastAt === val.length - 1 || !val.slice(lastAt).includes(" "))) {
                         setShowMentions(true);
@@ -618,13 +631,22 @@ export default function FeedbackTrailPage() {
                       }
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
-                      if (e.key === "Escape" && chatReplyTo) setChatReplyTo(null);
-                      if (e.key === "Escape") setShowMentions(false);
+                      // Enter sends; Shift+Enter inserts a newline (Slack/Gchat convention)
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendChat();
+                        // Reset textarea height after send
+                        if (chatInputRef.current) chatInputRef.current.style.height = "auto";
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        if (chatReplyTo) setChatReplyTo(null);
+                        else setShowMentions(false);
+                      }
                     }}
-                    placeholder={chatReplyTo ? `Reply to ${chatReplyTo.userName}…` : "Type a message..."}
-                    className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10" />
-                  <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors" title="Tag someone">
+                    placeholder={chatReplyTo ? `Reply to ${chatReplyTo.userName}… (Shift+Enter for new line)` : "Type a message…  (Shift+Enter for new line)"}
+                    className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10 resize-none leading-relaxed" />
+                  <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-2.5 text-gray-400 hover:text-indigo-500 transition-colors" title="Tag someone">
                     <HiAtSymbol className="w-4 h-4" />
                   </button>
                 </div>
