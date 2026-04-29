@@ -485,20 +485,29 @@ canvas{display:block}
   <div class="auth-card">
     <div class="auth-logo">
       <h1>eon<span>exia</span></h1>
-      <p>Market Growth & Workflow Simulation Engine<br><span style="font-size:11px;color:#8494a7">Sign in to continue</span></p>
+      <p>Market Growth & Workflow Simulation Engine<br><span style="font-size:11px;color:#8494a7">See how physician groups join your network, step by step</span></p>
+    </div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-mode="login">Sign In</div>
+      <div class="auth-tab" data-mode="signup">Sign Up</div>
     </div>
     <form id="authForm">
+      <div class="auth-field" id="nameField" style="display:none">
+        <label>Full Name</label>
+        <input type="text" id="authName" placeholder="Jane Doe" autocomplete="name">
+      </div>
       <div class="auth-field">
         <label>Email</label>
-        <input type="email" id="authEmail" placeholder="you@eonexea.com" autocomplete="email" required>
+        <input type="email" id="authEmail" placeholder="you@eonexea.com" autocomplete="email">
+        <div class="field-hint" id="emailHint">Only @eonexea.com addresses are allowed</div>
+        <div class="field-error" id="emailError"></div>
       </div>
       <div class="auth-field">
         <label>Password</label>
-        <input type="password" id="authPass" placeholder="Enter your password" autocomplete="current-password" required>
+        <input type="password" id="authPass" placeholder="Enter your password" autocomplete="current-password">
       </div>
       <button type="submit" class="auth-btn" id="authBtn">Sign In</button>
       <div class="auth-msg" id="authMsg"></div>
-      <div style="text-align:center;font-size:11px;color:#8494a7;margin-top:18px;line-height:1.6">Authorized personnel only.<br>Contact your administrator for access.</div>
     </form>
   </div>
 </div>
@@ -684,47 +693,62 @@ canvas{display:block}
 </div>
 
 <script>
-// ── AUTH SYSTEM (allowlist — 6 known accounts only, no self-signup) ──
-const ALLOWED_USERS=[
-  {email:'resources@eonexea.com', password:'Eonexea@2026!',  name:'Resources', role:'admin'},
-  {email:'leah@eonexea.com',      password:'Eonexea@2026!',  name:'Leah',      role:'admin'},
-  {email:'chloe@eonexea.com',     password:'Eonexea@2026!',  name:'Chloe',     role:'eonexea'},
-  {email:'nate@eonexea.com',      password:'Eonexea@2026!',  name:'Nate',      role:'eonexea'},
-  {email:'rep@mimimomentum.com',  password:'Momentum@2026!', name:'Rep 1',     role:'mimimomentum'},
-  {email:'rep2@mimimomentum.com', password:'Momentum@2026!', name:'Rep 2',     role:'mimimomentum'},
-];
+// ── AUTH SYSTEM ──
 const AUTH={
+  STORAGE_KEY:'eonexia_users',
   SESSION_KEY:'eonexia_session',
+  DOMAIN:'eonexea.com',
+  getUsers(){try{return JSON.parse(localStorage.getItem(this.STORAGE_KEY))||[];}catch{return[];}},
+  saveUsers(u){localStorage.setItem(this.STORAGE_KEY,JSON.stringify(u));},
   getSession(){try{return JSON.parse(localStorage.getItem(this.SESSION_KEY));}catch{return null;}},
   saveSession(s){localStorage.setItem(this.SESSION_KEY,JSON.stringify(s));},
   clearSession(){localStorage.removeItem(this.SESSION_KEY);},
+  signup(name,email,pass){
+    if(!email.endsWith('@'+this.DOMAIN))return{ok:false,msg:'Only @'+this.DOMAIN+' emails are allowed'};
+    if(pass.length<4)return{ok:false,msg:'Password must be at least 4 characters'};
+    if(!name.trim())return{ok:false,msg:'Please enter your name'};
+    const users=this.getUsers();
+    if(users.find(u=>u.email===email))return{ok:false,msg:'Account already exists. Please sign in.'};
+    const user={name:name.trim(),email,pass};
+    users.push(user);this.saveUsers(users);
+    this.saveSession({name:user.name,email:user.email});
+    return{ok:true,user};
+  },
   login(email,pass){
-    const e=(email||'').trim().toLowerCase();
-    const user=ALLOWED_USERS.find(u=>u.email.toLowerCase()===e&&u.password===pass);
+    const users=this.getUsers();
+    const user=users.find(u=>u.email===email&&u.pass===pass);
     if(!user)return{ok:false,msg:'Invalid email or password'};
-    const session={name:user.name,email:user.email,role:user.role};
-    this.saveSession(session);
-    return{ok:true,user:session};
+    this.saveSession({name:user.name,email:user.email});
+    return{ok:true,user};
   },
   logout(){this.clearSession();}
 };
 
+let authMode='login';
+document.querySelectorAll('.auth-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    authMode=tab.dataset.mode;
+    document.querySelectorAll('.auth-tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===authMode));
+    document.getElementById('nameField').style.display=authMode==='signup'?'block':'none';
+    document.getElementById('authBtn').textContent=authMode==='login'?'Sign In':'Create Account';
+    document.getElementById('emailHint').style.display=authMode==='signup'?'block':'none';
+    document.getElementById('authMsg').textContent='';
+  });
+});
 document.getElementById('authForm').addEventListener('submit',e=>{
   e.preventDefault();
+  const name=document.getElementById('authName').value;
   const email=document.getElementById('authEmail').value;
   const pass=document.getElementById('authPass').value;
   const msgEl=document.getElementById('authMsg');
-  if(!email||!pass){
-    msgEl.className='auth-msg error';msgEl.textContent='Please enter both email and password';
-    return;
-  }
-  const result=AUTH.login(email,pass);
+  let result;
+  if(authMode==='signup') result=AUTH.signup(name,email,pass);
+  else result=AUTH.login(email,pass);
   if(result.ok){
     msgEl.className='auth-msg success';msgEl.textContent='Success! Loading...';
-    setTimeout(()=>enterApp(result.user),400);
+    setTimeout(()=>enterApp(result.user||AUTH.getSession()),400);
   } else {
     msgEl.className='auth-msg error';msgEl.textContent=result.msg;
-    document.getElementById('authPass').value='';
   }
 });
 
@@ -753,8 +777,7 @@ document.getElementById('logoutBtn').addEventListener('click',()=>{
   AUTH.logout();
   document.getElementById('authScreen').classList.remove('hidden');
   document.getElementById('appRoot').classList.remove('visible');
-  document.getElementById('authEmail').value='';
-  document.getElementById('authPass').value='';
+  document.getElementById('authEmail').value='';document.getElementById('authPass').value='';document.getElementById('authName').value='';
   document.getElementById('authMsg').textContent='';
 });
 // Auto-login check
