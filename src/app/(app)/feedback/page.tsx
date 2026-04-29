@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol, HiOutlineFilm } from "react-icons/hi";
 import { useToast, Skeleton, SkeletonRows } from "@/components/ui";
-import { handleApiError, isReplyComment, isVideoUrl } from "@/lib/utils";
+import { handleApiError, isReplyComment, isVideoUrl, buildReplyComment, parseReplyComment } from "@/lib/utils";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -48,6 +48,17 @@ export default function FeedbackTrailPage() {
   const [replyTo, setReplyTo] = useState<{ taskId: string; fbId: string } | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
+  const [highlightedFbId, setHighlightedFbId] = useState<string | null>(null);
+
+  // Smooth-scroll to a specific feedback message and briefly highlight it.
+  // Used when clicking a reply's "Replying to X" header — jumps to the original message.
+  function jumpToFeedback(fbId: string) {
+    const el = document.getElementById(`fb-${fbId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedFbId(fbId);
+    window.setTimeout(() => setHighlightedFbId((curr) => (curr === fbId ? null : curr)), 1800);
+  }
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
   const [activeTab, setActiveTab] = useState<"task_feedback" | "team_scores" | "general_chat">("task_feedback");
 
@@ -195,9 +206,11 @@ export default function FeedbackTrailPage() {
     setReplyError("");
     try {
       const orig = threads.find((t) => t.task.id === replyTo.taskId)?.feedbacks.find((f) => f.id === replyTo.fbId);
+      // Encode parent feedback ID into the comment so the reply links back to the exact message
+      // (Google Chat / Slack-style threading without a DB schema change.)
       await apiPost("/api/feedback", {
         task_id: replyTo.taskId, reviewer_id: dbUser.id, rating: orig?.rating || 5,
-        comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved",
+        comment: buildReplyComment(replyTo.fbId, replyText), tag: "approved",
       });
       setReplyTo(null); setReplyText("");
       invalidateCache("/api/tasks", "/api/stats");
@@ -419,22 +432,25 @@ export default function FeedbackTrailPage() {
                             </div>
                             {/* Individual feedback entries */}
                             <div className="space-y-1 mt-2 pl-2 border-l-2 border-indigo-200 dark:border-indigo-800">
-                              {feedbacks.map((fb) => (
-                                <div key={fb.id} className="flex items-start gap-2 text-xs">
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                                    fb.rating >= 7 ? "bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400" :
-                                    fb.rating >= 4 ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400" :
-                                    "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
-                                  }`}>{fb.rating}/10</span>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{fb.reviewer?.full_name}</span>
-                                      <span className="text-[9px] text-gray-400">· {fmtTime(fb.created_at)}</span>
+                              {feedbacks.map((fb) => {
+                                const parsedText = parseReplyComment(fb.comment).text;
+                                return (
+                                  <div key={fb.id} className="flex items-start gap-2 text-xs">
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
+                                      fb.rating >= 7 ? "bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400" :
+                                      fb.rating >= 4 ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400" :
+                                      "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                                    }`}>{fb.rating}/10</span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{fb.reviewer?.full_name}</span>
+                                        <span className="text-[9px] text-gray-400">· {fmtTime(fb.created_at)}</span>
+                                      </div>
+                                      {parsedText && <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{parsedText}</p>}
                                     </div>
-                                    {fb.comment && <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{fb.comment}</p>}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -647,9 +663,42 @@ export default function FeedbackTrailPage() {
                         {/* Feedback messages — chronological */}
                         <div className="px-5 py-3 space-y-3 max-h-96 overflow-y-auto">
                           {feedbacks.map((fb) => {
+                            const parsed = parseReplyComment(fb.comment);
                             const isReply = isReplyComment(fb.comment);
+                            // If this reply has an encoded parent ID, find the parent message in this thread.
+                            const parentFb = parsed.parentId ? feedbacks.find((f) => f.id === parsed.parentId) : null;
+                            const parentText = parentFb ? (parseReplyComment(parentFb.comment).text || "") : "";
+                            const parentSnippet = parentText.length > 90 ? parentText.slice(0, 90) + "…" : parentText;
+                            const isHighlighted = highlightedFbId === fb.id;
+                            // Allow reply when composing on top of an existing reply too — pick the parent's parent (true root) if needed
+                            const replyTargetForButton = isReply && parsed.parentId ? parsed.parentId : fb.id;
                             return (
-                              <div key={fb.id} className={`${isReply ? "ml-8 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600" : ""}`}>
+                              <div
+                                key={fb.id}
+                                id={`fb-${fb.id}`}
+                                className={`transition-all duration-300 rounded-lg ${isReply ? "ml-8 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600" : ""} ${isHighlighted ? "ring-2 ring-amber-400 dark:ring-amber-500 bg-amber-50/60 dark:bg-amber-900/10 -mx-1 px-1 py-1" : ""}`}
+                              >
+                                {/* "Replying to <Author>" preview header — clickable jump-to-original */}
+                                {isReply && (parentFb || parsed.authorHint) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => parentFb && jumpToFeedback(parentFb.id)}
+                                    disabled={!parentFb}
+                                    className="group flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 mb-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:cursor-default disabled:hover:text-gray-500"
+                                    title={parentFb ? "Jump to original message" : "Original message not in this thread"}
+                                  >
+                                    <HiReply className="w-3 h-3 -scale-x-100" />
+                                    <span>Replying to</span>
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                                      {parentFb?.reviewer?.full_name || parsed.authorHint || "message"}
+                                    </span>
+                                    {parentSnippet && (
+                                      <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 italic max-w-xs truncate group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30">
+                                        “{parentSnippet}”
+                                      </span>
+                                    )}
+                                  </button>
+                                )}
                                 <div className="flex items-start gap-2.5">
                                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
                                     {fb.reviewer?.full_name?.[0] || "?"}
@@ -662,7 +711,7 @@ export default function FeedbackTrailPage() {
                                       <span className="text-[9px] text-gray-400">{fmtTime(fb.created_at)}</span>
                                       {fb.acknowledged && <span className="text-[9px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
                                     </div>
-                                    {fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{fb.comment}</p>}
+                                    {parsed.text && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{parsed.text}</p>}
 
                                     {/* Actions */}
                                     <div className="flex items-center gap-3 mt-1.5">
@@ -672,28 +721,56 @@ export default function FeedbackTrailPage() {
                                           <HiCheck className="w-3 h-3" /> Acknowledge
                                         </button>
                                       )}
-                                      {/* Reply */}
-                                      {!isReply && (
-                                        <button onClick={() => setReplyTo({ taskId: task.id, fbId: fb.id })} className="text-[10px] text-gray-400 hover:text-indigo-500 flex items-center gap-0.5 transition-colors">
-                                          <HiReply className="w-3 h-3" /> Reply
-                                        </button>
-                                      )}
+                                      {/* Reply — works on root messages AND on replies (threads them all under the root) */}
+                                      <button onClick={() => setReplyTo({ taskId: task.id, fbId: replyTargetForButton })} className="text-[10px] text-gray-400 hover:text-indigo-500 flex items-center gap-0.5 transition-colors">
+                                        <HiReply className="w-3 h-3" /> Reply
+                                      </button>
                                     </div>
                                   </div>
                                 </div>
 
-                                {/* Inline reply */}
-                                {replyTo?.fbId === fb.id && (
-                                  <div className="mt-2 ml-10 space-y-1">
-                                    <div className="flex gap-2">
-                                      <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Reply..." autoFocus
-                                        className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
-                                        onKeyDown={(e) => e.key === "Enter" && submitReply()} />
-                                      <button onClick={submitReply} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
-                                      <button onClick={() => { setReplyTo(null); setReplyText(""); setReplyError(""); }} className="text-xs text-gray-400">Cancel</button>
-                                    </div>
-                                    {replyError && <p className="text-[10px] text-red-500">{replyError}</p>}
-                                  </div>
+                                {/* Inline reply with quoted preview of selected message */}
+                                {replyTo?.fbId === replyTargetForButton && (
+                                  (() => {
+                                    const target = feedbacks.find((f) => f.id === replyTo.fbId);
+                                    const targetParsed = target ? parseReplyComment(target.comment) : { text: "" };
+                                    const targetSnippet = targetParsed.text.length > 120 ? targetParsed.text.slice(0, 120) + "…" : targetParsed.text;
+                                    return (
+                                      <div className="mt-2 ml-10 space-y-1.5">
+                                        {/* Quoted preview of the message being replied to */}
+                                        {target && (
+                                          <div className="flex items-start gap-2 px-3 py-1.5 bg-indigo-50/70 dark:bg-indigo-900/20 border-l-2 border-indigo-400 dark:border-indigo-500 rounded-r-lg">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
+                                                Replying to {target.reviewer?.full_name || "message"}
+                                              </div>
+                                              {targetSnippet && (
+                                                <div className="text-[11px] text-gray-600 dark:text-gray-300 italic truncate">
+                                                  “{targetSnippet}”
+                                                </div>
+                                              )}
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => { setReplyTo(null); setReplyText(""); setReplyError(""); }}
+                                              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0"
+                                              title="Cancel reply"
+                                            >
+                                              <HiX className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+                                        )}
+                                        <div className="flex gap-2">
+                                          <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Reply in thread…" autoFocus
+                                            className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
+                                            onKeyDown={(e) => { if (e.key === "Enter") submitReply(); if (e.key === "Escape") { setReplyTo(null); setReplyText(""); setReplyError(""); } }} />
+                                          <button onClick={submitReply} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
+                                          <button onClick={() => { setReplyTo(null); setReplyText(""); setReplyError(""); }} className="text-xs text-gray-400 px-2">Cancel</button>
+                                        </div>
+                                        {replyError && <p className="text-[10px] text-red-500">{replyError}</p>}
+                                      </div>
+                                    );
+                                  })()
                                 )}
                               </div>
                             );
