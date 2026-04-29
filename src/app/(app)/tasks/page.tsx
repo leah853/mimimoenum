@@ -34,15 +34,27 @@ function TasksInner() {
   const { appRole } = useAuth();
   const isDoer = canCreateTasks(appRole);
   const searchParams = useSearchParams();
-  // Hydrate filter state from URL — lets the browser back button restore the
-  // exact same view the user was looking at before drilling into a task
-  const initialStatus = (searchParams.get("status") as TaskStatus) || "all";
-  const initialCat = searchParams.get("cat") || "all";
-  const initialIter = searchParams.get("iter") || "all";
-  const initialWeek = searchParams.get("week") || "all";
-  const initialOwner = searchParams.get("owner") || "all";
-  const initialUrgency = (searchParams.get("urgency") as "all" | "overdue" | "due_today") || "all";
-  const initialSearch = searchParams.get("q") || "";
+
+  // Hydrate filter state — sessionStorage is the source of truth (router-agnostic,
+  // survives back-button reliably). URL params still work for shareable links and
+  // win if explicitly present.
+  type Saved = {
+    cat?: string; iter?: string; week?: string; owner?: string;
+    status?: string; urgency?: string; q?: string; expanded?: string[];
+  };
+  const saved: Saved = (() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(sessionStorage.getItem("tasksView") || "{}"); } catch { return {}; }
+  })();
+
+  const initialStatus = (searchParams.get("status") as TaskStatus) || (saved.status as TaskStatus) || "all";
+  const initialCat = searchParams.get("cat") || saved.cat || "all";
+  const initialIter = searchParams.get("iter") || saved.iter || "all";
+  const initialWeek = searchParams.get("week") || saved.week || "all";
+  const initialOwner = searchParams.get("owner") || saved.owner || "all";
+  const initialUrgency = (searchParams.get("urgency") as "all" | "overdue" | "due_today") || (saved.urgency as "all" | "overdue" | "due_today") || "all";
+  const initialSearch = searchParams.get("q") || saved.q || "";
+  const initialExpanded = Array.isArray(saved.expanded) ? new Set(saved.expanded) : new Set<string>();
 
   const { data: tasks, loading, refetch, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: quarters } = useApi<QuarterOption[]>("/api/quarters");
@@ -54,7 +66,7 @@ function TasksInner() {
   const [weekFilter, setWeekFilter] = useState<string>(initialWeek);
   const [ownerFilter, setOwnerFilter] = useState<string>(initialOwner);
   const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "due_today">(initialUrgency);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(initialExpanded);
   const [showCreate, setShowCreate] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -67,26 +79,30 @@ function TasksInner() {
   const dynamicCats = [...new Set(all.map((t) => t.category).filter(Boolean))] as string[];
   const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...dynamicCats])], [all]);
 
-  // Sync filter state to URL so browser Back returns to the same view
+  // Persist filter + expanded state to sessionStorage so the browser Back
+  // button restores the exact same view (filters, categories, iterations
+  // expanded). sessionStorage is router-agnostic — works regardless of
+  // Next.js's internal URL snapshotting.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams();
-    if (catFilter !== "all") params.set("cat", catFilter);
-    if (iterFilter !== "all") params.set("iter", iterFilter);
-    if (weekFilter !== "all") params.set("week", weekFilter);
-    if (ownerFilter !== "all") params.set("owner", ownerFilter);
-    if (statusFilter !== "all") params.set("status", statusFilter);
-    if (urgencyFilter !== "all") params.set("urgency", urgencyFilter);
-    if (search) params.set("q", search);
-    const qs = params.toString();
-    const url = qs ? `?${qs}` : window.location.pathname;
-    window.history.replaceState(null, "", url);
-  }, [catFilter, iterFilter, weekFilter, ownerFilter, statusFilter, urgencyFilter, search]);
+    const payload = {
+      cat: catFilter, iter: iterFilter, week: weekFilter,
+      owner: ownerFilter, status: statusFilter, urgency: urgencyFilter,
+      q: search, expanded: [...expanded],
+    };
+    try { sessionStorage.setItem("tasksView", JSON.stringify(payload)); } catch {}
+  }, [catFilter, iterFilter, weekFilter, ownerFilter, statusFilter, urgencyFilter, search, expanded]);
 
-  // Auto-expand — runs on first load AND whenever filters change
+  // Auto-expand — runs on first load AND whenever filters change.
+  // If we restored a saved expanded set from sessionStorage, skip the auto-
+  // expand so the user keeps the exact panels they had open before.
   const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}|${urgencyFilter}`;
   if (!initialized && (categories.length > 0 || iterations.length > 0)) {
-    queueMicrotask(() => { expandForCurrentView(); setInitialized(true); });
+    if (initialExpanded.size > 0) {
+      queueMicrotask(() => { setInitialized(true); });
+    } else {
+      queueMicrotask(() => { expandForCurrentView(); setInitialized(true); });
+    }
   }
 
   function expandForCurrentView() {
