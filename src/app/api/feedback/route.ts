@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, validate } from "@/lib/api-helpers";
-import { isAssessor, getCallerRole } from "@/lib/api-auth";
+import { getCallerRole } from "@/lib/api-auth";
 import { isReplyComment } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
@@ -28,8 +28,9 @@ export async function POST(request: NextRequest) {
   let body;
   try { body = await request.json(); } catch { return err("Invalid JSON", 400); }
 
-  // Any authenticated user can reply; only assessors can post new feedback
-  const isReply = isReplyComment(body.comment);
+  // A message is a reply if either parent_id is set OR the legacy "↩️" prefix
+  // is present. Doers/admins can reply; only assessors can post new feedback.
+  const isReply = Boolean(body.parent_id) || isReplyComment(body.comment);
   if (callerRole !== "assessor" && !isReply) {
     return err("Only assessors can give feedback", 403);
   }
@@ -49,9 +50,28 @@ export async function POST(request: NextRequest) {
     return err("Tag must be approved, needs_improvement, or blocked");
   }
 
+  // If parent_id is set, validate that the parent feedback exists and belongs
+  // to the same task — prevents cross-task replies and broken trees.
+  if (body.parent_id) {
+    const { data: parent } = await sb.from("feedback").select("id, task_id, subtask_id").eq("id", body.parent_id).maybeSingle();
+    if (!parent) return err("Parent feedback not found", 404);
+    if (body.task_id && parent.task_id && parent.task_id !== body.task_id) return err("Parent belongs to a different task", 422);
+    if (body.subtask_id && parent.subtask_id && parent.subtask_id !== body.subtask_id) return err("Parent belongs to a different subtask", 422);
+  }
+
+  const insertPayload = {
+    task_id: body.task_id || null,
+    subtask_id: body.subtask_id || null,
+    reviewer_id: body.reviewer_id,
+    rating: body.rating,
+    comment: body.comment ?? null,
+    tag: body.tag,
+    parent_id: body.parent_id || null,
+  };
+
   const { data, error } = await sb
     .from("feedback")
-    .insert(body)
+    .insert(insertPayload)
     .select("*, reviewer:users!feedback_reviewer_id_fkey(id, full_name)")
     .single();
 

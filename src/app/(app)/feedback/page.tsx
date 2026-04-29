@@ -195,9 +195,16 @@ export default function FeedbackTrailPage() {
     setReplyError("");
     try {
       const orig = threads.find((t) => t.task.id === replyTo.taskId)?.feedbacks.find((f) => f.id === replyTo.fbId);
+      // Slack/Gchat-style: anchor reply to the specific message via parent_id.
+      // Keep the legacy "↩️" prefix in the comment so old logic counting
+      // unacknowledged via isReplyComment continues to exclude replies.
       await apiPost("/api/feedback", {
-        task_id: replyTo.taskId, reviewer_id: dbUser.id, rating: orig?.rating || 5,
-        comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${replyText}`, tag: "approved",
+        task_id: replyTo.taskId,
+        reviewer_id: dbUser.id,
+        rating: orig?.rating || 5,
+        comment: `↩️ ${replyText}`,
+        tag: "approved",
+        parent_id: replyTo.fbId,
       });
       setReplyTo(null); setReplyText("");
       invalidateCache("/api/tasks", "/api/stats");
@@ -644,60 +651,94 @@ export default function FeedbackTrailPage() {
                           </div>
                         </Link>
 
-                        {/* Feedback messages — chronological */}
+                        {/* Feedback messages — threaded (replies nest under the specific parent) */}
                         <div className="px-5 py-3 space-y-3 max-h-96 overflow-y-auto">
-                          {feedbacks.map((fb) => {
-                            const isReply = isReplyComment(fb.comment);
-                            return (
-                              <div key={fb.id} className={`${isReply ? "ml-8 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600" : ""}`}>
-                                <div className="flex items-start gap-2.5">
-                                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
-                                    {fb.reviewer?.full_name?.[0] || "?"}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{fb.reviewer?.full_name}</span>
-                                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${tagColors[fb.tag] || ""}`}>{fb.tag.replace("_", " ")}</span>
-                                      {!isReply && <span className="text-xs font-bold text-gray-900 dark:text-white">{fb.rating}/10</span>}
-                                      <span className="text-[9px] text-gray-400">{fmtTime(fb.created_at)}</span>
-                                      {fb.acknowledged && <span className="text-[9px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
-                                    </div>
-                                    {fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{fb.comment}</p>}
+                          {(() => {
+                            // Build parent -> children map. Children sorted ascending by created_at so
+                            // a thread reads top-to-bottom in conversation order.
+                            const childrenBy = new Map<string, FeedbackItem[]>();
+                            const ids = new Set(feedbacks.map((f) => f.id));
+                            for (const f of feedbacks) {
+                              if (f.parent_id && ids.has(f.parent_id)) {
+                                const arr = childrenBy.get(f.parent_id) || [];
+                                arr.push(f);
+                                childrenBy.set(f.parent_id, arr);
+                              }
+                            }
+                            for (const arr of childrenBy.values()) {
+                              arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                            }
+                            const topLevel = feedbacks.filter((f) => !f.parent_id || !ids.has(f.parent_id));
 
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-3 mt-1.5">
-                                      {/* Doer: Acknowledge */}
-                                      {isDoer && !fb.acknowledged && !isReply && (
-                                        <button onClick={() => acknowledge(fb.id)} className="text-[10px] text-green-600 hover:text-green-500 flex items-center gap-0.5 transition-colors">
-                                          <HiCheck className="w-3 h-3" /> Acknowledge
-                                        </button>
-                                      )}
-                                      {/* Reply */}
-                                      {!isReply && (
-                                        <button onClick={() => setReplyTo({ taskId: task.id, fbId: fb.id })} className="text-[10px] text-gray-400 hover:text-indigo-500 flex items-center gap-0.5 transition-colors">
+                            const renderMsg = (fb: FeedbackItem, depth: number): React.ReactNode => {
+                              const isThreaded = !!fb.parent_id;
+                              const isLegacyReply = !isThreaded && isReplyComment(fb.comment);
+                              const isReply = isThreaded || isLegacyReply;
+                              // Strip "↩️" prefix from threaded replies — visual nesting already conveys it
+                              const displayComment = isThreaded
+                                ? (fb.comment || "").replace(/^↩️\s*(Reply to[^:]+:\s*)?/, "")
+                                : fb.comment || "";
+                              const indentClass = depth === 0
+                                ? ""
+                                : depth === 1
+                                  ? "ml-8 pl-3 border-l-2 border-indigo-300 dark:border-indigo-600"
+                                  : "ml-10 pl-3 border-l-2 border-indigo-200/60 dark:border-indigo-700/40";
+                              const kids = childrenBy.get(fb.id) || [];
+                              return (
+                                <div key={fb.id} className={`${indentClass} ${depth > 0 ? "mt-2" : ""}`}>
+                                  <div className="flex items-start gap-2.5">
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
+                                      {fb.reviewer?.full_name?.[0] || "?"}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{fb.reviewer?.full_name}</span>
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${tagColors[fb.tag] || ""}`}>{fb.tag.replace("_", " ")}</span>
+                                        {!isReply && <span className="text-xs font-bold text-gray-900 dark:text-white">{fb.rating}/10</span>}
+                                        <span className="text-[9px] text-gray-400">{fmtTime(fb.created_at)}</span>
+                                        {fb.acknowledged && <span className="text-[9px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
+                                      </div>
+                                      {displayComment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{displayComment}</p>}
+
+                                      <div className="flex items-center gap-3 mt-1.5">
+                                        {/* Doer: Acknowledge — only on top-level non-reply messages */}
+                                        {isDoer && !fb.acknowledged && !isReply && (
+                                          <button onClick={() => acknowledge(fb.id)} className="text-[10px] text-green-600 hover:text-green-500 flex items-center gap-0.5 transition-colors">
+                                            <HiCheck className="w-3 h-3" /> Acknowledge
+                                          </button>
+                                        )}
+                                        {/* Reply available on every message — Slack/Gchat-style threading */}
+                                        <button onClick={() => setReplyTo({ taskId: task.id, fbId: fb.id })}
+                                          className="text-[10px] text-gray-400 hover:text-indigo-500 flex items-center gap-0.5 transition-colors">
                                           <HiReply className="w-3 h-3" /> Reply
                                         </button>
-                                      )}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
 
-                                {/* Inline reply */}
-                                {replyTo?.fbId === fb.id && (
-                                  <div className="mt-2 ml-10 space-y-1">
-                                    <div className="flex gap-2">
-                                      <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Reply..." autoFocus
-                                        className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
-                                        onKeyDown={(e) => e.key === "Enter" && submitReply()} />
-                                      <button onClick={submitReply} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
-                                      <button onClick={() => { setReplyTo(null); setReplyText(""); setReplyError(""); }} className="text-xs text-gray-400">Cancel</button>
+                                  {/* Inline reply input renders directly under the message you clicked Reply on */}
+                                  {replyTo?.fbId === fb.id && (
+                                    <div className="mt-2 ml-10 space-y-1">
+                                      <div className="flex gap-2">
+                                        <input value={replyText} onChange={(e) => setReplyText(e.target.value)}
+                                          placeholder={`Reply to ${fb.reviewer?.full_name || "message"}…`} autoFocus
+                                          className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
+                                          onKeyDown={(e) => e.key === "Enter" && submitReply()} />
+                                        <button onClick={submitReply} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
+                                        <button onClick={() => { setReplyTo(null); setReplyText(""); setReplyError(""); }} className="text-xs text-gray-400">Cancel</button>
+                                      </div>
+                                      {replyError && <p className="text-[10px] text-red-500">{replyError}</p>}
                                     </div>
-                                    {replyError && <p className="text-[10px] text-red-500">{replyError}</p>}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                                  )}
+
+                                  {/* Recurse into children (visual indent caps at depth 2) */}
+                                  {kids.map((k) => renderMsg(k, Math.min(depth + 1, 2)))}
+                                </div>
+                              );
+                            };
+
+                            return topLevel.map((m) => renderMsg(m, 0));
+                          })()}
                         </div>
 
                         {/* Mark deliverables as viewed — for assessors */}

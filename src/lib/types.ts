@@ -105,6 +105,8 @@ export interface Feedback {
   acknowledged?: boolean;
   acknowledged_by?: string;
   acknowledged_at?: string;
+  /** Slack/Gchat-style threading: when set, this feedback is a reply to another. */
+  parent_id?: string | null;
   created_at: string;
   reviewer?: User;
 }

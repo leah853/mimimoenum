@@ -224,7 +224,16 @@ export default function TaskDetail() {
     if (!dbUser) { toast("Session not ready — please refresh", "error"); return; }
     const orig = task!.feedback?.find(f => f.id === ui.replyTo);
     try {
-      await apiPost("/api/feedback", { task_id: id, reviewer_id: dbUser.id, rating: orig?.rating || 5, comment: `↩️ Reply to ${orig?.reviewer?.full_name}: ${ui.replyText}`, tag: "approved" });
+      // parent_id anchors the reply to the specific message; legacy "↩️" prefix
+      // kept so isReplyComment-based filters keep working.
+      await apiPost("/api/feedback", {
+        task_id: id,
+        reviewer_id: dbUser.id,
+        rating: orig?.rating || 5,
+        comment: `↩️ ${ui.replyText}`,
+        tag: "approved",
+        parent_id: ui.replyTo,
+      });
       dispatch({ type: "RESET_REPLY" }); invalidateCache("/api/tasks", "/api/stats"); await refetch();
     } catch (e) { set("error", e instanceof Error ? e.message : "Failed"); }
   }
@@ -575,60 +584,102 @@ export default function TaskDetail() {
         <div className="space-y-4 max-w-2xl">
           {feedbackList.length === 0 ? (
             <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center"><p className="text-gray-500">No feedback yet.</p></div>
-          ) : feedbackList.map((fb) => {
-            const isReply = isReplyComment(fb.comment);
-            const isOwner = fb.reviewer_id === dbUser?.id;
-            return (
-              <div key={fb.id} className={`bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-5 animate-fade-in ${isReply ? "ml-8 border-l-2 border-l-violet-400" : ""}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">{fb.reviewer?.full_name?.[0] || "?"}</div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-800 dark:text-white">{fb.reviewer?.full_name}</span>
-                      <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${tagColors[fb.tag] || ""}`}>{fb.tag.replace("_", " ")}</span>
-                      <span className="ml-2 text-[9px] text-gray-400">{new Date(fb.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+          ) : (() => {
+            // Build parent->children map for Slack/Gchat-style threading
+            const childrenBy = new Map<string, FeedbackItem[]>();
+            const ids = new Set(feedbackList.map((f) => f.id));
+            for (const f of feedbackList) {
+              if (f.parent_id && ids.has(f.parent_id)) {
+                const arr = childrenBy.get(f.parent_id) || [];
+                arr.push(f);
+                childrenBy.set(f.parent_id, arr);
+              }
+            }
+            for (const arr of childrenBy.values()) {
+              arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            }
+            const topLevel = feedbackList.filter((f) => !f.parent_id || !ids.has(f.parent_id));
+
+            const renderFb = (fb: FeedbackItem, depth: number): React.ReactNode => {
+              const isThreaded = !!fb.parent_id;
+              const isLegacyReply = !isThreaded && isReplyComment(fb.comment);
+              const isReply = isThreaded || isLegacyReply;
+              const displayComment = isThreaded
+                ? (fb.comment || "").replace(/^↩️\s*(Reply to[^:]+:\s*)?/, "")
+                : fb.comment || "";
+              const isOwner = fb.reviewer_id === dbUser?.id;
+              const kids = childrenBy.get(fb.id) || [];
+
+              // Top-level renders as a full card; nested replies render inline (no card)
+              const containerClass = depth === 0
+                ? `bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-5 animate-fade-in ${isLegacyReply ? "ml-8 border-l-2 border-l-violet-400" : ""}`
+                : depth === 1
+                  ? "ml-8 pl-4 border-l-2 border-violet-300 dark:border-violet-600 mt-3"
+                  : "ml-10 pl-3 border-l-2 border-violet-200/60 dark:border-violet-700/40 mt-3";
+
+              return (
+                <div key={fb.id} className={containerClass}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white font-bold ${depth === 0 ? "w-7 h-7 text-xs" : "w-6 h-6 text-[10px]"}`}>
+                        {fb.reviewer?.full_name?.[0] || "?"}
+                      </div>
+                      <div>
+                        <span className={`font-medium text-gray-800 dark:text-white ${depth === 0 ? "text-sm" : "text-xs"}`}>{fb.reviewer?.full_name}</span>
+                        <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${tagColors[fb.tag] || ""}`}>{fb.tag.replace("_", " ")}</span>
+                        <span className="ml-2 text-[9px] text-gray-400">{new Date(fb.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!isReply && depth === 0 && <span className="text-lg font-bold text-gray-900 dark:text-white">{fb.rating}<span className="text-xs text-gray-400">/10</span></span>}
+                      {isOwner && canEditFeedback(appRole) && (
+                        <div className="flex gap-1">
+                          <button onClick={() => dispatch({ type: "START_EDIT_FB", fbId: fb.id, comment: fb.comment || "", rating: fb.rating })} className="text-gray-400 hover:text-indigo-500 transition-colors"><HiPencil className="w-3 h-3" /></button>
+                          <button onClick={() => deleteFeedback(fb.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiTrash className="w-3 h-3" /></button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">{fb.rating}<span className="text-xs text-gray-400">/10</span></span>
-                    {isOwner && canEditFeedback(appRole) && (
-                      <div className="flex gap-1">
-                        <button onClick={() => dispatch({ type: "START_EDIT_FB", fbId: fb.id, comment: fb.comment || "", rating: fb.rating })} className="text-gray-400 hover:text-indigo-500 transition-colors"><HiPencil className="w-3 h-3" /></button>
-                        <button onClick={() => deleteFeedback(fb.id)} className="text-gray-400 hover:text-red-500 transition-colors"><HiTrash className="w-3 h-3" /></button>
-                      </div>
-                    )}
-                  </div>
-                </div>
 
-                {ui.editingFb === fb.id ? (
-                  <div className="space-y-2 mt-2">
-                    <div className="flex gap-2"><input type="number" min={1} max={10} value={ui.editFbRating} onChange={(e) => set("editFbRating", parseInt(e.target.value))} className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm" /><span className="text-xs text-gray-400 self-center">/10</span></div>
-                    <textarea value={ui.editFbComment} onChange={(e) => set("editFbComment", e.target.value)} rows={2} className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-                    <div className="flex gap-2"><button onClick={() => updateFeedback(fb.id)} className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs rounded-lg">Save</button><button onClick={() => dispatch({ type: "CANCEL_EDIT_FB" })} className="text-xs text-gray-500">Cancel</button></div>
-                  </div>
-                ) : (
-                  fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{fb.comment}</p>
-                )}
+                  {ui.editingFb === fb.id ? (
+                    <div className="space-y-2 mt-2">
+                      <div className="flex gap-2"><input type="number" min={1} max={10} value={ui.editFbRating} onChange={(e) => set("editFbRating", parseInt(e.target.value))} className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm" /><span className="text-xs text-gray-400 self-center">/10</span></div>
+                      <textarea value={ui.editFbComment} onChange={(e) => set("editFbComment", e.target.value)} rows={2} className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                      <div className="flex gap-2"><button onClick={() => updateFeedback(fb.id)} className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs rounded-lg">Save</button><button onClick={() => dispatch({ type: "CANCEL_EDIT_FB" })} className="text-xs text-gray-500">Cancel</button></div>
+                    </div>
+                  ) : (
+                    displayComment && <p className={`text-gray-600 dark:text-gray-300 mt-1 leading-relaxed ${depth === 0 ? "text-sm" : "text-[13px]"}`}>{displayComment}</p>
+                  )}
 
-                {!isReply && (
-                  <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3">
-                    {/* Acknowledge — doers only */}
-                    {isDoer && !fb.acknowledged && (
+                  {/* Action row: reply available on every message; acknowledge only on top-level non-replies */}
+                  <div className={`flex items-center gap-3 ${depth === 0 ? "mt-3 pt-2 border-t border-gray-100 dark:border-gray-800" : "mt-2"}`}>
+                    {isDoer && !fb.acknowledged && !isReply && depth === 0 && (
                       <button onClick={async () => { try { await apiPatch(`/api/feedback/${fb.id}`, { acknowledged: true, acknowledged_by: dbUser?.id }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                         className="flex items-center gap-1 text-[10px] text-green-600 hover:text-green-500 transition-colors"><HiCheck className="w-3 h-3" /> Acknowledge</button>
                     )}
-                    {fb.acknowledged && <span className="text-[10px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
-                    {/* Reply */}
+                    {fb.acknowledged && depth === 0 && <span className="text-[10px] text-green-500 flex items-center gap-0.5"><HiCheck className="w-3 h-3" /> Acknowledged</span>}
                     {ui.replyTo === fb.id ? (
-                      <div className="flex gap-2 flex-1"><input value={ui.replyText} onChange={(e) => set("replyText", e.target.value)} placeholder="Reply..." autoFocus className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" onKeyDown={(e) => e.key === "Enter" && replyToFeedback()} /><button onClick={replyToFeedback} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Reply</button><button onClick={() => dispatch({ type: "RESET_REPLY" })} className="text-xs text-gray-400">Cancel</button></div>
+                      <div className="flex gap-2 flex-1">
+                        <input value={ui.replyText} onChange={(e) => set("replyText", e.target.value)}
+                          placeholder={`Reply to ${fb.reviewer?.full_name || "message"}…`} autoFocus
+                          className="flex-1 px-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white"
+                          onKeyDown={(e) => e.key === "Enter" && replyToFeedback()} />
+                        <button onClick={replyToFeedback} className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-xs rounded-xl">Send</button>
+                        <button onClick={() => dispatch({ type: "RESET_REPLY" })} className="text-xs text-gray-400">Cancel</button>
+                      </div>
                     ) : (
                       <button onClick={() => set("replyTo", fb.id)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-500 transition-colors"><HiReply className="w-3 h-3" /> Reply</button>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* Recurse into child replies */}
+                  {kids.map((k) => renderFb(k, Math.min(depth + 1, 2)))}
+                </div>
+              );
+            };
+
+            return topLevel.map((fb) => renderFb(fb, 0));
+          })()}
         </div>
       )}
     </div>
