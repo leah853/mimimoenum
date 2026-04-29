@@ -532,12 +532,14 @@ export default function FeedbackTrailPage() {
                             <div className="space-y-1">
                               <textarea value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
                                 rows={Math.min(Math.max(editChatText.split("\n").length, 2), 8)}
+                                wrap="soft"
                                 onKeyDown={(e) => {
                                   // Save on Enter; Shift+Enter inserts a newline
                                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); updateChatMsg(msg.id); }
                                   if (e.key === "Escape") setEditingChat(null);
                                 }}
-                                className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed resize-none" />
+                                className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed resize-none break-words"
+                                style={{ overflowWrap: "anywhere", wordBreak: "break-word" }} />
                               <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
                                 <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
                                 <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
@@ -545,7 +547,8 @@ export default function FeedbackTrailPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left whitespace-pre-wrap leading-relaxed break-words ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                            <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left whitespace-pre-wrap leading-relaxed break-words ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}
+                              style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
                               {renderMentions(msg.message)}
                             </div>
                           )}
@@ -645,7 +648,9 @@ export default function FeedbackTrailPage() {
                       }
                     }}
                     placeholder={chatReplyTo ? `Reply to ${chatReplyTo.userName}… (Shift+Enter for new line)` : "Type a message…  (Shift+Enter for new line)"}
-                    className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10 resize-none leading-relaxed" />
+                    wrap="soft"
+                    className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10 resize-none leading-relaxed whitespace-pre-wrap break-words"
+                    style={{ overflowWrap: "anywhere", wordBreak: "break-word" }} />
                   <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-2.5 text-gray-400 hover:text-indigo-500 transition-colors" title="Tag someone">
                     <HiAtSymbol className="w-4 h-4" />
                   </button>

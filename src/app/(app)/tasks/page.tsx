@@ -34,17 +34,26 @@ function TasksInner() {
   const { appRole } = useAuth();
   const isDoer = canCreateTasks(appRole);
   const searchParams = useSearchParams();
+  // Hydrate filter state from URL — lets the browser back button restore the
+  // exact same view the user was looking at before drilling into a task
   const initialStatus = (searchParams.get("status") as TaskStatus) || "all";
+  const initialCat = searchParams.get("cat") || "all";
+  const initialIter = searchParams.get("iter") || "all";
+  const initialWeek = searchParams.get("week") || "all";
+  const initialOwner = searchParams.get("owner") || "all";
+  const initialUrgency = (searchParams.get("urgency") as "all" | "overdue" | "due_today") || "all";
+  const initialSearch = searchParams.get("q") || "";
+
   const { data: tasks, loading, refetch, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: quarters } = useApi<QuarterOption[]>("/api/quarters");
   const { data: users } = useApi<UserOption[]>("/api/users/owners");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">(initialStatus);
-  const [catFilter, setCatFilter] = useState<string>("all");
-  const [iterFilter, setIterFilter] = useState<string>("all");
-  const [weekFilter, setWeekFilter] = useState<string>("all");
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "due_today">("all");
+  const [catFilter, setCatFilter] = useState<string>(initialCat);
+  const [iterFilter, setIterFilter] = useState<string>(initialIter);
+  const [weekFilter, setWeekFilter] = useState<string>(initialWeek);
+  const [ownerFilter, setOwnerFilter] = useState<string>(initialOwner);
+  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "due_today">(initialUrgency);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -57,6 +66,22 @@ function TasksInner() {
   const allUsers = users || [];
   const dynamicCats = [...new Set(all.map((t) => t.category).filter(Boolean))] as string[];
   const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...dynamicCats])], [all]);
+
+  // Sync filter state to URL so browser Back returns to the same view
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams();
+    if (catFilter !== "all") params.set("cat", catFilter);
+    if (iterFilter !== "all") params.set("iter", iterFilter);
+    if (weekFilter !== "all") params.set("week", weekFilter);
+    if (ownerFilter !== "all") params.set("owner", ownerFilter);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (urgencyFilter !== "all") params.set("urgency", urgencyFilter);
+    if (search) params.set("q", search);
+    const qs = params.toString();
+    const url = qs ? `?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, [catFilter, iterFilter, weekFilter, ownerFilter, statusFilter, urgencyFilter, search]);
 
   // Auto-expand — runs on first load AND whenever filters change
   const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}|${urgencyFilter}`;
@@ -351,11 +376,47 @@ function TasksInner() {
 
       {/* Task Table — shows only matching items, no empty shells */}
       <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-x-auto">
-        {/* Quarter header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-          <span className="text-base font-bold text-gray-900 dark:text-white">{quarter?.name || "Q2 2026"}</span>
-          {quarter && <span className="text-xs text-gray-400">{formatDate(quarter.start_date)} — {formatDate(quarter.end_date)}</span>}
-          <span className="ml-auto text-xs text-gray-500">{filtered.length} of {all.length}</span>
+        {/* Quarter + Iteration summary header */}
+        <div className="border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <span className="text-base font-bold text-gray-900 dark:text-white">{quarter?.name || "Q2 2026"}</span>
+            {quarter && <span className="text-xs text-gray-400">{formatDate(quarter.start_date)} — {formatDate(quarter.end_date)}</span>}
+            <span className="ml-auto text-xs text-gray-500">{filtered.length} of {all.length}</span>
+          </div>
+          {iterations.length > 0 && (
+            <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {iterations.map((iter) => {
+                // Reflect the active filters here too so each card shows what
+                // the user actually sees in the list right now.
+                const iterScopedAll = filtered.filter((t) => t.iteration_id === iter.id);
+                const total = iterScopedAll.length;
+                const done = iterScopedAll.filter((t) => t.status === "completed").length;
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                const isActive = iterFilter === iter.id;
+                return (
+                  <button key={iter.id}
+                    onClick={() => { setIterFilter(isActive ? "all" : iter.id); setWeekFilter("all"); }}
+                    className={`text-left p-2.5 rounded-xl border transition-all ${
+                      isActive
+                        ? "bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/30 dark:to-violet-900/20 border-indigo-300 dark:border-indigo-700 ring-1 ring-indigo-300 dark:ring-indigo-700"
+                        : "bg-gray-50/70 dark:bg-gray-800/30 border-gray-200/60 dark:border-gray-800/60 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10"
+                    }`}>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-xs font-semibold text-gray-800 dark:text-white">{iter.name}</span>
+                      <span className="text-[10px] text-gray-500">{done}/{total}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200/70 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[9px] text-gray-400">{formatDate(iter.start_date)} – {formatDate(iter.end_date)}</span>
+                      <span className="text-[9px] text-gray-500 font-medium">{pct}%</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Column headers */}
