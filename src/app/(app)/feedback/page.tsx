@@ -57,6 +57,8 @@ export default function FeedbackTrailPage() {
   const [showMentions, setShowMentions] = useState(false);
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editChatText, setEditChatText] = useState("");
+  const [chatReplyTo, setChatReplyTo] = useState<{ id: string; userName: string; preview: string } | null>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const chatMessages = chatData || [];
@@ -244,9 +246,15 @@ export default function FeedbackTrailPage() {
     setChatSending(true);
     try {
       const mentions = extractMentionIds(chatMsg);
-      await apiPost("/api/chat", { user_id: dbUser.id, message: chatMsg, mentions });
+      await apiPost("/api/chat", {
+        user_id: dbUser.id,
+        message: chatMsg,
+        mentions,
+        parent_id: chatReplyTo?.id || null,
+      });
       setChatMsg("");
       setShowMentions(false);
+      setChatReplyTo(null);
       await refetchChat();
     } catch (e) { toast(handleApiError(e), "error"); }
     setChatSending(false);
@@ -471,50 +479,87 @@ export default function FeedbackTrailPage() {
                   <HiOutlineChatAlt className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-400">No messages yet. Start the conversation!</p>
                 </div>
-              ) : chatMessages.map((msg) => {
-                const isMe = msg.user_id === dbUser?.id;
-                return (
-                  <div key={msg.id} className={`group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${isMe ? "bg-gradient-to-br from-indigo-500 to-violet-500" : "bg-gradient-to-br from-gray-400 to-gray-500"}`}>
-                      {msg.user?.full_name?.[0] || "?"}
-                    </div>
-                    <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
-                      <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
-                        <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
-                        {isMe && editingChat !== msg.id && (
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
-                            <button onClick={() => { setEditingChat(msg.id); setEditChatText(msg.message); }} className="text-[9px] text-gray-400 hover:text-indigo-500">Edit</button>
-                            <button onClick={() => deleteChatMsg(msg.id)} className="text-[9px] text-gray-400 hover:text-red-500">Delete</button>
-                          </span>
-                        )}
-                      </div>
-                      {editingChat === msg.id ? (
-                        <div className="space-y-1">
-                          <input value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
-                            onKeyDown={(e) => { if (e.key === "Enter") updateChatMsg(msg.id); if (e.key === "Escape") setEditingChat(null); }}
-                            className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-                          <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                            <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
-                            <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
+              ) : (() => {
+                // Build parent->children tree for threaded chat
+                const childrenBy = new Map<string, ChatMessage[]>();
+                const ids = new Set(chatMessages.map((m) => m.id));
+                for (const m of chatMessages) {
+                  if (m.parent_id && ids.has(m.parent_id)) {
+                    const arr = childrenBy.get(m.parent_id) || [];
+                    arr.push(m);
+                    childrenBy.set(m.parent_id, arr);
+                  }
+                }
+                for (const arr of childrenBy.values()) {
+                  arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                }
+                const topLevel = chatMessages.filter((m) => !m.parent_id || !ids.has(m.parent_id));
+
+                const renderChat = (msg: ChatMessage, depth: number): React.ReactNode => {
+                  const isMe = msg.user_id === dbUser?.id;
+                  const kids = childrenBy.get(msg.id) || [];
+                  const wrapperClass = depth === 0
+                    ? `group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`
+                    : `group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""} ml-8 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800/40 mt-2`;
+                  return (
+                    <div key={msg.id}>
+                      <div className={wrapperClass}>
+                        <div className={`rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${isMe ? "bg-gradient-to-br from-indigo-500 to-violet-500" : "bg-gradient-to-br from-gray-400 to-gray-500"} ${depth === 0 ? "w-7 h-7" : "w-6 h-6"}`}>
+                          {msg.user?.full_name?.[0] || "?"}
+                        </div>
+                        <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
+                          <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
+                            <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
+                            {editingChat !== msg.id && (
+                              <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setChatReplyTo({ id: msg.id, userName: msg.user?.full_name || "message", preview: msg.message.slice(0, 60) });
+                                    chatInputRef.current?.focus();
+                                  }}
+                                  className="text-[9px] text-indigo-600 hover:text-indigo-500 font-medium">Reply</button>
+                                {isMe && (
+                                  <>
+                                    <button onClick={() => { setEditingChat(msg.id); setEditChatText(msg.message); }} className="text-[9px] text-gray-400 hover:text-indigo-500">Edit</button>
+                                    <button onClick={() => deleteChatMsg(msg.id)} className="text-[9px] text-gray-400 hover:text-red-500">Delete</button>
+                                  </>
+                                )}
+                              </span>
+                            )}
                           </div>
+                          {editingChat === msg.id ? (
+                            <div className="space-y-1">
+                              <input value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
+                                onKeyDown={(e) => { if (e.key === "Enter") updateChatMsg(msg.id); if (e.key === "Escape") setEditingChat(null); }}
+                                className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                              <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                                <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
+                                <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                              {renderMentions(msg.message)}
+                            </div>
+                          )}
+                          {(msg.mentions?.length || 0) > 0 && (
+                            <div className="flex gap-1 mt-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                              {msg.mentions!.map((m, i) => (
+                                <span key={i} className="text-[9px] text-indigo-500">@{(teamUsers || []).find(u => u.id === m)?.full_name || m}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}>
-                          {renderMentions(msg.message)}
-                        </div>
-                      )}
-                      {(msg.mentions?.length || 0) > 0 && (
-                        <div className="flex gap-1 mt-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                          {msg.mentions!.map((m, i) => (
-                            <span key={i} className="text-[9px] text-indigo-500">@{(teamUsers || []).find(u => u.id === m)?.full_name || m}</span>
-                          ))}
-                        </div>
-                      )}
+                      </div>
+                      {/* Recurse into thread replies (cap visual indent at depth 2) */}
+                      {kids.map((k) => renderChat(k, Math.min(depth + 1, 2)))}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                };
+
+                return topLevel.map((m) => renderChat(m, 0));
+              })()}
               <div ref={chatEndRef} />
             </div>
 
@@ -544,9 +589,24 @@ export default function FeedbackTrailPage() {
                   ))}
                 </div>
               )}
+
+              {/* Replying-to context pill — visible while a reply is queued */}
+              {chatReplyTo && (
+                <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border-l-2 border-indigo-400">
+                  <HiReply className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">Replying to {chatReplyTo.userName}</span>
+                    <span className="block text-[11px] text-gray-600 dark:text-gray-400 truncate">{chatReplyTo.preview}</span>
+                  </div>
+                  <button onClick={() => setChatReplyTo(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0" title="Cancel reply">
+                    <HiX className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <input value={chatMsg}
+                  <input ref={chatInputRef} value={chatMsg}
                     onChange={(e) => {
                       setChatMsg(e.target.value);
                       const val = e.target.value;
@@ -559,9 +619,10 @@ export default function FeedbackTrailPage() {
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+                      if (e.key === "Escape" && chatReplyTo) setChatReplyTo(null);
                       if (e.key === "Escape") setShowMentions(false);
                     }}
-                    placeholder="Type a message..."
+                    placeholder={chatReplyTo ? `Reply to ${chatReplyTo.userName}…` : "Type a message..."}
                     className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white pr-10" />
                   <button onClick={() => setShowMentions(!showMentions)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors" title="Tag someone">
                     <HiAtSymbol className="w-4 h-4" />
