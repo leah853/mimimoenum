@@ -709,8 +709,8 @@ export default function FeedbackTrailPage() {
                                         )}
                                         {/* Reply available on every message — Slack/Gchat-style threading */}
                                         <button onClick={() => setReplyTo({ taskId: task.id, fbId: fb.id })}
-                                          className="text-[10px] text-gray-400 hover:text-indigo-500 flex items-center gap-0.5 transition-colors">
-                                          <HiReply className="w-3 h-3" /> Reply
+                                          className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                                          <HiReply className="w-3.5 h-3.5" /> Reply
                                         </button>
                                       </div>
                                     </div>

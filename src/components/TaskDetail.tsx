@@ -668,7 +668,10 @@ export default function TaskDetail() {
                         <button onClick={() => dispatch({ type: "RESET_REPLY" })} className="text-xs text-gray-400">Cancel</button>
                       </div>
                     ) : (
-                      <button onClick={() => set("replyTo", fb.id)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-500 transition-colors"><HiReply className="w-3 h-3" /> Reply</button>
+                      <button onClick={() => set("replyTo", fb.id)}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                        <HiReply className="w-3.5 h-3.5" /> Reply
+                      </button>
                     )}
                   </div>
 
