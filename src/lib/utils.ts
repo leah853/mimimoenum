@@ -23,35 +23,6 @@ export function isReplyComment(comment?: string | null): boolean {
   return !!comment && (comment.startsWith("↩️") || comment.startsWith("\u21a9\ufe0f") || comment.startsWith("Reply to"));
 }
 
-/**
- * Encode a threaded reply with a parent message ID.
- * Format: `↩️[<parentId>] <text>` — parsed by parseReplyComment.
- * Avoids a DB migration by piggy-backing on the comment string.
- */
-export function buildReplyComment(parentId: string, text: string): string {
-  return `↩️[${parentId}] ${text.trim()}`;
-}
-
-/**
- * Parse a reply comment to extract the parent message ID (if encoded) and the clean text.
- * Handles three formats:
- *   1. New:    `↩️[<parentId>] <text>`              -> { parentId, text }
- *   2. Legacy: `↩️ Reply to <Author>: <text>`        -> { parentId: null, text, authorHint: 'Author' }
- *   3. Legacy: `Reply to <Author>: <text>`           -> same as #2
- * Non-replies return the original comment as text and parentId: null.
- */
-export function parseReplyComment(comment?: string | null): { parentId: string | null; text: string; authorHint?: string } {
-  if (!comment) return { parentId: null, text: "" };
-  // Format 1: ↩️[parentId] text
-  const newMatch = comment.match(/^↩️\[([^\]]+)\]\s*([\s\S]*)$/);
-  if (newMatch) return { parentId: newMatch[1], text: newMatch[2] };
-  // Format 2/3: legacy "Reply to <Author>: <text>" with optional emoji prefix
-  const legacyMatch = comment.match(/^(?:↩️\s*)?Reply to ([^:]+):\s*([\s\S]*)$/);
-  if (legacyMatch) return { parentId: null, text: legacyMatch[2], authorHint: legacyMatch[1].trim() };
-  return { parentId: null, text: comment };
-}
-
-
 /** Extract a human-readable error message from an unknown catch value */
 export function handleApiError(e: unknown): string {
   if (e instanceof Error) return e.message;
