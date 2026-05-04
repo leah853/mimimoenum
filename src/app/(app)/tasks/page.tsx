@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks } from "@/lib/roles";
 import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck, HiOutlineFilm } from "react-icons/hi";
 import Link from "next/link";
-import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT } from "@/lib/constants";
+import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT, CATEGORY_GROUP, FOUNDATION_ORDER, FOUNDATION_LABEL } from "@/lib/constants";
 import { formatDate, isReplyComment, isVideoUrl } from "@/lib/utils";
 import { Skeleton, SkeletonRows, useToast } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
@@ -287,21 +287,46 @@ function TasksInner() {
             </div>
           </div>
 
-          {/* Category selector — pill buttons */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Category</label>
-            <div className="flex gap-1.5 flex-wrap">
+          {/* Category selector — grouped by Apex / Platform / People / Branding */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Category</label>
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+              {/* "All" stays a single pill on the left */}
               <button onClick={() => setCatFilter("all")}
                 className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${catFilter === "all" ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
                 All
               </button>
-              {categories.map((c) => {
-                const count = all.filter(t => t.category === c && (iterFilter === "all" || t.iteration_id === iterFilter) && (weekFilter === "all" || t.week_id === weekFilter)).length;
+              {FOUNDATION_ORDER.map((group) => {
+                const groupCats = categories.filter((c) => CATEGORY_GROUP[c] === group);
+                if (groupCats.length === 0) return null;
+                const isApex = group === "apex";
                 return (
-                  <button key={c} onClick={() => setCatFilter(c)}
-                    className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${catFilter === c ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                    {CAT_SHORT[c] || c} <span className={catFilter === c ? "text-white/60" : "text-gray-400"}>({count})</span>
-                  </button>
+                  <div key={group} className="flex flex-col gap-1">
+                    <span className={`text-[9px] font-semibold uppercase tracking-[0.08em] ${isApex ? "text-amber-600 dark:text-amber-400" : "text-gray-400"}`}>
+                      {isApex ? "★ " : ""}{FOUNDATION_LABEL[group]}
+                    </span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {groupCats.map((c) => {
+                        const count = all.filter(t => t.category === c && (iterFilter === "all" || t.iteration_id === iterFilter) && (weekFilter === "all" || t.week_id === weekFilter)).length;
+                        const active = catFilter === c;
+                        const apexActive = isApex && active;
+                        return (
+                          <button key={c} onClick={() => setCatFilter(c)}
+                            className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${
+                              apexActive
+                                ? "bg-gradient-to-r from-amber-500 to-indigo-500 text-white shadow-md ring-1 ring-amber-400"
+                                : active
+                                ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm"
+                                : isApex
+                                ? "bg-gradient-to-br from-amber-50 to-indigo-50 dark:from-amber-900/15 dark:to-indigo-900/10 text-amber-700 dark:text-amber-300 hover:brightness-105 ring-1 ring-amber-200/60 dark:ring-amber-800/30"
+                                : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"
+                            }`}>
+                            {CAT_SHORT[c] || c} <span className={active ? "text-white/60" : "text-gray-400"}>({count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>

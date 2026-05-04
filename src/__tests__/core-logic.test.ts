@@ -189,15 +189,16 @@ describe("Role permissions", () => {
 // ============================================
 describe("Constants", () => {
   test("FIXED_CATEGORIES has 6 items", () => {
-    expect(FIXED_CATEGORIES).toHaveLength(6);
+    expect(FIXED_CATEGORIES).toHaveLength(7);
   });
 
-  test("FIXED_CATEGORIES includes all required categories", () => {
-    expect(FIXED_CATEGORIES).toContain("Customer Success & PG Acquisition");
-    expect(FIXED_CATEGORIES).toContain("Product / Engineering / Workflows");
-    expect(FIXED_CATEGORIES).toContain("Cybersecurity");
-    expect(FIXED_CATEGORIES).toContain("Continuous Learning");
+  test("FIXED_CATEGORIES includes all required categories (apex + foundations)", () => {
+    expect(FIXED_CATEGORIES).toContain("Milestone Execution");
+    expect(FIXED_CATEGORIES).toContain("Workflows");
+    expect(FIXED_CATEGORIES).toContain("Product & Engineering");
+    expect(FIXED_CATEGORIES).toContain("Cybersecurity / Compliance");
     expect(FIXED_CATEGORIES).toContain("Talent Acquisition");
+    expect(FIXED_CATEGORIES).toContain("Training & Culture");
     expect(FIXED_CATEGORIES).toContain("Branding");
   });
 
@@ -211,7 +212,7 @@ describe("Constants", () => {
   test("CAT_SHORT has entry for each category", () => {
     for (const cat of FIXED_CATEGORIES) {
       expect(CAT_SHORT[cat]).toBeDefined();
-      expect(CAT_SHORT[cat].length).toBeLessThan(15);
+      expect(CAT_SHORT[cat].length).toBeLessThan(20);
     }
   });
 

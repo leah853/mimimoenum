@@ -13,19 +13,18 @@ type WeekOption = { id: string; week_number: number; start_date: string; end_dat
 type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
 type QuarterOption = { id: string; name: string; start_date: string; end_date: string; iterations: IterOption[] };
 
-import { FIXED_CATEGORIES, OWNER_STYLE } from "@/lib/constants";
+import {
+  FIXED_CATEGORIES,
+  OWNER_STYLE,
+  CATEGORY_ALIAS,
+  CATEGORY_GROUP,
+  FOUNDATION_ORDER,
+  FOUNDATION_LABEL,
+  FOUNDATION_TAGLINE,
+  type FoundationGroup,
+  type CategoryName,
+} from "@/lib/constants";
 import { calcScore, formatDate } from "@/lib/utils";
-
-// Display aliases requested by reps — the user-facing name shown in Owner Map,
-// while the data keeps the canonical category name from FIXED_CATEGORIES.
-const CATEGORY_ALIAS: Record<string, string> = {
-  "Customer Success & PG Acquisition": "Vertical Execution & Customer Success",
-  "Product / Engineering / Workflows": "Workflow / Product / Engineering",
-  "Cybersecurity": "Cybersecurity",
-  "Branding": "Branding",
-  "Continuous Learning": "Knowledge & Culture",
-  "Talent Acquisition": "Talent Acquisition",
-};
 
 function ScorePill({ tasks, size = "sm" }: { tasks: Task[]; size?: "sm" | "lg" }) {
   const s = calcScore(tasks);
@@ -317,12 +316,29 @@ function buildIterationHierarchy(tasks: FullTask[], iterations: IterOption[]): I
 
 // Emoji per area for a bit of visual interest.
 const AREA_EMOJI: Record<string, string> = {
-  "Customer Success & PG Acquisition": "🎯",
-  "Product / Engineering / Workflows": "⚙️",
-  "Cybersecurity": "🛡️",
-  "Continuous Learning": "📚",
-  "Talent Acquisition": "👥",
-  "Branding": "🎨",
+  "Milestone Execution":          "🎯",
+  "Workflows":                    "🔁",
+  "Product & Engineering":        "⚙️",
+  "Cybersecurity / Compliance":   "🛡️",
+  "Talent Acquisition":           "👥",
+  "Training & Culture":           "📚",
+  "Branding":                     "🎨",
+};
+
+// Group accent classes (apex gets a distinct gold/indigo treatment).
+const FOUNDATION_ACCENT: Record<FoundationGroup, { wrap: string; pill: string; pillText: string }> = {
+  apex:     { wrap: "border-amber-300/70 dark:border-amber-700/40 bg-gradient-to-br from-amber-50/80 to-indigo-50/60 dark:from-amber-900/15 dark:to-indigo-900/10",
+              pill: "bg-gradient-to-r from-amber-100 to-indigo-100 dark:from-amber-900/30 dark:to-indigo-900/20",
+              pillText: "text-amber-700 dark:text-amber-300" },
+  platform: { wrap: "border-blue-200/60 dark:border-blue-800/30",
+              pill: "bg-blue-50 dark:bg-blue-900/15",
+              pillText: "text-blue-700 dark:text-blue-300" },
+  people:   { wrap: "border-emerald-200/60 dark:border-emerald-800/30",
+              pill: "bg-emerald-50 dark:bg-emerald-900/15",
+              pillText: "text-emerald-700 dark:text-emerald-300" },
+  branding: { wrap: "border-violet-200/60 dark:border-violet-800/30",
+              pill: "bg-violet-50 dark:bg-violet-900/15",
+              pillText: "text-violet-700 dark:text-violet-300" },
 };
 
 // The two canonical owners; anything else is treated as "yet to be defined".
@@ -365,15 +381,34 @@ function OwnerMap({ categories, tasks, iterations }: { categories: string[]; tas
         )}
       </div>
 
-      {/* Six area cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {cats.map((cat) => {
+      {/* Foundation-grouped area cards: Apex (Milestone Execution) on top, then Platform / People / Branding */}
+      {FOUNDATION_ORDER.map((group) => {
+        const groupCats = cats.filter((c) => CATEGORY_GROUP[c] === group);
+        if (groupCats.length === 0) return null;
+        const accent = FOUNDATION_ACCENT[group];
+        const isApex = group === "apex";
+        return (
+          <section key={group} className="space-y-2">
+            {/* Group header pill */}
+            <div className={`flex items-center gap-3 px-3 py-1.5 rounded-xl border ${accent.pill} ${isApex ? "border-amber-300/60 dark:border-amber-700/40" : "border-transparent"}`}>
+              <span className={`text-[11px] font-bold uppercase tracking-[0.08em] ${accent.pillText}`}>
+                {isApex ? "★ Apex — " : ""}{FOUNDATION_LABEL[group]}
+              </span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">{FOUNDATION_TAGLINE[group]}</span>
+            </div>
+
+            <div className={isApex ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 lg:grid-cols-2 gap-4"}>
+              {groupCats.map((cat) => {
           const catTasks = tasks.filter((t) => t.category === cat);
           const displayName = CATEGORY_ALIAS[cat] || cat;
           const emoji = AREA_EMOJI[cat] || "📋";
 
           return (
-            <div key={cat} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+            <div key={cat} className={`backdrop-blur-sm border rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md ${
+              isApex
+                ? "bg-gradient-to-br from-amber-50/80 to-indigo-50/60 dark:from-amber-900/15 dark:to-indigo-900/10 border-amber-300/60 dark:border-amber-700/40 ring-1 ring-amber-200/60 dark:ring-amber-800/30"
+                : "bg-white/80 dark:bg-gray-900/80 border-gray-200/60 dark:border-gray-800/60"
+            }`}>
               {/* Area header */}
               <div className="px-5 py-3 border-b border-gray-200/60 dark:border-gray-800/60 flex items-center justify-between bg-gradient-to-r from-gray-50/60 to-white/30 dark:from-gray-800/30 dark:to-gray-900/20">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -508,8 +543,11 @@ function OwnerMap({ categories, tasks, iterations }: { categories: string[]; tas
               </div>
             </div>
           );
-        })}
-      </div>
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

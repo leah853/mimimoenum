@@ -18,7 +18,9 @@ type IterOption = { id: string; name: string; start_date: string; end_date: stri
 type QuarterOption = { id: string; name: string; iterations: IterOption[] };
 type WeekReport = { id: string; report_type: string; content: string; file_url?: string; feedback?: { id: string; reviewer_id: string; rating: number; comment?: string; reviewer?: { id: string; full_name: string } }[] };
 
-const CATEGORIES = ["Customer Success & PG Acquisition", "Product / Engineering / Workflows", "Cybersecurity", "Continuous Learning", "Talent Acquisition", "Branding"];
+// Pulled from shared constants so WeekDetail stays in sync with the rest of the app
+import { FIXED_CATEGORIES as CATEGORIES_LIST } from "@/lib/constants";
+const CATEGORIES = CATEGORIES_LIST as readonly string[];
 
 /** Parse file_url which could be a single URL string or a JSON array of URLs */
 function parseFileUrls(fileUrl?: string | null): string[] {
