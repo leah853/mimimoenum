@@ -20,33 +20,33 @@ export const FIXED_CATEGORIES = [
 
 export type CategoryName = (typeof FIXED_CATEGORIES)[number];
 
-// The 4 ordered groups. "apex" is the visually distinct top tier.
-export type FoundationGroup = "apex" | "platform" | "people" | "branding";
+// The 3 ordered groups. "apex" is the visually distinct top tier and now
+// covers both Milestone Execution and Branding (clubbed per request — the
+// outcome we deliver and how we show up sit together).
+export type FoundationGroup = "apex" | "platform" | "people";
 
-export const FOUNDATION_ORDER: readonly FoundationGroup[] = ["apex", "platform", "people", "branding"];
+export const FOUNDATION_ORDER: readonly FoundationGroup[] = ["apex", "platform", "people"];
 
 export const FOUNDATION_LABEL: Record<FoundationGroup, string> = {
-  apex: "Milestone Execution",
+  apex: "Milestone Execution & Branding",
   platform: "Platform — Core Engine",
   people: "People",
-  branding: "Branding",
 };
 
 export const FOUNDATION_TAGLINE: Record<FoundationGroup, string> = {
-  apex: "What we deliver",
+  apex: "What we deliver and how we show up",
   platform: "Workflows · Product & Engineering · Cybersecurity",
   people: "Talent Acquisition · Training & Culture",
-  branding: "How we show up",
 };
 
 export const CATEGORY_GROUP: Record<string, FoundationGroup> = {
   "Milestone Execution":          "apex",
+  "Branding":                     "apex",
   "Workflows":                    "platform",
   "Product & Engineering":        "platform",
   "Cybersecurity / Compliance":   "platform",
   "Talent Acquisition":           "people",
   "Training & Culture":           "people",
-  "Branding":                     "branding",
 };
 
 // Helper — group → its categories in render order

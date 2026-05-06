@@ -336,9 +336,6 @@ const FOUNDATION_ACCENT: Record<FoundationGroup, { wrap: string; pill: string; p
   people:   { wrap: "border-emerald-200/60 dark:border-emerald-800/30",
               pill: "bg-emerald-50 dark:bg-emerald-900/15",
               pillText: "text-emerald-700 dark:text-emerald-300" },
-  branding: { wrap: "border-violet-200/60 dark:border-violet-800/30",
-              pill: "bg-violet-50 dark:bg-violet-900/15",
-              pillText: "text-violet-700 dark:text-violet-300" },
 };
 
 // The two canonical owners; anything else is treated as "yet to be defined".

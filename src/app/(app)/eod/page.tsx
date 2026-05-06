@@ -9,20 +9,30 @@ import { HiChevronLeft, HiChevronRight, HiOutlineFilm, HiTrash } from "react-ico
 import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
-// Daily updates are written under the four core foundation groups so that
-// each day's entry maps cleanly back onto the milestone structure.
-type GroupKey = "apex" | "platform" | "people" | "branding";
+// Daily updates are written under the three core foundation groups (apex
+// covers Milestone Execution AND Branding clubbed together).
+type GroupKey = "apex" | "platform" | "people";
 const GROUP_LABELS: { key: GroupKey; label: string; emoji: string }[] = [
-  { key: "apex",     label: "Milestone Execution",  emoji: "🎯" },
-  { key: "platform", label: "Platform — Core Engine", emoji: "⚙️" },
-  { key: "people",   label: "People",                emoji: "👥" },
-  { key: "branding", label: "Branding",              emoji: "🎨" },
+  { key: "apex",     label: "Milestone Execution & Branding", emoji: "🎯" },
+  { key: "platform", label: "Platform — Core Engine",         emoji: "⚙️" },
+  { key: "people",   label: "People",                          emoji: "👥" },
 ];
 const SECTION_PREFIX = "### "; // marker used inside what_was_done
 type DoneByGroup = Record<GroupKey, string>;
-const emptyDone: DoneByGroup = { apex: "", platform: "", people: "", branding: "" };
+const emptyDone: DoneByGroup = { apex: "", platform: "", people: "" };
 
-// Encode the 4 group textareas into a single string stored in what_was_done.
+// Map every recognised section header back to one of the 3 group keys. This
+// lets us continue to read older EOD entries that were written when there
+// were 4 separate groups (Milestone Execution + Branding stored separately).
+const SECTION_HEADER_TO_GROUP: Record<string, GroupKey> = {
+  "Milestone Execution & Branding": "apex",
+  "Milestone Execution":            "apex", // legacy
+  "Branding":                       "apex", // legacy → folded into apex
+  "Platform — Core Engine":         "platform",
+  "People":                         "people",
+};
+
+// Encode the 3 group textareas into a single string stored in what_was_done.
 // Empty groups are omitted so the field stays clean.
 function encodeDone(d: DoneByGroup): string {
   const parts: string[] = [];
@@ -33,31 +43,33 @@ function encodeDone(d: DoneByGroup): string {
   return parts.join("\n\n");
 }
 
-// Parse a stored what_was_done field back into the 4 groups. If no section
-// markers are found (legacy entries written before this restructure), the
-// whole text is treated as Milestone Execution so it still appears somewhere.
+// Parse a stored what_was_done field back into the 3 groups. Legacy entries
+// (no markers) fall under the apex group; legacy "Branding" sections merge
+// with whatever's already in apex (separated by a blank line).
 function decodeDone(text: string | null | undefined): DoneByGroup {
-  const out: DoneByGroup = { apex: "", platform: "", people: "", branding: "" };
+  const out: DoneByGroup = { apex: "", platform: "", people: "" };
   if (!text) return out;
-  const labelToKey = new Map(GROUP_LABELS.map((g) => [g.label, g.key as GroupKey]));
   const lines = text.split("\n");
   let currentKey: GroupKey | null = null;
   let buffer: string[] = [];
   const flush = () => {
-    if (currentKey !== null) out[currentKey] = buffer.join("\n").trim();
+    if (currentKey !== null) {
+      const chunk = buffer.join("\n").trim();
+      if (chunk) out[currentKey] = out[currentKey] ? `${out[currentKey]}\n\n${chunk}` : chunk;
+    }
     buffer = [];
   };
   for (const line of lines) {
     if (line.startsWith(SECTION_PREFIX)) {
       flush();
       const label = line.slice(SECTION_PREFIX.length).trim();
-      currentKey = labelToKey.get(label) ?? null;
+      currentKey = SECTION_HEADER_TO_GROUP[label] ?? null;
     } else {
       buffer.push(line);
     }
   }
   flush();
-  // Legacy fallback: no markers anywhere → put it under Milestone Execution
+  // Legacy fallback: no markers anywhere → put it under apex
   if (!Object.values(out).some(Boolean)) out.apex = text.trim();
   return out;
 }
