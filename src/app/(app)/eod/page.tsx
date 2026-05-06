@@ -9,6 +9,59 @@ import { HiChevronLeft, HiChevronRight, HiOutlineFilm, HiTrash } from "react-ico
 import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
+// Daily updates are written under the four core foundation groups so that
+// each day's entry maps cleanly back onto the milestone structure.
+type GroupKey = "apex" | "platform" | "people" | "branding";
+const GROUP_LABELS: { key: GroupKey; label: string; emoji: string }[] = [
+  { key: "apex",     label: "Milestone Execution",  emoji: "🎯" },
+  { key: "platform", label: "Platform — Core Engine", emoji: "⚙️" },
+  { key: "people",   label: "People",                emoji: "👥" },
+  { key: "branding", label: "Branding",              emoji: "🎨" },
+];
+const SECTION_PREFIX = "### "; // marker used inside what_was_done
+type DoneByGroup = Record<GroupKey, string>;
+const emptyDone: DoneByGroup = { apex: "", platform: "", people: "", branding: "" };
+
+// Encode the 4 group textareas into a single string stored in what_was_done.
+// Empty groups are omitted so the field stays clean.
+function encodeDone(d: DoneByGroup): string {
+  const parts: string[] = [];
+  for (const g of GROUP_LABELS) {
+    const v = d[g.key].trim();
+    if (v) parts.push(`${SECTION_PREFIX}${g.label}\n${v}`);
+  }
+  return parts.join("\n\n");
+}
+
+// Parse a stored what_was_done field back into the 4 groups. If no section
+// markers are found (legacy entries written before this restructure), the
+// whole text is treated as Milestone Execution so it still appears somewhere.
+function decodeDone(text: string | null | undefined): DoneByGroup {
+  const out: DoneByGroup = { apex: "", platform: "", people: "", branding: "" };
+  if (!text) return out;
+  const labelToKey = new Map(GROUP_LABELS.map((g) => [g.label, g.key as GroupKey]));
+  const lines = text.split("\n");
+  let currentKey: GroupKey | null = null;
+  let buffer: string[] = [];
+  const flush = () => {
+    if (currentKey !== null) out[currentKey] = buffer.join("\n").trim();
+    buffer = [];
+  };
+  for (const line of lines) {
+    if (line.startsWith(SECTION_PREFIX)) {
+      flush();
+      const label = line.slice(SECTION_PREFIX.length).trim();
+      currentKey = labelToKey.get(label) ?? null;
+    } else {
+      buffer.push(line);
+    }
+  }
+  flush();
+  // Legacy fallback: no markers anywhere → put it under Milestone Execution
+  if (!Object.values(out).some(Boolean)) out.apex = text.trim();
+  return out;
+}
+
 type FullEOD = EODUpdate & {
   user?: { id: string; full_name: string };
   linked_tasks?: { task: { id: string; title: string; status: string } }[];
@@ -31,8 +84,7 @@ export default function EODPage() {
   const updates = allUpdates || [];
   const isAssessor = canGiveFeedback(appRole);
 
-  const [whatWasDone, setWhatWasDone] = useState("");
-  const [whatsNext, setWhatsNext] = useState("");
+  const [doneByGroup, setDoneByGroup] = useState<DoneByGroup>(emptyDone);
   const [blockers, setBlockers] = useState("");
   const [addedBy, setAddedBy] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -40,8 +92,7 @@ export default function EODPage() {
   const [submitting, setSubmitting] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [editingEod, setEditingEod] = useState(false);
-  const [editDone, setEditDone] = useState("");
-  const [editNext, setEditNext] = useState("");
+  const [editDone, setEditDone] = useState<DoneByGroup>(emptyDone);
   const [editObstacles, setEditObstacles] = useState("");
 
   // Summary stats for current month
@@ -79,7 +130,8 @@ export default function EODPage() {
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); };
 
   async function submitUpdate() {
-    if (!whatWasDone || !addedBy) return;
+    const encoded = encodeDone(doneByGroup);
+    if (!encoded || !addedBy) return;
     setSubmitting(true);
     try {
       // Upload video directly to Supabase storage (bypasses Vercel 4.5 MB limit)
@@ -93,12 +145,14 @@ export default function EODPage() {
       await apiPost("/api/eod", {
         user_id: addedBy,
         date: selectedDate,
-        what_was_done: whatWasDone,
-        whats_next: whatsNext || null,
+        what_was_done: encoded,
+        // whats_next column kept on the schema for backward compatibility
+        // but the form no longer collects it
+        whats_next: null,
         blockers: blockers || null,
         video_url: videoUrl,
       });
-      setWhatWasDone(""); setWhatsNext(""); setBlockers(""); setVideoFile(null);
+      setDoneByGroup(emptyDone); setBlockers(""); setVideoFile(null);
       await refetch();
       toast("EOD update saved", "success");
     } catch (e) { toast(handleApiError(e), "error"); setUploadingVideo(false); }
@@ -240,7 +294,7 @@ export default function EODPage() {
                 </div>
                 {isDoer && !editingEod && (
                   <div className="flex items-center gap-2">
-                    <button onClick={() => { setEditingEod(true); setEditDone(selectedUpdate.what_was_done); setEditNext(selectedUpdate.whats_next || ""); setEditObstacles(selectedUpdate.blockers || ""); }}
+                    <button onClick={() => { setEditingEod(true); setEditDone(decodeDone(selectedUpdate.what_was_done)); setEditObstacles(selectedUpdate.blockers || ""); }}
                       className="text-[10px] text-indigo-500 hover:text-indigo-400 transition-colors">Edit</button>
                     <button onClick={async () => {
                       if (!confirm("Delete this EOD update?")) return;
@@ -252,27 +306,49 @@ export default function EODPage() {
 
               {editingEod ? (
                 <div className="space-y-3">
-                  <div><label className="text-xs text-gray-400 mb-1 block">What was done</label>
-                    <textarea value={editDone} onChange={(e) => setEditDone(e.target.value)} rows={3}
-                      className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
-                  <div><label className="text-xs text-gray-400 mb-1 block">What&apos;s next</label>
-                    <textarea value={editNext} onChange={(e) => setEditNext(e.target.value)} rows={2}
-                      className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
+                  <p className="text-xs text-gray-400">What was done — by core area</p>
+                  {GROUP_LABELS.map((g) => (
+                    <div key={g.key}>
+                      <label className="text-[11px] text-gray-500 mb-1 block">{g.emoji} {g.label}</label>
+                      <textarea value={editDone[g.key]} onChange={(e) => setEditDone({ ...editDone, [g.key]: e.target.value })} rows={2}
+                        className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+                    </div>
+                  ))}
                   <div><label className="text-xs text-gray-400 mb-1 block">Obstacles</label>
                     <textarea value={editObstacles} onChange={(e) => setEditObstacles(e.target.value)} rows={2}
                       className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" /></div>
                   <div className="flex gap-2">
                     <button onClick={async () => {
-                      try { await apiPatch(`/api/eod/${selectedUpdate.id}`, { what_was_done: editDone, whats_next: editNext || null, blockers: editObstacles || null }); setEditingEod(false); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
+                      try {
+                        const encoded = encodeDone(editDone);
+                        await apiPatch(`/api/eod/${selectedUpdate.id}`, { what_was_done: encoded, blockers: editObstacles || null });
+                        setEditingEod(false);
+                        await refetch();
+                      } catch (e) { toast(handleApiError(e), "error"); }
                     }} className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:brightness-110 text-white text-xs rounded-xl shadow-sm transition-all">Save</button>
                     <button onClick={() => setEditingEod(false)} className="text-xs text-gray-500">Cancel</button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div><p className="text-xs text-gray-400 uppercase mb-1">What was done</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.what_was_done}</p></div>
-                  {selectedUpdate.whats_next && <div><p className="text-xs text-gray-400 uppercase mb-1">What&apos;s next</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.whats_next}</p></div>}
-                  {selectedUpdate.blockers && <div><p className="text-xs text-red-500 dark:text-red-400 uppercase mb-1">Obstacles</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.blockers}</p></div>}
+                  {(() => {
+                    const dec = decodeDone(selectedUpdate.what_was_done);
+                    const filled = GROUP_LABELS.filter((g) => dec[g.key]);
+                    if (filled.length === 0) return <p className="text-xs text-gray-400 italic">No update recorded.</p>;
+                    return (
+                      <div className="space-y-2">
+                        {filled.map((g) => (
+                          <div key={g.key}>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 uppercase mb-1 flex items-center gap-1">
+                              <span>{g.emoji}</span> {g.label}
+                            </p>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap pl-5 border-l-2 border-gray-200 dark:border-gray-700">{dec[g.key]}</p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {selectedUpdate.blockers && <div className="mt-3"><p className="text-xs text-red-500 dark:text-red-400 uppercase mb-1">Obstacles</p><p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedUpdate.blockers}</p></div>}
                   {/* Video preview */}
                   {selectedUpdate.video_url && (
                     <div>
@@ -381,15 +457,19 @@ export default function EODPage() {
                   {(owners || []).map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">What was done? *</label>
-                <textarea value={whatWasDone} onChange={(e) => setWhatWasDone(e.target.value)} rows={3}
-                  className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">What&apos;s next?</label>
-                <textarea value={whatsNext} onChange={(e) => setWhatsNext(e.target.value)} rows={2}
-                  className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white" />
+              <div className="space-y-2">
+                <label className="text-xs text-gray-500 mb-1 block">What was done? <span className="text-gray-400">— add under any of the four core areas (at least one required)</span> *</label>
+                {GROUP_LABELS.map((g) => (
+                  <div key={g.key}>
+                    <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-1.5">
+                      <span>{g.emoji}</span> {g.label}
+                    </label>
+                    <textarea value={doneByGroup[g.key]} onChange={(e) => setDoneByGroup({ ...doneByGroup, [g.key]: e.target.value })} rows={2}
+                      placeholder={`What did you do in ${g.label.toLowerCase()}?`}
+                      className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed resize-none break-words"
+                      style={{ overflowWrap: "anywhere", wordBreak: "break-word" }} />
+                  </div>
+                ))}
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Obstacles</label>
@@ -411,7 +491,7 @@ export default function EODPage() {
                   </div>
                 )}
               </div>
-              <button onClick={submitUpdate} disabled={!whatWasDone || !addedBy || submitting || uploadingVideo}
+              <button onClick={submitUpdate} disabled={!Object.values(doneByGroup).some((v) => v.trim().length > 0) || !addedBy || submitting || uploadingVideo}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-sm rounded-xl shadow-md transition-all active:scale-[0.97]">
                 {uploadingVideo ? "Uploading video..." : submitting ? "Submitting..." : "Submit"}
               </button>
