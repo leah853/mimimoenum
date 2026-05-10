@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New thread · Eonexea</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
+  <style>
+    :root {
+      --c-bg:        #f8fafc;
+      --c-panel:     #ffffff;
+      --c-border:    #e2e8f0;
+      --c-text:      #0f172a;
+      --c-text-dim:  #64748b;
+      --c-brand:     #2563eb;
+      --c-brand-2:   #1e40af;
+      --c-success:   #16a34a;
+      --c-warn:      #d97706;
+      --c-danger:    #dc2626;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: var(--c-text); background: var(--c-bg); }
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+  .min-h-screen{padding-top:32px}</style>
+  
+</head>
+<body class="min-h-screen"><div style="position:fixed;top:0;left:0;right:0;background:#1e40af;color:white;text-align:center;font-size:12px;padding:6px;z-index:100;font-family:system-ui">&#127916; HHAH Portal Demo &middot; click around to explore &middot; forms are read-only</div>
+  
+<div class="min-h-screen flex flex-col md:flex-row" x-data="{ mobileNavOpen: false }">
+
+  
+  <aside class="hidden md:flex w-60 bg-white border-r border-slate-200 flex-col"
+         aria-label="Primary navigation">
+    <div class="px-5 py-4 border-b border-slate-200">
+      <div class="text-sm font-bold tracking-wide text-slate-900">EONEXEA</div>
+      
+      <div class="text-xs text-slate-500 mt-0.5">in partnership with</div>
+      <div class="text-xs font-medium text-slate-700 truncate">Sunrise Home Health</div>
+      
+    </div>
+
+    <nav class="flex-1 px-2 py-4 space-y-0.5 text-sm" aria-label="Main">
+      
+      
+        <a href="/hhahdemo/"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Home
+        </a>
+      
+        <a href="/hhahdemo/sync"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Data Sync
+        </a>
+      
+        <a href="/hhahdemo/patients"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Patients
+        </a>
+      
+        <a href="/hhahdemo/care-docs"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Care Docs
+        </a>
+      
+        <a href="/hhahdemo/flags"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Flags
+        </a>
+      
+        <a href="/hhahdemo/communication"
+           aria-current="page"
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  bg-blue-50 text-blue-700 font-medium">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-blue-600"
+                aria-hidden="true"></span>
+          Talk to Us
+        </a>
+      
+        <a href="/hhahdemo/notifications"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Notifications
+        </a>
+      
+    </nav>
+
+    <div class="px-2 py-3 border-t border-slate-200 space-y-0.5 text-sm">
+      <a href="/hhahdemo/profile" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">Profile</a>
+      <a href="/hhahdemo/settings" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">Settings</a>
+      
+      <a href="/hhahdemo/admin/baa" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">BAA</a>
+      <a href="/hhahdemo/admin/audit" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">Audit</a>
+      
+    </div>
+
+    <form action="/hhahdemo/login" method="get" method="post" class="px-2 py-3 border-t border-slate-200">
+      <button type="submit"
+              class="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        Log out
+      </button>
+    </form>
+  </aside>
+
+  
+  <div class="flex-1 flex flex-col min-w-0">
+    
+    <header class="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center gap-3 md:gap-4 sticky top-0 z-20"
+            role="banner">
+      
+      <button @click="mobileNavOpen = !mobileNavOpen"
+              class="md:hidden p-2 text-slate-500 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              aria-label="Toggle navigation menu"
+              :aria-expanded="mobileNavOpen.toString()">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      <label class="flex-1 max-w-2xl">
+        <span class="sr-only">Search</span>
+        <input type="search"
+               placeholder="Search patients, docs, orders…"
+               aria-label="Global search"
+               class="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
+      </label>
+      <div class="flex items-center gap-2 md:gap-3">
+        <a href="/hhahdemo/notifications"
+           aria-label="Notifications"
+           class="relative p-2 text-slate-500 hover:text-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+        </a>
+        
+        <div class="hidden sm:flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-100"
+             aria-label="Current user">
+          <div class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-medium"
+               aria-hidden="true">
+            H
+          </div>
+          <div class="text-xs">
+            <div class="font-medium text-slate-900">Hhah Admin</div>
+          </div>
+        </div>
+        
+      </div>
+    </header>
+
+    
+    <nav x-show="mobileNavOpen" x-cloak
+         class="md:hidden bg-white border-b border-slate-200 px-2 py-2 space-y-0.5 text-sm"
+         aria-label="Mobile navigation">
+      
+        <a href="/hhahdemo/"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Home
+        </a>
+      
+        <a href="/hhahdemo/sync"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Data Sync
+        </a>
+      
+        <a href="/hhahdemo/patients"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Patients
+        </a>
+      
+        <a href="/hhahdemo/care-docs"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Care Docs
+        </a>
+      
+        <a href="/hhahdemo/flags"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Flags
+        </a>
+      
+        <a href="/hhahdemo/communication"
+           class="block px-3 py-2 rounded-md
+                  bg-blue-50 text-blue-700 font-medium">
+          Talk to Us
+        </a>
+      
+        <a href="/hhahdemo/notifications"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Notifications
+        </a>
+      
+      <hr class="my-1 border-slate-200">
+      <a href="/hhahdemo/profile" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Profile</a>
+      <a href="/hhahdemo/settings" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Settings</a>
+      
+        <a href="/hhahdemo/admin/baa" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">BAA</a>
+        <a href="/hhahdemo/admin/audit" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Audit</a>
+      
+      <form action="/hhahdemo/login" method="get" method="post">
+        <button class="w-full text-left px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-md">Log out</button>
+      </form>
+    </nav>
+
+    
+    <main class="flex-1 px-4 md:px-6 py-4 md:py-6 overflow-auto pb-20 md:pb-6"
+          role="main" tabindex="-1">
+      
+<a href="/hhahdemo/communication" class="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">← Back</a>
+<h1 class="text-xl font-semibold text-slate-900 mb-1">Start a new thread</h1>
+<p class="text-sm text-slate-500 mb-6">Send a message to Us (Eonexea ops).</p>
+
+<form action="/hhahdemo/communication/new" method="get" class="bg-white rounded-xl border border-slate-200 p-6 max-w-xl space-y-4">
+  <div>
+    <div class="text-xs text-slate-500 uppercase tracking-wide mb-1">To</div>
+    <div class="text-sm text-slate-900 font-medium">Us (Eonexea ops)</div>
+  </div>
+
+  
+  
+
+  <div>
+    <label class="block text-xs font-medium text-slate-700 mb-1">Subject</label>
+    <input type="text" name="subject" required maxlength="200"
+           class="w-full px-3 py-2 text-sm border border-slate-200 rounded-md
+                  focus:outline-none focus:ring-2 focus:ring-blue-500">
+  </div>
+  <div>
+    <label class="block text-xs font-medium text-slate-700 mb-1">Message</label>
+    <textarea name="body" rows="6" required maxlength="8000"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-md
+                     focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+  </div>
+
+  <div class="flex justify-end gap-2 pt-2">
+    <a href="/hhahdemo/communication" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md">Cancel</a>
+    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Send</button>
+  </div>
+</form>
+
+    </main>
+  </div>
+
+  
+  <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 grid grid-cols-5"
+       aria-label="Bottom navigation">
+    
+      <a href="/hhahdemo/"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">🏠</span>
+        Home
+      </a>
+    
+      <a href="/hhahdemo/sync"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">📥</span>
+        Sync
+      </a>
+    
+      <a href="/hhahdemo/patients"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">🧑‍⚕️</span>
+        Patients
+      </a>
+    
+      <a href="/hhahdemo/care-docs"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">📄</span>
+        Docs
+      </a>
+    
+      <a href="/hhahdemo/flags"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">⚑</span>
+        Flags
+      </a>
+    
+  </nav>
+</div>
+
+<style>[x-cloak]{display:none!important}</style>
+
+</body>
+</html>

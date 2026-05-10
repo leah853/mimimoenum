@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/hhahdemo",
+      "destination": "/hhahdemo/index.html"
+    },
+    {
+      "source": "/hhahdemo/:path*",
+      "destination": "/hhahdemo/:path*/index.html"
+    },
+    {
       "source": "/orchestrator",
       "destination": "/orchestrator.html"
     },
