@@ -5,12 +5,14 @@ const AUTH_COOKIE = "mimimomentum_auth";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page, API routes, static assets, and orchestrator
+  // Allow login page, API routes, static assets, and public demos
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
-    pathname.startsWith("/orchestrator")
+    pathname.startsWith("/orchestrator") ||
+    pathname.startsWith("/hhahdemo") ||
+    pathname.startsWith("/unittest_marketanalysis")
   ) {
     return NextResponse.next();
   }
