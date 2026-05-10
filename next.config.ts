@@ -3,11 +3,16 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
-      // /hhahdemo → public/hhahdemo/index.html (the bare URL needs a rewrite;
-      // sub-paths like /hhahdemo/sync resolve natively to public/hhahdemo/sync.html).
+      // /hhahdemo → public/hhahdemo/index.html
       {
         source: "/hhahdemo",
         destination: "/hhahdemo/index.html",
+      },
+      // /hhahdemo/<anything> → public/hhahdemo/<anything>.html
+      // Skip when the path already ends in .html or is an asset, to avoid recursion.
+      {
+        source: "/hhahdemo/:path((?!.*\\.html$).+)",
+        destination: "/hhahdemo/:path.html",
       },
       {
         source: "/orchestrator",
