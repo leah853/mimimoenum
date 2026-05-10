@@ -3,17 +3,26 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
-      // /hhahdemo → public/hhahdemo/index.html
-      {
-        source: "/hhahdemo",
-        destination: "/hhahdemo/index.html",
-      },
-      // /hhahdemo/<anything> → public/hhahdemo/<anything>.html
-      // Skip when the path already ends in .html or is an asset, to avoid recursion.
-      {
-        source: "/hhahdemo/:path((?!.*\\.html$).+)",
-        destination: "/hhahdemo/:path.html",
-      },
+      // HHAH Portal demo
+      { source: "/hhahdemo", destination: "/hhahdemo/index.html" },
+      { source: "/hhahdemo/login", destination: "/hhahdemo/login.html" },
+      { source: "/hhahdemo/auth/mfa/enroll", destination: "/hhahdemo/auth/mfa/enroll.html" },
+      { source: "/hhahdemo/auth/mfa/challenge", destination: "/hhahdemo/auth/mfa/challenge.html" },
+      { source: "/hhahdemo/sync", destination: "/hhahdemo/sync.html" },
+      { source: "/hhahdemo/sync/upload", destination: "/hhahdemo/sync/upload.html" },
+      { source: "/hhahdemo/sync/uploads", destination: "/hhahdemo/sync/uploads.html" },
+      { source: "/hhahdemo/patients", destination: "/hhahdemo/patients.html" },
+      { source: "/hhahdemo/patients/:id", destination: "/hhahdemo/patients/:id.html" },
+      { source: "/hhahdemo/care-docs/signature-required", destination: "/hhahdemo/care-docs/signature-required.html" },
+      { source: "/hhahdemo/care-docs/other", destination: "/hhahdemo/care-docs/other.html" },
+      { source: "/hhahdemo/flags", destination: "/hhahdemo/flags.html" },
+      { source: "/hhahdemo/communication", destination: "/hhahdemo/communication.html" },
+      { source: "/hhahdemo/communication/new", destination: "/hhahdemo/communication/new.html" },
+      { source: "/hhahdemo/notifications", destination: "/hhahdemo/notifications.html" },
+      { source: "/hhahdemo/profile", destination: "/hhahdemo/profile.html" },
+      { source: "/hhahdemo/settings", destination: "/hhahdemo/settings.html" },
+      { source: "/hhahdemo/admin/baa", destination: "/hhahdemo/admin/baa.html" },
+      { source: "/hhahdemo/admin/audit", destination: "/hhahdemo/admin/audit.html" },
       {
         source: "/orchestrator",
         destination: "/orchestrator.html",
