@@ -480,94 +480,91 @@ export default function FeedbackTrailPage() {
                   <p className="text-sm text-gray-400">No messages yet. Start the conversation!</p>
                 </div>
               ) : (() => {
-                // Build parent->children tree for threaded chat
-                const childrenBy = new Map<string, ChatMessage[]>();
-                const ids = new Set(chatMessages.map((m) => m.id));
-                for (const m of chatMessages) {
-                  if (m.parent_id && ids.has(m.parent_id)) {
-                    const arr = childrenBy.get(m.parent_id) || [];
-                    arr.push(m);
-                    childrenBy.set(m.parent_id, arr);
-                  }
-                }
-                for (const arr of childrenBy.values()) {
-                  arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-                }
-                const topLevel = chatMessages.filter((m) => !m.parent_id || !ids.has(m.parent_id));
+                // Flat chronological order — every message renders at its actual
+                // send time, even if it's a reply. Replies still show a "↳ in
+                // reply to X" header above the bubble so context isn't lost.
+                const byId = new Map(chatMessages.map((m) => [m.id, m]));
+                const ordered = [...chatMessages].sort(
+                  (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+                );
 
-                const renderChat = (msg: ChatMessage, depth: number): React.ReactNode => {
+                return ordered.map((msg) => {
                   const isMe = msg.user_id === dbUser?.id;
-                  const kids = childrenBy.get(msg.id) || [];
-                  const wrapperClass = depth === 0
-                    ? `group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`
-                    : `group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""} ml-8 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800/40 mt-2`;
+                  const parent = msg.parent_id ? byId.get(msg.parent_id) : null;
                   return (
-                    <div key={msg.id}>
-                      <div className={wrapperClass}>
-                        <div className={`rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${isMe ? "bg-gradient-to-br from-indigo-500 to-violet-500" : "bg-gradient-to-br from-gray-400 to-gray-500"} ${depth === 0 ? "w-7 h-7" : "w-6 h-6"}`}>
-                          {msg.user?.full_name?.[0] || "?"}
-                        </div>
-                        <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
-                          <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
-                            <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
-                            {editingChat !== msg.id && (
-                              <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
-                                <button
-                                  onClick={() => {
-                                    setChatReplyTo({ id: msg.id, userName: msg.user?.full_name || "message", preview: msg.message.slice(0, 60) });
-                                    chatInputRef.current?.focus();
-                                  }}
-                                  className="text-[9px] text-indigo-600 hover:text-indigo-500 font-medium">Reply</button>
-                                {isMe && (
-                                  <>
-                                    <button onClick={() => { setEditingChat(msg.id); setEditChatText(msg.message); }} className="text-[9px] text-gray-400 hover:text-indigo-500">Edit</button>
-                                    <button onClick={() => deleteChatMsg(msg.id)} className="text-[9px] text-gray-400 hover:text-red-500">Delete</button>
-                                  </>
-                                )}
-                              </span>
-                            )}
-                          </div>
-                          {editingChat === msg.id ? (
-                            <div className="space-y-1">
-                              <textarea value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
-                                rows={Math.min(Math.max(editChatText.split("\n").length, 2), 8)}
-                                wrap="soft"
-                                onKeyDown={(e) => {
-                                  // Save on Enter; Shift+Enter inserts a newline
-                                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); updateChatMsg(msg.id); }
-                                  if (e.key === "Escape") setEditingChat(null);
+                    <div key={msg.id} className={`group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${isMe ? "bg-gradient-to-br from-indigo-500 to-violet-500" : "bg-gradient-to-br from-gray-400 to-gray-500"}`}>
+                        {msg.user?.full_name?.[0] || "?"}
+                      </div>
+                      <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
+                        <div className="flex items-center gap-2 mb-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                          <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
+                          <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
+                          {editingChat !== msg.id && (
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setChatReplyTo({ id: msg.id, userName: msg.user?.full_name || "message", preview: msg.message.slice(0, 60) });
+                                  chatInputRef.current?.focus();
                                 }}
-                                className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed resize-none break-words"
-                                style={{ overflowWrap: "anywhere", wordBreak: "break-word" }} />
-                              <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                                <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
-                                <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
-                                <span className="text-[9px] text-gray-400">Shift+Enter for new line</span>
+                                className="text-[9px] text-indigo-600 hover:text-indigo-500 font-medium">Reply</button>
+                              {isMe && (
+                                <>
+                                  <button onClick={() => { setEditingChat(msg.id); setEditChatText(msg.message); }} className="text-[9px] text-gray-400 hover:text-indigo-500">Edit</button>
+                                  <button onClick={() => deleteChatMsg(msg.id)} className="text-[9px] text-gray-400 hover:text-red-500">Delete</button>
+                                </>
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Reply-to preview — keeps thread context without breaking chronological order */}
+                        {parent && (
+                          <div className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1`}>
+                            <div className="inline-flex items-start gap-1.5 max-w-full text-[10px] px-2 py-1 rounded-lg border border-indigo-200/60 dark:border-indigo-800/40 bg-indigo-50/50 dark:bg-indigo-900/15 text-left">
+                              <span className="text-indigo-500 flex-shrink-0">↳</span>
+                              <div className="min-w-0">
+                                <span className="font-medium text-indigo-600 dark:text-indigo-400">{parent.user?.full_name || "user"}</span>
+                                <span className="text-gray-500 dark:text-gray-400">: {parent.message.length > 80 ? parent.message.slice(0, 80) + "…" : parent.message}</span>
                               </div>
                             </div>
-                          ) : (
-                            <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left whitespace-pre-wrap leading-relaxed break-words ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}
-                              style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                              {renderMentions(msg.message)}
+                          </div>
+                        )}
+
+                        {editingChat === msg.id ? (
+                          <div className="space-y-1">
+                            <textarea value={editChatText} onChange={(e) => setEditChatText(e.target.value)} autoFocus
+                              rows={Math.min(Math.max(editChatText.split("\n").length, 2), 8)}
+                              wrap="soft"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); updateChatMsg(msg.id); }
+                                if (e.key === "Escape") setEditingChat(null);
+                              }}
+                              className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed resize-none break-words"
+                              style={{ overflowWrap: "anywhere", wordBreak: "break-word" }} />
+                            <div className="flex gap-1.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                              <button onClick={() => updateChatMsg(msg.id)} className="text-[9px] text-green-600 hover:text-green-500">Save</button>
+                              <button onClick={() => setEditingChat(null)} className="text-[9px] text-gray-400">Cancel</button>
+                              <span className="text-[9px] text-gray-400">Shift+Enter for new line</span>
                             </div>
-                          )}
-                          {(msg.mentions?.length || 0) > 0 && (
-                            <div className="flex gap-1 mt-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                              {msg.mentions!.map((m, i) => (
-                                <span key={i} className="text-[9px] text-indigo-500">@{(teamUsers || []).find(u => u.id === m)?.full_name || m}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className={`inline-block px-3 py-2 rounded-xl text-sm text-left whitespace-pre-wrap leading-relaxed break-words ${isMe ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}
+                            style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                            {renderMentions(msg.message)}
+                          </div>
+                        )}
+                        {(msg.mentions?.length || 0) > 0 && (
+                          <div className="flex gap-1 mt-0.5" style={{ justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                            {msg.mentions!.map((m, i) => (
+                              <span key={i} className="text-[9px] text-indigo-500">@{(teamUsers || []).find(u => u.id === m)?.full_name || m}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      {/* Recurse into thread replies (cap visual indent at depth 2) */}
-                      {kids.map((k) => renderChat(k, Math.min(depth + 1, 2)))}
                     </div>
                   );
-                };
-
-                return topLevel.map((m) => renderChat(m, 0));
+                });
               })()}
               <div ref={chatEndRef} />
             </div>
