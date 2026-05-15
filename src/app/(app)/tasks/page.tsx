@@ -93,17 +93,23 @@ function TasksInner() {
     try { sessionStorage.setItem("tasksView", JSON.stringify(payload)); } catch {}
   }, [catFilter, iterFilter, weekFilter, ownerFilter, statusFilter, urgencyFilter, search, expanded]);
 
-  // Auto-expand — runs on first load AND whenever filters change.
-  // If we restored a saved expanded set from sessionStorage, skip the auto-
-  // expand so the user keeps the exact panels they had open before.
+  // Auto-expand on first load AND whenever filters change.
+  // Wait until BOTH tasks (all) and iterations have actually loaded — otherwise
+  // expandForCurrentView walks zero tasks and produces an empty set, leaving
+  // the page looking like every iteration is empty.
   const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}|${urgencyFilter}`;
-  if (!initialized && (categories.length > 0 || iterations.length > 0)) {
+  const readyToInit = !initialized && all.length > 0 && iterations.length > 0;
+  useEffect(() => {
+    if (!readyToInit) return;
     if (initialExpanded.size > 0) {
-      queueMicrotask(() => { setInitialized(true); });
+      // Honor a saved expanded set from sessionStorage so Back keeps the view
+      setInitialized(true);
     } else {
-      queueMicrotask(() => { expandForCurrentView(); setInitialized(true); });
+      expandForCurrentView();
+      setInitialized(true);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyToInit]);
 
   function expandForCurrentView() {
     const auto = new Set<string>();
