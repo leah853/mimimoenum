@@ -501,18 +501,21 @@ export default function FeedbackTrailPage() {
                           <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{msg.user?.full_name}</span>
                           <span className="text-[9px] text-gray-400">{fmtTime(msg.created_at)}</span>
                           {editingChat !== msg.id && (
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+                            <span className="flex gap-1.5 items-center">
+                              {/* Reply is always visible — no hover required so reps on any device can use it */}
                               <button
                                 onClick={() => {
                                   setChatReplyTo({ id: msg.id, userName: msg.user?.full_name || "message", preview: msg.message.slice(0, 60) });
                                   chatInputRef.current?.focus();
                                 }}
-                                className="text-[9px] text-indigo-600 hover:text-indigo-500 font-medium">Reply</button>
+                                className="inline-flex items-center gap-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 hover:underline">
+                                ↳ Reply
+                              </button>
                               {isMe && (
-                                <>
+                                <span className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
                                   <button onClick={() => { setEditingChat(msg.id); setEditChatText(msg.message); }} className="text-[9px] text-gray-400 hover:text-indigo-500">Edit</button>
                                   <button onClick={() => deleteChatMsg(msg.id)} className="text-[9px] text-gray-400 hover:text-red-500">Delete</button>
-                                </>
+                                </span>
                               )}
                             </span>
                           )}
