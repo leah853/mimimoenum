@@ -1,0 +1,17 @@
+quarter,iteration,week,category,task_name,owner_email,deadline,description,dependencies
+Q2 2026,Iteration 3,,Milestone Execution,GOAL: e.g. Pilot 2 — Medium-Risk Accounts Live,leah@eonexea.com,2026-06-07,(Optional one-liner about the goal),
+Q2 2026,Iteration 3,Week 1,Milestone Execution,(Weekly task title),chloe@eonexea.com,2026-05-24,(Optional notes),
+Q2 2026,Iteration 3,Week 2,Milestone Execution,(Weekly task title),leah@eonexea.com,2026-05-31,,(comma-separated task names this one depends on)
+Q2 2026,Iteration 3,Week 3,Milestone Execution,(Weekly task title),chloe@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,,Workflows,GOAL: e.g. Orchestrator v2 launched,leah@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,Week 1,Workflows,(Weekly task title),chloe@eonexea.com,2026-05-24,,
+Q2 2026,Iteration 3,,Product & Engineering,GOAL: e.g. MVP v3 in pilot,leah@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,Week 1,Product & Engineering,(Weekly task title),leah@eonexea.com,2026-05-24,,
+Q2 2026,Iteration 3,,Cybersecurity / Compliance,GOAL: e.g. SOC2 Type I in progress,leah@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,Week 2,Cybersecurity / Compliance,(Weekly task title),leah@eonexea.com,2026-05-31,,
+Q2 2026,Iteration 3,,Talent Acquisition,GOAL: e.g. 2 senior engineers onboarded,leah@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,Week 1,Talent Acquisition,(Weekly task title),leah@eonexea.com,2026-05-24,,
+Q2 2026,Iteration 3,,Training & Culture,GOAL: e.g. Knowledge system internal adoption complete,chloe@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,Week 2,Training & Culture,(Weekly task title),chloe@eonexea.com,2026-05-31,,
+Q2 2026,Iteration 3,,Branding,GOAL: e.g. Investor deck v3 finalized,chloe@eonexea.com,2026-06-07,,
+Q2 2026,Iteration 3,Week 3,Branding,(Weekly task title),chloe@eonexea.com,2026-06-07,,
