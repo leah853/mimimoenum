@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
   const body = await safeJson(request);
   if (!body) return err("Invalid JSON", 400);
 
-  const { task_id, subtask_id, title, file_url, file_name, file_size_bytes, uploaded_by } = body as {
-    task_id?: string; subtask_id?: string; title?: string;
+  const { task_id, subtask_id, title, description, file_url, file_name, file_size_bytes, uploaded_by } = body as {
+    task_id?: string; subtask_id?: string; title?: string; description?: string;
     file_url?: string; file_name?: string; file_size_bytes?: number;
     uploaded_by?: string;
   };
@@ -33,10 +33,18 @@ export async function POST(request: NextRequest) {
     .limit(1);
   const version = existing && existing.length > 0 ? existing[0].version + 1 : 1;
 
+  // The deliverables table has no description column, so we fold the
+  // description into the title using a " — " separator (matches the
+  // existing text-only route's behavior — see /api/deliverables/text).
+  const baseTitle = (title && title.trim()) || file_name || "Deliverable";
+  const finalTitle = description && description.trim()
+    ? `${baseTitle} — ${description.trim()}`
+    : baseTitle;
+
   const { data, error } = await sb.from("deliverables").insert({
     task_id: task_id || null,
     subtask_id: subtask_id || null,
-    title: title || file_name || "Deliverable",
+    title: finalTitle,
     file_url,
     file_name: file_name || null,
     file_size_bytes: file_size_bytes || null,

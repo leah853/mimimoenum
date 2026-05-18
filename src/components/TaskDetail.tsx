@@ -193,6 +193,7 @@ export default function TaskDetail() {
         await apiPost("/api/deliverables/record", {
           task_id: id,
           title: ui.fileTitle || file.name,
+          description: ui.deliverableDesc || null,
           file_url: uploaded.url,
           file_name: file.name,
           file_size_bytes: file.size,
