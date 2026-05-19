@@ -11,6 +11,7 @@ import { getCompletionBlockers } from "@/lib/business-rules";
 import { HiArrowLeft, HiExclamationCircle, HiTrash, HiReply, HiPencil, HiCheck, HiX, HiEye, HiOutlineChatAlt } from "react-icons/hi";
 import { useToast, Skeleton } from "@/components/ui";
 import { handleApiError, isReplyComment, isVideoUrl } from "@/lib/utils";
+import { FIXED_CATEGORIES } from "@/lib/constants";
 
 type FeedbackItem = Feedback & { reviewer?: { id: string; full_name: string }; acknowledged?: boolean; acknowledged_by?: string; acknowledged_at?: string };
 type FullTask = Task & {
@@ -481,7 +482,22 @@ export default function TaskDetail() {
                   <p className="text-sm text-gray-800 dark:text-white">{task.deadline || "—"}</p>
                 )}
               </div>
-              <div><span className="text-xs text-gray-400">Category</span><p className="text-sm text-gray-800 dark:text-white">{task.category || "—"}</p></div>
+              <div>
+                <span className="text-xs text-gray-400 block mb-1">Category</span>
+                {isDoer ? (
+                  <select value={task.category || ""} onChange={async (e) => {
+                    const v = e.target.value || null;
+                    try { await apiPatch(`/api/tasks/${id}`, { category: v }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); }
+                    catch (err) { toast(handleApiError(err), "error"); }
+                  }}
+                    className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/60 rounded-xl text-sm text-gray-900 dark:text-white">
+                    <option value="">Uncategorized</option>
+                    {FIXED_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <p className="text-sm text-gray-800 dark:text-white">{task.category || "—"}</p>
+                )}
+              </div>
               <div><span className="text-xs text-gray-400">Attachments</span><p className="text-sm text-gray-800 dark:text-white">{task.deliverables?.length || 0} files</p></div>
               <div><span className="text-xs text-gray-400">Feedback</span><p className="text-sm text-gray-800 dark:text-white">{feedbackList.length} entries</p></div>
             </div>
