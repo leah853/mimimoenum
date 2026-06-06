@@ -76,5 +76,18 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return err(error.message, 400);
+
+  // The moment a rep scores a task (a non-reply piece of feedback from an
+  // assessor), mark the task completed. Replies, doer-acks, and feedback on
+  // subtasks don't trigger this. Per-task: a single fresh rating is enough.
+  if (!isReply && callerRole === "assessor" && body.task_id) {
+    const { error: updErr } = await sb
+      .from("tasks")
+      .update({ status: "completed" })
+      .eq("id", body.task_id);
+    // Don't fail the request if this side-effect errors — feedback is still saved.
+    if (updErr) console.warn("[feedback] auto-complete failed:", updErr.message);
+  }
+
   return ok(data, 201);
 }

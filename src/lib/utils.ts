@@ -36,3 +36,21 @@ export function isVideoUrl(urlOrName?: string | null): boolean {
   const s = urlOrName.toLowerCase().split("?")[0];
   return /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(s);
 }
+
+/** Tasks already handed off to reps (under_review) are NOT overdue from the
+ *  doer's perspective — the ball is in the rep's court. They show as
+ *  "Needs Review" instead. Completed tasks are obviously not overdue. */
+export function isTaskOverdue(task: { deadline?: string | null; status: TaskStatus }, todayISO?: string): boolean {
+  if (!task.deadline) return false;
+  if (task.status === "completed" || task.status === "under_review") return false;
+  const today = todayISO || new Date().toISOString().split("T")[0];
+  return task.deadline < today;
+}
+
+/** Due-today excludes under_review for the same reason. */
+export function isTaskDueToday(task: { deadline?: string | null; status: TaskStatus }, todayISO?: string): boolean {
+  if (!task.deadline) return false;
+  if (task.status === "completed" || task.status === "under_review") return false;
+  const today = todayISO || new Date().toISOString().split("T")[0];
+  return task.deadline === today;
+}

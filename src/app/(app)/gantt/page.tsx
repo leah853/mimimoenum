@@ -15,7 +15,7 @@ type Quarter = { id: string; name: string; start_date: string; end_date: string;
 type ViewMode = "overall" | "iteration" | "week";
 
 import { FIXED_CATEGORIES, CAT_COLORS, CAT_SHORT } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
+import { formatDate, isTaskOverdue } from "@/lib/utils";
 
 // Owner-based border colors for task bars
 const OWNER_COLORS: Record<string, { border: string; bg: string; label: string }> = {
@@ -409,7 +409,7 @@ export default function GanttPage() {
                 const catColor = CAT_COLORS[task.category || ""] || "#6366f1";
                 const isBlocked = blockedTaskIds.has(task.id);
                 const isHovered = hoveredTask === task.id;
-                const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== "completed";
+                const isOverdue = isTaskOverdue(task);
                 const isIterationGoal = !task.week_id;
                 const ownerName = task.owner?.full_name || "";
                 const ownerStyle = OWNER_COLORS[ownerName];

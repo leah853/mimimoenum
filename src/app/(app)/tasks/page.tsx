@@ -10,7 +10,7 @@ import { canEditTasks, canCreateTasks } from "@/lib/roles";
 import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck, HiOutlineFilm } from "react-icons/hi";
 import Link from "next/link";
 import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT, CATEGORY_GROUP, FOUNDATION_ORDER, FOUNDATION_LABEL } from "@/lib/constants";
-import { formatDate, isReplyComment, isVideoUrl } from "@/lib/utils";
+import { formatDate, isReplyComment, isVideoUrl, isTaskOverdue, isTaskDueToday } from "@/lib/utils";
 import { Skeleton, SkeletonRows, useToast } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
@@ -121,8 +121,8 @@ function TasksInner() {
       if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
       if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
-      if (urgencyFilter === "overdue" && !(t.deadline && t.deadline < todayStr && t.status !== "completed")) return false;
-      if (urgencyFilter === "due_today" && !(t.deadline === todayStr && t.status !== "completed")) return false;
+      if (urgencyFilter === "overdue" && !isTaskOverdue(t, todayStr)) return false;
+      if (urgencyFilter === "due_today" && !isTaskDueToday(t, todayStr)) return false;
       return true;
     });
     // Expand categories that have matching tasks
@@ -175,17 +175,17 @@ function TasksInner() {
     if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
     if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
     if (urgencyFilter === "overdue") {
-      if (!(t.deadline && t.deadline < todayISO && t.status !== "completed")) return false;
+      if (!isTaskOverdue(t, todayISO)) return false;
     }
     if (urgencyFilter === "due_today") {
-      if (!(t.deadline === todayISO && t.status !== "completed")) return false;
+      if (!isTaskDueToday(t, todayISO)) return false;
     }
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const overdueCount = all.filter((t) => t.deadline && new Date(t.deadline) < new Date() && t.status !== "completed").length;
-  const dueTodayCount = all.filter((t) => t.deadline === new Date().toISOString().split("T")[0] && t.status !== "completed").length;
+  const overdueCount = all.filter((t) => isTaskOverdue(t)).length;
+  const dueTodayCount = all.filter((t) => isTaskDueToday(t)).length;
 
   async function updateField(taskId: string, field: string, value: string) {
     if (field === "status" && value === "completed") {
@@ -597,8 +597,9 @@ function TasksInner() {
 
 function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullTask; onUpdate: (id: string, field: string, value: string) => void; editable?: boolean; owners?: UserOption[] }) {
   const todayStr = new Date().toISOString().split("T")[0];
-  const isOverdue = task.deadline && task.deadline < todayStr && task.status !== "completed";
-  const isDueToday = task.deadline === todayStr && task.status !== "completed";
+  const isOverdue = isTaskOverdue(task, todayStr);
+  const isDueToday = isTaskDueToday(task, todayStr);
+  const isUnderReview = task.status === "under_review";
   const ownerName = task.owner?.full_name || owners.find((o) => o.id === task.owner_id)?.full_name || "";
   const ownerStyle = OWNER_STYLE[ownerName];
 
@@ -606,7 +607,7 @@ function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullT
   const hasDeliverables = (task.deliverables?.length || 0) > 0;
   const hasFeedback = (task.feedback?.length || 0) > 0;
   const hasUnacknowledgedFb = (task.feedback || []).some(f => !f.acknowledged && !isReplyComment(f.comment));
-  const needsReview = hasDeliverables && !hasFeedback;
+  const needsReview = isUnderReview || (hasDeliverables && !hasFeedback);
   const needsAck = hasFeedback && hasUnacknowledgedFb;
 
   return (

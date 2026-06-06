@@ -11,7 +11,7 @@ import { Card, KPICard, ProgressBar, ScorePill, SkeletonRows, EmptyState } from 
 import ScoreEditor from "@/components/ScoreEditor";
 import Link from "next/link";
 import { HiArrowRight, HiOutlinePaperClip } from "react-icons/hi";
-import { calcScore } from "@/lib/utils";
+import { calcScore, isTaskOverdue } from "@/lib/utils";
 import { FIXED_CATEGORIES } from "@/lib/constants";
 
 type ScoreOverride = { target_type: string; target_id: string; score: number };
@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const notStarted = all.filter((t) => t.status === "not_started").length;
   const blocked = all.filter((t) => t.status === "blocked").length;
   const underReview = all.filter((t) => t.status === "under_review").length;
-  const overdue = all.filter((t) => t.deadline && new Date(t.deadline) < new Date() && t.status !== "completed");
+  const overdue = all.filter((t) => isTaskOverdue(t));
   const lowRated = all.filter((t) => {
     const fb = (t as Task & { feedback?: { rating: number }[] }).feedback;
     if (!fb?.length) return false;
