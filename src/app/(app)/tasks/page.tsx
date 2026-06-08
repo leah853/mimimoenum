@@ -607,7 +607,10 @@ function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullT
   const hasDeliverables = (task.deliverables?.length || 0) > 0;
   const hasFeedback = (task.feedback?.length || 0) > 0;
   const hasUnacknowledgedFb = (task.feedback || []).some(f => !f.acknowledged && !isReplyComment(f.comment));
-  const needsReview = isUnderReview || (hasDeliverables && !hasFeedback);
+  // Completed tasks are done — never flag them as needing review even if a
+  // feedback row was later deleted leaving deliverables-only state.
+  const isCompleted = task.status === "completed";
+  const needsReview = !isCompleted && (isUnderReview || (hasDeliverables && !hasFeedback));
   const needsAck = hasFeedback && hasUnacknowledgedFb;
 
   return (
