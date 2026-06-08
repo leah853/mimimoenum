@@ -297,7 +297,9 @@ export default function FeedbackTrailPage() {
         <p className="text-sm text-gray-500 mt-1">All feedback threads across tasks — interact, acknowledge, and respond</p>
       </div>
 
-      {/* KPI Cards — clickable filters */}
+      {/* KPI Cards — clickable filters. Light-touch reorg: only visible on
+          the Task Feedback tab — filters don't apply to Team Scores or Chat. */}
+      {activeTab === "task_feedback" && (
       <div className="grid grid-cols-5 gap-4 stagger-children">
         <button onClick={() => toggleFilter("all")}
           className={`text-left rounded-2xl p-4 interactive transition-all ${
@@ -352,9 +354,10 @@ export default function FeedbackTrailPage() {
           {activeFilter === "awaiting_review" && <p className="text-[9px] text-violet-500 mt-1">Filter active</p>}
         </button>
       </div>
+      )}
 
-      {/* Active filter indicator */}
-      {activeFilter && activeFilter !== "all" && (
+      {/* Active filter indicator — only meaningful inside Task Feedback. */}
+      {activeTab === "task_feedback" && activeFilter && activeFilter !== "all" && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Filtering by:</span>
           <span className="text-xs px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full font-medium">
