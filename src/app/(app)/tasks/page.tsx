@@ -258,7 +258,10 @@ function TasksInner() {
                 All
               </button>
               {iterations.map((i) => {
-                const count = all.filter(t => t.iteration_id === i.id && (catFilter === "all" || t.category === catFilter)).length;
+                // Iteration chip shows TOTAL tasks in that iteration regardless
+                // of category/week/status filters — switching iterations should
+                // never make other iterations' counts collapse to zero.
+                const count = all.filter(t => t.iteration_id === i.id).length;
                 return (
                   <button key={i.id} onClick={() => { setIterFilter(i.id); setWeekFilter("all"); }}
                     className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${iterFilter === i.id ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
@@ -281,7 +284,9 @@ function TasksInner() {
                 ? (iterations.find(i => i.id === iterFilter)?.weeks || [])
                 : iterations.flatMap(i => (i.weeks || []).map(w => ({ ...w, iterName: i.name })))
               ).map((w) => {
-                const weekCount = all.filter(t => t.week_id === w.id && (catFilter === "all" || t.category === catFilter)).length;
+                // Week chip = total in that week (independent of category) —
+                // mirrors the iteration-chip rule so counts stay stable.
+                const weekCount = all.filter(t => t.week_id === w.id).length;
                 const label = "iterName" in w ? `${(w as { iterName: string }).iterName} · W${w.week_number}` : `Week ${w.week_number}`;
                 return (
                   <button key={w.id} onClick={() => setWeekFilter(w.id)}
@@ -685,6 +690,14 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
   const [error, setError] = useState("");
   const iterations = quarters[0]?.iterations || [];
 
+  // Bug 4 fix: Esc closes the modal so the page never feels "stuck".
+  // Backdrop click handler is wired below on the overlay div.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   async function handleCreate() {
     if (!title || !ownerId || !deadline) { setError("Title, owner, and deadline are required"); return; }
     setSaving(true); setError("");
@@ -700,8 +713,14 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl">
+    <div
+      className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Create Task</h2>
         {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{error}</p>}
         <div><label className="text-xs text-gray-500 mb-1 block">Title *</label>

@@ -50,6 +50,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await safeJson(request);
   if (!body) return err("Invalid JSON", 400);
 
+  // Bug 5 fix: if the deadline moved into a different iteration window, the
+  // task's iteration_id (and week_id) should auto-reassign — otherwise the
+  // task sticks in the wrong iteration tab. We only touch these if the
+  // caller didn't explicitly set them in the same PATCH.
+  if (body.deadline && typeof body.deadline === "string") {
+    if (body.iteration_id === undefined) {
+      const { data: iter } = await sb
+        .from("iterations")
+        .select("id")
+        .lte("start_date", body.deadline)
+        .gte("end_date", body.deadline)
+        .maybeSingle();
+      // Only overwrite if we found a match — otherwise leave whatever's there.
+      if (iter?.id) body.iteration_id = iter.id;
+    }
+    if (body.week_id === undefined) {
+      const { data: week } = await sb
+        .from("weeks")
+        .select("id")
+        .lte("start_date", body.deadline)
+        .gte("end_date", body.deadline)
+        .maybeSingle();
+      if (week?.id) body.week_id = week.id;
+    }
+  }
+
   // Business rule: if trying to complete, check deliverables + feedback
   if (body.status === "completed") {
     const { data: deliverables } = await sb.from("deliverables").select("id").eq("task_id", id).limit(1);

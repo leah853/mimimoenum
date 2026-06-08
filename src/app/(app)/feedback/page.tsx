@@ -50,6 +50,8 @@ export default function FeedbackTrailPage() {
   const [replyError, setReplyError] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
   const [activeTab, setActiveTab] = useState<"task_feedback" | "team_scores" | "general_chat">("task_feedback");
+  // Bug 6b: search-by-message text filter for the Task Feedback view.
+  const [messageSearch, setMessageSearch] = useState("");
 
   // General Chat state
   const [chatMsg, setChatMsg] = useState("");
@@ -147,23 +149,31 @@ export default function FeedbackTrailPage() {
     </div>
   );
 
-  // Filter logic — applied to threads
+  // Filter logic — applied to threads. Composed from KPI-card filter (active
+  // pill) AND the message search text. Both apply.
   function getFilteredThreads() {
-    if (!activeFilter || activeFilter === "all") return threads;
+    let base = threads;
     if (activeFilter === "unacknowledged") {
-      return threads.filter(t => t.feedbacks.some(f => !f.acknowledged && !isReplyComment(f.comment)));
-    }
-    if (activeFilter === "new_messages") {
+      base = base.filter(t => t.feedbacks.some(f => !f.acknowledged && !isReplyComment(f.comment)));
+    } else if (activeFilter === "new_messages") {
       const myEmail = dbUser?.email || "";
       const iAmRep = myEmail.endsWith("@mimimomentum.com");
-      return threads.filter(t => {
+      base = base.filter(t => {
         if (t.feedbacks.length === 0) return false;
         const last = t.feedbacks[t.feedbacks.length - 1];
         const lastIsRep = last.reviewer?.full_name === "Rep 1" || last.reviewer?.full_name === "Rep 2";
         return iAmRep ? !lastIsRep : lastIsRep;
       });
     }
-    return threads;
+    // Bug 6b: text search across task title and any feedback comment.
+    const q = messageSearch.trim().toLowerCase();
+    if (q) {
+      base = base.filter(t =>
+        (t.task.title || "").toLowerCase().includes(q) ||
+        t.feedbacks.some(f => (f.comment || "").toLowerCase().includes(q))
+      );
+    }
+    return base;
   }
 
   const filteredThreads = getFilteredThreads();
@@ -290,16 +300,27 @@ export default function FeedbackTrailPage() {
       {/* KPI Cards — clickable filters */}
       <div className="grid grid-cols-5 gap-4 stagger-children">
         <button onClick={() => toggleFilter("all")}
-          className={`text-left bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border rounded-2xl p-4 interactive transition-all ${
-            activeFilter === "all" || !activeFilter ? "border-gray-300 dark:border-gray-600 ring-1 ring-gray-300 dark:ring-gray-600" : "border-gray-200/60 dark:border-gray-800/60"
+          className={`text-left rounded-2xl p-4 interactive transition-all ${
+            activeFilter === "all"
+              ? "bg-gradient-to-br from-gray-100 to-slate-100 dark:from-gray-800/40 dark:to-slate-800/30 border-2 border-gray-400 dark:border-gray-500 ring-1 ring-gray-400"
+              : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60"
           }`}>
           <p className="text-xs text-gray-500">Threads</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalThreads}</p>
+          {activeFilter === "all" && <p className="text-[9px] text-gray-500 mt-1">Filter active</p>}
         </button>
-        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-4">
+        {/* Bug 6c: Total Feedback is now a button that clears all filters and
+            scrolls to the Task Feedback list. Acts as a "show everything" shortcut. */}
+        <button onClick={() => { setActiveFilter(null); setMessageSearch(""); setActiveTab("task_feedback"); }}
+          className={`text-left rounded-2xl p-4 interactive transition-all ${
+            activeFilter === null && !messageSearch
+              ? "bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-900/15 dark:to-violet-900/10 border-2 border-indigo-300 dark:border-indigo-700 ring-1 ring-indigo-300"
+              : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60"
+          }`}>
           <p className="text-xs text-gray-500">Total Feedback</p>
           <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{totalFeedback}</p>
-        </div>
+          {activeFilter === null && !messageSearch && <p className="text-[9px] text-indigo-500 mt-1">All shown</p>}
+        </button>
         <button onClick={() => toggleFilter("new_messages")}
           className={`text-left rounded-2xl p-4 interactive transition-all ${
             activeFilter === "new_messages"
@@ -668,6 +689,34 @@ export default function FeedbackTrailPage() {
       {/* ===== TASK FEEDBACK TAB ===== */}
       {activeTab === "task_feedback" && (
         <>
+          {/* Bug 6b: search-by-message — filters threads by task title or any
+              feedback comment. Composes with the KPI-card filter above. */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-md">
+              <input
+                type="text"
+                value={messageSearch}
+                onChange={(e) => setMessageSearch(e.target.value)}
+                placeholder="Search messages or task title…"
+                className="w-full pl-4 pr-9 py-2 text-sm bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+              />
+              {messageSearch && (
+                <button
+                  onClick={() => setMessageSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  <HiX className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {messageSearch && (
+              <span className="text-xs text-gray-500">
+                {filteredThreads.length} match{filteredThreads.length === 1 ? "" : "es"}
+              </span>
+            )}
+          </div>
+
           {/* Awaiting review section — shown when filter active or for assessors */}
           {(showAwaitingReview || (isAssessor && !activeFilter && tasksWithDeliverables > 0)) && (
             <div className="bg-gradient-to-r from-violet-50 to-purple-50/50 dark:from-violet-900/10 dark:to-purple-900/5 border border-violet-200/60 dark:border-violet-800/30 rounded-2xl p-5">
