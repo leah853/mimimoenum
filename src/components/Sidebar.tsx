@@ -21,7 +21,14 @@ export default function Sidebar() {
   const { theme, toggle } = useTheme();
   const { data: stats } = useApi<Stats>("/api/stats");
 
-  const feedbackCount = stats?.feedbackCount || 0;
+  // Tester suggestion: sidebar badge should represent UNREAD feedback only —
+  // not a composite of awaiting-review tasks + new-messages + unacknowledged.
+  // For doers, "unread" = unacknowledged feedback rows on their tasks.
+  // For reps, "unread" = tasks awaiting their first review (no feedback yet).
+  const isAssessor = appRole === "assessor";
+  const feedbackCount = isAssessor
+    ? (stats?.awaitingReview || 0)
+    : (stats?.unacknowledged || 0);
   const eodNeedsReview = stats?.eodNeedsReview || 0;
 
   const NAV_ITEMS = [

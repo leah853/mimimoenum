@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, Suspense, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import type { Task, TaskStatus } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import { useApi, apiPost, apiPatch } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canEditTasks, canCreateTasks } from "@/lib/roles";
-import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck, HiOutlineFilm } from "react-icons/hi";
+import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck, HiOutlineFilm, HiX } from "react-icons/hi";
 import Link from "next/link";
 import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT, CATEGORY_GROUP, FOUNDATION_ORDER, FOUNDATION_LABEL } from "@/lib/constants";
 import { formatDate, isReplyComment, isVideoUrl, isTaskOverdue, isTaskDueToday } from "@/lib/utils";
@@ -438,9 +439,10 @@ function TasksInner() {
           {iterations.length > 0 && (
             <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {iterations.map((iter) => {
-                // Reflect the active filters here too so each card shows what
-                // the user actually sees in the list right now.
-                const iterScopedAll = filtered.filter((t) => t.iteration_id === iter.id);
+                // Iteration progress cards show the ABSOLUTE per-iteration
+                // breakdown — not the current filter. Otherwise selecting
+                // iteration A would zero out the cards for B/C/D.
+                const iterScopedAll = all.filter((t) => t.iteration_id === iter.id);
                 const total = iterScopedAll.length;
                 const done = iterScopedAll.filter((t) => t.status === "completed").length;
                 const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -689,13 +691,28 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const iterations = quarters[0]?.iterations || [];
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
 
-  // Bug 4 fix: Esc closes the modal so the page never feels "stuck".
-  // Backdrop click handler is wired below on the overlay div.
+  // Bug 2 (tester round 2): the modal still felt "stuck". Belt-and-suspenders:
+  //   1. Esc closes
+  //   2. Backdrop click closes (wired on overlay below)
+  //   3. Title input auto-focuses so the user immediately sees the modal is live
+  //   4. Body scroll locked while open — prevents background scrolling under
+  //      the overlay which can read as "screen frozen"
+  //   5. Portal-rendered to <body> so no ancestor stacking-context can hide it
   useEffect(() => {
+    setPortalNode(document.body);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // Microtask so the input exists in the DOM by the time we focus it
+    requestAnimationFrame(() => titleInputRef.current?.focus());
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [onClose]);
 
   async function handleCreate() {
@@ -712,19 +729,32 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
     setSaving(false);
   }
 
-  return (
+  if (!portalNode) return null;
+
+  const modalContent = (
     <div
-      className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       <div
-        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl"
+        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Create Task</h2>
+        {/* Visible close button — belt-and-suspenders for "I can't dismiss this" */}
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+        >
+          <HiX className="w-5 h-5" />
+        </button>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white pr-8">Create Task</h2>
         {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{error}</p>}
         <div><label className="text-xs text-gray-500 mb-1 block">Title *</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" /></div>
+          <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" /></div>
         <div><label className="text-xs text-gray-500 mb-1 block">Description</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" /></div>
         <div className="grid grid-cols-2 gap-3">
@@ -763,4 +793,8 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
       </div>
     </div>
   );
+
+  // Portal to <body> so no ancestor (sidebar, header, parent transforms, etc.)
+  // can hide or capture clicks for this modal.
+  return createPortal(modalContent, portalNode);
 }
