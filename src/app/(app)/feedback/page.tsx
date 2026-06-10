@@ -49,7 +49,7 @@ export default function FeedbackTrailPage() {
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
-  const [activeTab, setActiveTab] = useState<"task_feedback" | "team_scores" | "general_chat">("task_feedback");
+  const [activeTab, setActiveTab] = useState<"task_feedback" | "week_reports" | "team_scores" | "general_chat">("task_feedback");
   // Bug 6b: search-by-message text filter for the Task Feedback view.
   const [messageSearch, setMessageSearch] = useState("");
 
@@ -367,13 +367,18 @@ export default function FeedbackTrailPage() {
         </div>
       )}
 
-      {/* Tabs: Task Feedback / General Chat */}
+      {/* Tabs: Task Feedback / Week Reports / Team Scores / General Chat */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
         <button onClick={() => setActiveTab("task_feedback")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "task_feedback" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
           Task Feedback
           {newForMe > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500 text-white rounded-full font-bold min-w-[18px] text-center">{newForMe}</span>}
           {newForMe === 0 && totalFeedback > 0 && <span className="text-[10px] text-gray-400">({totalFeedback})</span>}
+        </button>
+        <button onClick={() => setActiveTab("week_reports")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "week_reports" ? "border-teal-500 text-teal-600 dark:text-teal-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Week Reports
+          {(weekReports || []).length > 0 && <span className="text-[10px] text-gray-400">({(weekReports || []).length})</span>}
         </button>
         <button onClick={() => setActiveTab("team_scores")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "team_scores" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
@@ -901,79 +906,85 @@ export default function FeedbackTrailPage() {
               )}
             </>
           )}
+        </>
+      )}
 
-          {/* ===== WEEK REPORTS SECTION ===== */}
-          {(weekReports || []).length > 0 && (
-            <div className="mt-6 space-y-4">
-              <h2 className="text-sm font-semibold text-teal-600 dark:text-teal-400 flex items-center gap-2">
-                <span className="text-base">📊</span> Week Reports ({(weekReports || []).length})
-              </h2>
-              <div className="space-y-4">
-                {(weekReports || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((wr) => (
-                  <div key={wr.id} className="bg-gradient-to-br from-teal-50/80 to-cyan-50/60 dark:from-teal-900/15 dark:to-cyan-900/10 border border-teal-200/60 dark:border-teal-800/30 rounded-2xl shadow-sm transition-all hover:shadow-md">
-                    {/* Report header */}
-                    <div className="px-5 py-3 border-b border-teal-200/40 dark:border-teal-800/20 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                          wr.report_type === "wednesday"
-                            ? "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400"
-                            : "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400"
-                        }`}>
-                          {wr.report_type === "wednesday" ? "Wednesday" : "Saturday"}
-                        </span>
-                        <span className="text-[10px] text-gray-500">
-                          by {wr.submitted_by_user?.full_name || "Unknown"} · {fmtTime(wr.created_at)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {wr.file_url && (
-                          <span className="flex items-center gap-1 text-[10px] text-teal-600 dark:text-teal-400">
-                            <HiOutlinePaperClip className="w-3.5 h-3.5" /> Files
-                          </span>
-                        )}
-                        {(wr.feedback?.length || 0) === 0 && (
-                          <span className="flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Awaiting review
-                          </span>
-                        )}
-                        <Link href={`/weeks/${wr.week_id}?tab=reports`} className="text-[10px] text-teal-500 hover:text-teal-400 flex items-center gap-1 transition-colors">
-                          Open week <HiArrowRight className="w-3 h-3" />
-                        </Link>
-                      </div>
+      {/* ===== WEEK REPORTS TAB (now a top-level tab per tester's structure) ===== */}
+      {activeTab === "week_reports" && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-teal-600 dark:text-teal-400 flex items-center gap-2">
+            <span className="text-base">📊</span> Week Reports ({(weekReports || []).length})
+          </h2>
+          {(weekReports || []).length === 0 ? (
+            <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center">
+              <p className="text-sm text-gray-500">No week reports yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {(weekReports || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((wr) => (
+                <div key={wr.id} className="bg-gradient-to-br from-teal-50/80 to-cyan-50/60 dark:from-teal-900/15 dark:to-cyan-900/10 border border-teal-200/60 dark:border-teal-800/30 rounded-2xl shadow-sm transition-all hover:shadow-md">
+                  {/* Report header */}
+                  <div className="px-5 py-3 border-b border-teal-200/40 dark:border-teal-800/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                        wr.report_type === "wednesday"
+                          ? "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400"
+                          : "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400"
+                      }`}>
+                        {wr.report_type === "wednesday" ? "Wednesday" : "Saturday"}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        by {wr.submitted_by_user?.full_name || "Unknown"} · {fmtTime(wr.created_at)}
+                      </span>
                     </div>
-
-                    {/* Full report content — scrollable, never truncated */}
-                    <div className="px-5 py-4">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{wr.content}</p>
+                    <div className="flex items-center gap-3">
+                      {wr.file_url && (
+                        <span className="flex items-center gap-1 text-[10px] text-teal-600 dark:text-teal-400">
+                          <HiOutlinePaperClip className="w-3.5 h-3.5" /> Files
+                        </span>
+                      )}
+                      {(wr.feedback?.length || 0) === 0 && (
+                        <span className="flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Awaiting review
+                        </span>
+                      )}
+                      <Link href={`/weeks/${wr.week_id}?tab=reports`} className="text-[10px] text-teal-500 hover:text-teal-400 flex items-center gap-1 transition-colors">
+                        Open week <HiArrowRight className="w-3 h-3" />
+                      </Link>
                     </div>
-
-                    {/* Feedback entries */}
-                    {(wr.feedback?.length || 0) > 0 && (
-                      <div className="px-5 py-3 border-t border-teal-200/30 dark:border-teal-800/20 space-y-3">
-                        <p className="text-[10px] text-gray-400 uppercase font-medium">Feedback ({wr.feedback!.length})</p>
-                        {wr.feedback!.map((fb) => (
-                          <div key={fb.id} className="flex items-start gap-2.5">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
-                              {fb.reviewer?.full_name?.[0] || "?"}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{fb.reviewer?.full_name}</span>
-                                <span className="text-xs font-bold text-gray-900 dark:text-white">{fb.rating}/10</span>
-                                <span className="text-[9px] text-gray-400">{fmtTime(fb.created_at)}</span>
-                              </div>
-                              {fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{fb.comment}</p>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                ))}
-              </div>
+
+                  {/* Full report content — scrollable, never truncated */}
+                  <div className="px-5 py-4">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{wr.content}</p>
+                  </div>
+
+                  {/* Feedback entries */}
+                  {(wr.feedback?.length || 0) > 0 && (
+                    <div className="px-5 py-3 border-t border-teal-200/30 dark:border-teal-800/20 space-y-3">
+                      <p className="text-[10px] text-gray-400 uppercase font-medium">Feedback ({wr.feedback!.length})</p>
+                      {wr.feedback!.map((fb) => (
+                        <div key={fb.id} className="flex items-start gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
+                            {fb.reviewer?.full_name?.[0] || "?"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{fb.reviewer?.full_name}</span>
+                              <span className="text-xs font-bold text-gray-900 dark:text-white">{fb.rating}/10</span>
+                              <span className="text-[9px] text-gray-400">{fmtTime(fb.created_at)}</span>
+                            </div>
+                            {fb.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{fb.comment}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
