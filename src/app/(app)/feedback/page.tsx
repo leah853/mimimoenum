@@ -297,8 +297,33 @@ export default function FeedbackTrailPage() {
         <p className="text-sm text-gray-500 mt-1">All feedback threads across tasks — interact, acknowledge, and respond</p>
       </div>
 
-      {/* KPI Cards — clickable filters. Light-touch reorg: only visible on
-          the Task Feedback tab — filters don't apply to Team Scores or Chat. */}
+      {/* Tabs: Task Feedback / Week Reports / Team Scores / General Chat — moved
+          above the KPI cards so filters visibly sit UNDER the Task Feedback button. */}
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
+        <button onClick={() => setActiveTab("task_feedback")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "task_feedback" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Task Feedback
+          {newForMe > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500 text-white rounded-full font-bold min-w-[18px] text-center">{newForMe}</span>}
+          {newForMe === 0 && totalFeedback > 0 && <span className="text-[10px] text-gray-400">({totalFeedback})</span>}
+        </button>
+        <button onClick={() => setActiveTab("week_reports")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "week_reports" ? "border-teal-500 text-teal-600 dark:text-teal-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Week Reports
+          {(weekReports || []).length > 0 && <span className="text-[10px] text-gray-400">({(weekReports || []).length})</span>}
+        </button>
+        <button onClick={() => setActiveTab("team_scores")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "team_scores" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Team Scores
+          {overallAvg > 0 && <span className="text-[10px] font-bold text-gray-400">({overallAvg.toFixed(1)}/10)</span>}
+        </button>
+        <button onClick={() => setActiveTab("general_chat")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "general_chat" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          General Chat
+          {chatMessages.length > 0 && <span className="text-[10px] text-gray-400">({chatMessages.length})</span>}
+        </button>
+      </div>
+
+      {/* KPI Cards — clickable filters. Filters only show under Task Feedback. */}
       {activeTab === "task_feedback" && (
       <div className="grid grid-cols-5 gap-4 stagger-children">
         <button onClick={() => toggleFilter("all")}
@@ -366,31 +391,6 @@ export default function FeedbackTrailPage() {
           <button onClick={() => setActiveFilter(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><HiX className="w-3.5 h-3.5" /></button>
         </div>
       )}
-
-      {/* Tabs: Task Feedback / Week Reports / Team Scores / General Chat */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
-        <button onClick={() => setActiveTab("task_feedback")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "task_feedback" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-          Task Feedback
-          {newForMe > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500 text-white rounded-full font-bold min-w-[18px] text-center">{newForMe}</span>}
-          {newForMe === 0 && totalFeedback > 0 && <span className="text-[10px] text-gray-400">({totalFeedback})</span>}
-        </button>
-        <button onClick={() => setActiveTab("week_reports")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "week_reports" ? "border-teal-500 text-teal-600 dark:text-teal-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-          Week Reports
-          {(weekReports || []).length > 0 && <span className="text-[10px] text-gray-400">({(weekReports || []).length})</span>}
-        </button>
-        <button onClick={() => setActiveTab("team_scores")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "team_scores" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-          Team Scores
-          {overallAvg > 0 && <span className="text-[10px] font-bold text-gray-400">({overallAvg.toFixed(1)}/10)</span>}
-        </button>
-        <button onClick={() => setActiveTab("general_chat")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "general_chat" ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-          General Chat
-          {chatMessages.length > 0 && <span className="text-[10px] text-gray-400">({chatMessages.length})</span>}
-        </button>
-      </div>
 
       {/* ===== TEAM SCORES TAB ===== */}
       {activeTab === "team_scores" && (
