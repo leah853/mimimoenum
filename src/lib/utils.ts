@@ -37,20 +37,55 @@ export function isVideoUrl(urlOrName?: string | null): boolean {
   return /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(s);
 }
 
-/** Tasks already handed off to reps (under_review) are NOT overdue from the
- *  doer's perspective — the ball is in the rep's court. They show as
- *  "Needs Review" instead. Completed tasks are obviously not overdue. */
-export function isTaskOverdue(task: { deadline?: string | null; status: TaskStatus }, todayISO?: string): boolean {
+/** A task is "awaiting review" when the doer has uploaded a deliverable but
+ *  no feedback exists yet — the ball is in the rep's court even if the
+ *  underlying status is still in_progress/not_started. Treated the same as
+ *  under_review for overdue/due-today purposes. */
+function isAwaitingReview(task: {
+  status: TaskStatus;
+  deliverables?: { id: string }[] | null;
+  feedback?: { id: string }[] | null;
+}): boolean {
+  if (task.status === "under_review") return true;
+  if (task.status === "completed") return false;
+  const hasDeliverables = (task.deliverables?.length || 0) > 0;
+  const hasFeedback = (task.feedback?.length || 0) > 0;
+  return hasDeliverables && !hasFeedback;
+}
+
+/** Tasks already handed off to reps (under_review, OR with deliverables
+ *  awaiting first review) are NOT overdue from the doer's perspective — the
+ *  ball is in the rep's court. They show as "Needs Review" instead.
+ *  Completed tasks are obviously not overdue. */
+export function isTaskOverdue(
+  task: {
+    deadline?: string | null;
+    status: TaskStatus;
+    deliverables?: { id: string }[] | null;
+    feedback?: { id: string }[] | null;
+  },
+  todayISO?: string,
+): boolean {
   if (!task.deadline) return false;
-  if (task.status === "completed" || task.status === "under_review") return false;
+  if (task.status === "completed") return false;
+  if (isAwaitingReview(task)) return false;
   const today = todayISO || new Date().toISOString().split("T")[0];
   return task.deadline < today;
 }
 
-/** Due-today excludes under_review for the same reason. */
-export function isTaskDueToday(task: { deadline?: string | null; status: TaskStatus }, todayISO?: string): boolean {
+/** Due-today excludes under_review and awaiting-review for the same reason. */
+export function isTaskDueToday(
+  task: {
+    deadline?: string | null;
+    status: TaskStatus;
+    deliverables?: { id: string }[] | null;
+    feedback?: { id: string }[] | null;
+  },
+  todayISO?: string,
+): boolean {
   if (!task.deadline) return false;
-  if (task.status === "completed" || task.status === "under_review") return false;
+  if (task.status === "completed") return false;
+  if (isAwaitingReview(task)) return false;
   const today = todayISO || new Date().toISOString().split("T")[0];
   return task.deadline === today;
 }
