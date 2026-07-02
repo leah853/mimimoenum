@@ -58,7 +58,7 @@ export function displayStatus(n: TreeNode): Status {
 
 export const STATUS_HEX: Record<Status, string> = {
   grey: "#B4B2A9",
-  black: "#2C2C2A",
+  black: "#3B7DD1", // "highlighted": attachment present, not scored yet
   red: "#E24B4A",
   yellow: "#EF9F27",
   green: "#639922",

@@ -6,7 +6,7 @@ import { useApi, apiPost, apiPatch, apiDelete, invalidateCache } from "@/lib/use
 import { useAuth } from "@/lib/auth-context";
 import { useToast, SkeletonRows } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
-import { displayStatus, ownStatus, STATUS_HEX, type Status } from "@/lib/treeStatus";
+import { ownStatus, STATUS_HEX, type Status } from "@/lib/treeStatus";
 import {
   HiX,
   HiOutlinePaperClip,
@@ -65,7 +65,10 @@ const COLORS: Record<
   { bar: string; dot: string; text: string; pill: string; pillText: string }
 > = {
   grey: { bar: "#B4B2A9", dot: "#D3D1C7", text: "#5F5E5A", pill: "#F1EFE8", pillText: "#5F5E5A" },
-  black: { bar: "#2C2C2A", dot: "#2C2C2A", text: "#2C2C2A", pill: "#E7E5DE", pillText: "#2C2C2A" },
+  // "black" now = attachment present but not yet scored ("highlighted / awaiting review").
+  // Kept the key name so treeStatus.ts stays untouched, but the palette is a
+  // steel blue that reads as "flagged — needs a score" instead of "final/done".
+  black: { bar: "#3B7DD1", dot: "#3B7DD1", text: "#1F4E82", pill: "#E7EFFA", pillText: "#1F4E82" },
   red: { bar: "#E24B4A", dot: "#E24B4A", text: "#A32D2D", pill: "#FCEBEB", pillText: "#A32D2D" },
   yellow: { bar: "#EF9F27", dot: "#EF9F27", text: "#854F0B", pill: "#FAEEDA", pillText: "#854F0B" },
   green: { bar: "#639922", dot: "#639922", text: "#3B6D11", pill: "#EAF3DE", pillText: "#3B6D11" },
@@ -102,9 +105,50 @@ function buildRoots(flat: ApiNode[]): TreeNode[] {
 
 // ─── Layout: pine — milestone tip at top, fans down, trunk to base ──────────
 type Positions = Record<string, { x: number; y: number; depth: number }>;
+type Heights = Record<string, number>;
 
-function layout(root: TreeNode): { positions: Positions; width: number; height: number; maxDepth: number } {
+/** Estimate card height from title length. ~16 characters fit per line at
+ *  typical fs 13.5 in NODE_W. Base = kind chip + assignee row + padding. */
+function estimateCardHeight(title: string): number {
+  const CHARS_PER_LINE = 16;
+  const lines = Math.max(1, Math.ceil((title || "").length / CHARS_PER_LINE));
+  const TITLE_LINE_H = 17;
+  const BASE = 34; // kind chip row (16) + assignee row (14) + vertical padding (~4)
+  return Math.max(NODE_H, BASE + TITLE_LINE_H * lines);
+}
+
+function layout(root: TreeNode): {
+  positions: Positions;
+  heights: Heights;
+  width: number;
+  height: number;
+  maxDepth: number;
+} {
   const positions: Positions = {};
+  const heights: Heights = {};
+
+  // Pass 1: compute a display height for every node from its title.
+  const walkAll = (n: TreeNode) => {
+    heights[n.id] = estimateCardHeight(n.title);
+    n.children.forEach(walkAll);
+  };
+  walkAll(root);
+
+  // Pass 2: find the tallest card at each visible depth so every row stacks
+  // cleanly without overlap.
+  const depthMaxH: number[] = [];
+  const measureDepths = (n: TreeNode, depth: number) => {
+    depthMaxH[depth] = Math.max(depthMaxH[depth] || 0, heights[n.id]);
+    if (!n.collapsed) n.children.forEach((c) => measureDepths(c, depth + 1));
+  };
+  measureDepths(root, 0);
+
+  // Pre-compute y-offset per depth: y[d] = 10 + Σ (depthMaxH[i] + V_GAP) for i<d
+  const yAt: number[] = [10];
+  for (let d = 0; d < depthMaxH.length; d++) {
+    yAt[d + 1] = yAt[d] + depthMaxH[d] + V_GAP;
+  }
+
   let cursorX = 0;
   let maxDepth = 0;
   const place = (node: TreeNode, depth: number): number => {
@@ -113,22 +157,23 @@ function layout(root: TreeNode): { positions: Positions; width: number; height: 
     if (!visibleKids.length) {
       const x = cursorX;
       cursorX += NODE_W + H_GAP;
-      positions[node.id] = { x, y: 10 + depth * (NODE_H + V_GAP), depth };
+      positions[node.id] = { x, y: yAt[depth], depth };
       return x + NODE_W / 2;
     }
     const centers = visibleKids.map((c) => place(c, depth + 1));
     const mid = (centers[0] + centers[centers.length - 1]) / 2;
-    positions[node.id] = { x: mid - NODE_W / 2, y: 10 + depth * (NODE_H + V_GAP), depth };
+    positions[node.id] = { x: mid - NODE_W / 2, y: yAt[depth], depth };
     return mid;
   };
   place(root, 0);
+
   let maxX = 0;
   let maxY = 0;
-  Object.values(positions).forEach((p) => {
+  for (const [id, p] of Object.entries(positions)) {
     maxX = Math.max(maxX, p.x + NODE_W);
-    maxY = Math.max(maxY, p.y + NODE_H);
-  });
-  return { positions, width: maxX, height: maxY + TRUNK, maxDepth };
+    maxY = Math.max(maxY, p.y + heights[id]);
+  }
+  return { positions, heights, width: maxX, height: maxY + TRUNK, maxDepth };
 }
 
 function flatten(node: TreeNode, acc: TreeNode[]): TreeNode[] {
@@ -141,12 +186,6 @@ function subtreeCount(node: TreeNode): number {
   let c = 0;
   node.children.forEach((k) => { c += 1 + subtreeCount(k); });
   return c;
-}
-
-function collectScoresLocal(n: TreeNode, out: number[]): number[] {
-  if (n.score != null) out.push(n.score);
-  n.children.forEach((c) => collectScoresLocal(c, out));
-  return out;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -399,7 +438,7 @@ function PineCanvas({
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const { positions, width, height } = useMemo(() => layout(root), [root]);
+  const { positions, heights, width, height } = useMemo(() => layout(root), [root]);
   const nodes = useMemo(() => flatten(root, []), [root]);
   const PAD = 40;
 
@@ -546,17 +585,19 @@ function PineCanvas({
             const limbs: React.ReactNode[] = [];
             const BARK = "#8A6A4A";
             const BARK_D = "#6E5238";
-            const widthAt = (depth: number) => Math.max(3.5, 13 - depth * 3);
+            // Branches: THICK at the trunk (depth 0), sharply tapering toward
+            // the leaves. Starts at ~24 and thins to ~3 by depth 5.
+            const widthAt = (depth: number) => Math.max(3, 24 - depth * 4.5);
             const rootP = positions[root.id];
 
             // Central trunk: descends from the milestone tip to the base of
             // the canvas, thickening as it goes.
             if (rootP) {
               const cx = rootP.x + NODE_W / 2;
-              const topY = rootP.y + NODE_H / 2;
+              const topY = rootP.y + (heights[root.id] || NODE_H) / 2;
               const baseY = height + PAD - 18;
               const topH = widthAt(0) / 2;
-              const baseH = 15;
+              const baseH = 22;
               limbs.push(
                 <path
                   key="trunk"
@@ -575,7 +616,7 @@ function PineCanvas({
                 const cp = positions[c.id];
                 if (!cp) return;
                 const x1 = p.x + NODE_W / 2;
-                const y1 = p.y + NODE_H;
+                const y1 = p.y + (heights[n.id] || NODE_H);
                 const x2 = cp.x + NODE_W / 2;
                 const y2 = cp.y;
                 const w2 = widthAt(cp.depth);
@@ -598,7 +639,7 @@ function PineCanvas({
               if (n.children && n.children.length) return;
               const p = positions[n.id];
               const bx = p.x + NODE_W / 2;
-              const by = p.y + NODE_H + 6;
+              const by = p.y + (heights[n.id] || NODE_H) + 6;
               const leaf = (dx: number, dy: number, r: number, rot: number, fill: string, op: number) => (
                 <ellipse
                   key={`${n.id}lf${dx}${dy}`}
@@ -627,6 +668,7 @@ function PineCanvas({
             key={n.id}
             node={n}
             pos={positions[n.id]}
+            cardHeight={heights[n.id] || NODE_H}
             hasKids={n.children.length > 0}
             onOpen={onOpen}
             onToggle={onToggle}
@@ -641,10 +683,15 @@ function PineCanvas({
   );
 }
 
-// ─── Node card (ported verbatim from reference, adapted to Supabase fields) ─
+// ─── Node card ──────────────────────────────────────────────────────────────
+// Color reflects OWN status only (no worst-child rollup) — so grey means "not
+// touched yet", steel-blue "black" means "attachment added, awaiting score",
+// and red/yellow/green come from the score itself. This is what makes the
+// tree eyeball-able for progress: count non-grey nodes.
 function NodeCard({
   node,
   pos,
+  cardHeight,
   hasKids,
   onOpen,
   onToggle,
@@ -652,15 +699,14 @@ function NodeCard({
 }: {
   node: TreeNode;
   pos: { x: number; y: number; depth: number };
+  cardHeight: number;
   hasKids: boolean;
   onOpen: (id: string) => void;
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const disp = displayStatus(node);
   const own = ownStatus(node);
-  const c = COLORS[disp];
-  const rolledUp = hasKids && own !== disp;
+  const c = COLORS[own];
   const assignee = node.assignee || node.owner?.full_name || null;
   const hasAtt = node.attachment_count > 0;
   const isMilestone = node.kind === "Milestone";
@@ -672,6 +718,18 @@ function NodeCard({
   const titleWeight = isMilestone ? 700 : isGoal ? 600 : 500;
   const cardBg = isMilestone ? "#FFFEF9" : "#FFFFFF";
 
+  // Aggregate progress badge on the Milestone card — how many descendants
+  // have some sign of progress (attachment or score). Lets you eyeball
+  // completion without expanding every branch.
+  let progressText: string | null = null;
+  if (isMilestone) {
+    const all: TreeNode[] = [];
+    const walk = (x: TreeNode) => { x.children.forEach((c) => { all.push(c); walk(c); }); };
+    walk(node);
+    const touched = all.filter((x) => x.score != null || x.attachment_count > 0).length;
+    progressText = `${touched}/${all.length}`;
+  }
+
   return (
     <div
       style={{
@@ -679,7 +737,7 @@ function NodeCard({
         left: pos.x,
         top: pos.y,
         width: NODE_W,
-        height: NODE_H,
+        height: cardHeight,
         background: cardBg,
         borderRadius: 12,
         border: "0.5px solid #E4E1D8",
@@ -687,7 +745,8 @@ function NodeCard({
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "center",
+        justifyContent: "flex-start",
+        gap: 3,
         padding: "6px 10px",
         cursor: "pointer",
         boxShadow: isMilestone
@@ -713,27 +772,43 @@ function NodeCard({
         >
           {node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MS" : node.kind === "Goal" ? "GOAL" : "TASK"}
         </span>
-        <span
-          style={{
-            fontSize: titleSize,
-            fontWeight: titleWeight,
-            color: "#2C2C2A",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {node.title}
-        </span>
+        {progressText && (
+          <span
+            title="descendants with attachment or score"
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              padding: "1px 6px",
+              borderRadius: 8,
+              background: "#EEF2FA",
+              color: "#1F4E82",
+              marginLeft: "auto",
+              flexShrink: 0,
+            }}
+          >
+            {progressText}
+          </span>
+        )}
+      </div>
+      <div
+        style={{
+          fontSize: titleSize,
+          fontWeight: titleWeight,
+          color: "#2C2C2A",
+          lineHeight: 1.28,
+          wordBreak: "break-word",
+          overflowWrap: "anywhere",
+          whiteSpace: "normal",
+        }}
+      >
+        {node.title}
       </div>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 6,
-          marginTop: 3,
+          marginTop: "auto",
           fontSize: 10.5,
           color: "#8A897F",
           minWidth: 0,
@@ -794,23 +869,6 @@ function NodeCard({
           </span>
         )}
       </div>
-      {rolledUp && (
-        <span
-          title="color rolled up from worst child"
-          style={{
-            position: "absolute",
-            top: -9,
-            right: 8,
-            background: c.bar,
-            color: "#fff",
-            fontSize: 9,
-            borderRadius: 8,
-            padding: "1px 6px",
-          }}
-        >
-          worst {Math.min(...collectScoresLocal(node, []))}
-        </span>
-      )}
       {hasKids && (
         <button
           onClick={(e) => {
@@ -987,7 +1045,8 @@ function NodeModal({
 
   if (!portalNode) return null;
 
-  const disp = displayStatus(node);
+  // Match the tree card: own-status colour, no rollup.
+  const disp = ownStatus(node);
   const c = COLORS[disp];
 
   const modal = (
