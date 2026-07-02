@@ -6,7 +6,7 @@ import { useApi, apiPost, apiPatch, apiDelete, invalidateCache } from "@/lib/use
 import { useAuth } from "@/lib/auth-context";
 import { useToast, SkeletonRows } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
-import { displayStatus, ownStatus, type Status } from "@/lib/treeStatus";
+import { displayStatus, ownStatus, STATUS_HEX, type Status } from "@/lib/treeStatus";
 import {
   HiX,
   HiOutlinePaperClip,
@@ -235,20 +235,63 @@ export default function MilestoneTree() {
     } catch (e) { toast(handleApiError(e), "error"); }
   }
 
+  async function seedSampleTree() {
+    if (!confirm("Load the Milestone 1 sample tree? Only works if the tree is currently empty.")) return;
+    try {
+      const res = await fetch("/api/milestone-nodes/seed", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      toast(`Seeded ${json.inserted} nodes`, "success");
+      invalidateCache("/api/milestone-nodes");
+      await refetch();
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
   if (loading) return <div className="mt-6"><SkeletonRows count={6} /></div>;
 
   return (
-    <div className="mt-4 space-y-8">
+    <div className="mt-4 space-y-6">
+      {/* Legend header — color meanings + rollup caption */}
+      <div className="flex items-center flex-wrap gap-x-5 gap-y-2 px-4 py-2 bg-white/70 dark:bg-gray-900/60 border border-gray-200/60 dark:border-gray-800/60 rounded-xl text-[11.5px]">
+        <span className="font-semibold text-gray-700 dark:text-gray-300">Legend</span>
+        {(
+          [
+            ["grey", "untouched"],
+            ["black", "has link"],
+            ["red", "≤5"],
+            ["yellow", "6–8"],
+            ["green", "9+"],
+          ] as const
+        ).map(([k, l]) => (
+          <span key={k} className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span
+              className="inline-block rounded-sm"
+              style={{ width: 11, height: 11, background: STATUS_HEX[k as Status] }}
+            />
+            {l}
+          </span>
+        ))}
+        <span className="text-gray-400 italic">parent color = worst child</span>
+      </div>
+
       {roots.length === 0 ? (
-        <div className="bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center">
-          <p className="text-sm text-gray-500 mb-3">No milestones yet. Plant one to grow the tree.</p>
+        <div className="bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-gray-800/60 rounded-2xl p-8 text-center space-y-3">
+          <p className="text-sm text-gray-500">No milestones yet. Plant one to grow the tree.</p>
           {isDoer && (
-            <button
-              onClick={() => setCreateUnder({ parentId: null, kind: "Milestone" })}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl shadow-md hover:brightness-110 transition-all"
-            >
-              + Create first Milestone
-            </button>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <button
+                onClick={() => setCreateUnder({ parentId: null, kind: "Milestone" })}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl shadow-md hover:brightness-110 transition-all"
+              >
+                + Create first Milestone
+              </button>
+              <button
+                onClick={seedSampleTree}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-indigo-600 text-sm border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-all"
+              >
+                Load Milestone 1 sample tree
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -289,6 +332,7 @@ export default function MilestoneTree() {
       {openNode && (
         <NodeModal
           node={openNode}
+          path={findPath(roots, openNode.id)}
           currentUser={dbUser}
           isDoer={isDoer}
           onClose={() => setOpenNodeId(null)}
@@ -299,6 +343,23 @@ export default function MilestoneTree() {
       )}
     </div>
   );
+}
+
+/** Titles of every ancestor down to (but not including) the target node. */
+function findPath(roots: TreeNode[], id: string): string[] {
+  for (const r of roots) {
+    const trail = walk(r, id, []);
+    if (trail) return trail;
+  }
+  return [];
+}
+function walk(node: TreeNode, id: string, acc: string[]): string[] | null {
+  if (node.id === id) return acc;
+  for (const c of node.children) {
+    const r = walk(c, id, [...acc, node.title]);
+    if (r) return r;
+  }
+  return null;
 }
 
 function defaultChildKind(root: TreeNode, parentId: string | null): Kind {
@@ -362,6 +423,32 @@ function PineCanvas({
             height={(height + PAD) * 0.38}
             fill={`url(#ground-${root.id})`}
           />
+          {/* Ambient foliage blobs — soft green ellipses in the corners for
+              atmosphere. Never align to nodes. */}
+          {(() => {
+            const W = width + PAD;
+            const H = height + PAD;
+            const blob = (cx: number, cy: number, rx: number, ry: number, rot: number, op: number) => (
+              <ellipse
+                key={`${cx}-${cy}`}
+                cx={cx}
+                cy={cy}
+                rx={rx}
+                ry={ry}
+                fill="#9FC0A8"
+                opacity={op}
+                transform={`rotate(${rot} ${cx} ${cy})`}
+              />
+            );
+            return [
+              blob(28, H * 0.2, 46, 28, -18, 0.14),
+              blob(W - 30, H * 0.16, 52, 30, 22, 0.13),
+              blob(18, H * 0.55, 38, 24, 10, 0.1),
+              blob(W - 20, H * 0.5, 44, 26, -14, 0.1),
+              blob(40, H * 0.85, 40, 22, -8, 0.08),
+              blob(W - 44, H * 0.82, 40, 24, 12, 0.08),
+            ];
+          })()}
         </svg>
 
         {/* trunk + forking limbs + leaf clusters — computed from positions */}
@@ -651,6 +738,7 @@ function NodeCard({
 // ─── Node modal (edit / feedback / attachments) ──────────────────────────────
 function NodeModal({
   node,
+  path,
   currentUser,
   isDoer,
   onClose,
@@ -659,6 +747,7 @@ function NodeModal({
   onRefetchTree,
 }: {
   node: TreeNode;
+  path: string[];
   currentUser: { id: string; full_name: string; email: string } | null;
   isDoer: boolean;
   onClose: () => void;
@@ -792,18 +881,30 @@ function NodeModal({
         className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
         style={{ borderTop: `3px solid ${c.bar}` }}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-start justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800 gap-2">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
             <span
-              style={{ width: 10, height: 10, borderRadius: 3, background: c.dot }}
+              style={{ width: 10, height: 10, borderRadius: 3, background: c.dot, marginTop: 6 }}
               className="flex-shrink-0"
             />
-            <span className="text-[11px] px-1.5 py-0.5 rounded-md font-semibold" style={{ background: c.pill, color: c.pillText }}>
-              {node.kind}
-            </span>
-            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{node.title}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="text-[11px] px-1.5 py-0.5 rounded-md font-semibold flex-shrink-0"
+                  style={{ background: c.pill, color: c.pillText }}
+                >
+                  {node.kind}
+                </span>
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
+                  {node.title}
+                </span>
+              </div>
+              <div className="text-[10.5px] text-gray-500 mt-0.5 truncate">
+                {path.length > 0 ? path.join(" › ") : "root"}
+              </div>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 rounded">
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 rounded flex-shrink-0">
             <HiX className="w-4 h-4" />
           </button>
         </div>
@@ -841,15 +942,40 @@ function NodeModal({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-gray-500 mb-1 block uppercase tracking-wider">Score (1-10)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={scoreEdit}
-                    onChange={(e) => setScoreEdit(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="w-full px-3 py-2 text-sm bg-gray-50/80 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] text-gray-500 uppercase tracking-wider">Score</label>
+                    {scoreEdit !== "" && (
+                      <button
+                        type="button"
+                        onClick={() => setScoreEdit("")}
+                        className="text-[10px] text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline"
+                      >
+                        clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      step={1}
+                      value={scoreEdit === "" ? 5 : scoreEdit}
+                      onChange={(e) => setScoreEdit(Number(e.target.value))}
+                      className="flex-1 accent-indigo-500"
+                    />
+                    <span
+                      className="w-8 text-right text-base font-semibold"
+                      style={{ color: scoreEdit === "" ? "#C7C4BA" : COLORS[scoreColorSafe(Number(scoreEdit)) || "grey"].text }}
+                    >
+                      {scoreEdit === "" ? "–" : scoreEdit}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[9.5px] text-gray-400 mt-1">
+                    <span>1-5 red</span>
+                    <span>6-8 yellow</span>
+                    <span>9-10 green</span>
+                  </div>
                 </div>
               </div>
             </>
@@ -956,14 +1082,18 @@ function NodeModal({
         </div>
 
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800">
-          {isDoer ? (
+          {isDoer && node.kind !== "Milestone" ? (
             <button
               onClick={() => onDelete(node.id)}
               className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
             >
               <HiOutlineTrash className="w-3.5 h-3.5" /> Delete node
             </button>
-          ) : <span />}
+          ) : (
+            <span className="text-[10.5px] text-gray-400 italic">
+              {node.kind === "Milestone" ? "Root — can't delete" : ""}
+            </span>
+          )}
           <div className="flex gap-2">
             <button onClick={onClose} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 rounded-lg">
               Close
@@ -1072,6 +1202,13 @@ function CreateNodeModal({
   );
 
   return createPortal(modal, portalNode);
+}
+
+function scoreColorSafe(score: number | null): Status | null {
+  if (score == null || isNaN(score)) return null;
+  if (score <= 5) return "red";
+  if (score <= 8) return "yellow";
+  return "green";
 }
 
 // ─── Small utils ─────────────────────────────────────────────────────────────
