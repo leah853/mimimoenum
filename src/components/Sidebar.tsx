@@ -7,7 +7,7 @@ import { useTheme } from "@/lib/theme-context";
 import { useApi } from "@/lib/use-api";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import {
-  HiOutlineViewGrid, HiOutlineChartBar, HiOutlineClipboardList,
+  HiOutlineViewGrid, HiOutlineClipboardList,
   HiOutlineDocumentText, HiOutlineUpload, HiOutlineLogout,
   HiOutlineTable, HiOutlineSun, HiOutlineMoon, HiOutlineAnnotation,
   HiOutlineVideoCamera,
@@ -34,7 +34,6 @@ export default function Sidebar() {
   const NAV_ITEMS = [
     { href: "/dashboard", label: "Dashboard", icon: HiOutlineViewGrid, badge: 0 },
     { href: "/milestones", label: "Milestones", icon: HiOutlineTable, badge: 0 },
-    { href: "/gantt", label: "Gantt View", icon: HiOutlineChartBar, badge: 0 },
     { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList, badge: 0 },
     { href: "/feedback", label: "Feedback Trail", icon: HiOutlineAnnotation, badge: feedbackCount },
     { href: "/eod", label: "EOD Updates", icon: HiOutlineDocumentText, badge: eodNeedsReview },
