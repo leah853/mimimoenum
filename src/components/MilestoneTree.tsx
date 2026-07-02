@@ -432,7 +432,7 @@ function PineCanvas({
   const zoomPct = Math.round(scale * 100);
 
   return (
-    <div ref={outerRef} style={{ background: "#FAFAF7", borderRadius: 12, padding: 12, border: "1px solid #EEEBE2" }}>
+    <div ref={outerRef} style={{ background: "#F7F5EF", borderRadius: 12, padding: 12 }}>
       {/* Zoom toolbar */}
       <div className="flex items-center justify-end gap-1.5 mb-2 text-[11px]">
         <button
@@ -485,42 +485,140 @@ function PineCanvas({
             }}
           >
       <div style={{ position: "relative", width: width + PAD, height: height + PAD }}>
-        {/* Clean connectors: thin rounded curves from parent bottom-center to
-            child top-center. No trunk, no leaves, no ambient noise — the
-            hierarchy has to read at a glance. */}
+        {/* Ambient backdrop: canopy + ground gradients + soft corner foliage */}
         <svg
           width={width + PAD}
           height={height + PAD}
           style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
           aria-hidden="true"
         >
+          <defs>
+            <radialGradient id={`canopy-${root.id}`} cx="50%" cy="14%" r="60%">
+              <stop offset="0%" stopColor="#CFE0D2" stopOpacity="0.55" />
+              <stop offset="100%" stopColor="#CFE0D2" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id={`ground-${root.id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#E4DCCB" stopOpacity="0" />
+              <stop offset="100%" stopColor="#E4DCCB" stopOpacity="0.5" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width={width + PAD} height={height + PAD} fill={`url(#canopy-${root.id})`} />
+          <rect
+            x="0"
+            y={(height + PAD) * 0.62}
+            width={width + PAD}
+            height={(height + PAD) * 0.38}
+            fill={`url(#ground-${root.id})`}
+          />
           {(() => {
-            const lines: React.ReactNode[] = [];
-            const LINE = "#CFCFC5";
+            const W = width + PAD;
+            const H = height + PAD;
+            const blob = (cx: number, cy: number, rx: number, ry: number, rot: number, op: number) => (
+              <ellipse
+                key={`${cx}-${cy}`}
+                cx={cx}
+                cy={cy}
+                rx={rx}
+                ry={ry}
+                fill="#9FC0A8"
+                opacity={op}
+                transform={`rotate(${rot} ${cx} ${cy})`}
+              />
+            );
+            return [
+              blob(28, H * 0.2, 46, 28, -18, 0.14),
+              blob(W - 30, H * 0.16, 52, 30, 22, 0.13),
+              blob(18, H * 0.55, 38, 24, 10, 0.1),
+              blob(W - 20, H * 0.5, 44, 26, -14, 0.1),
+              blob(40, H * 0.85, 40, 22, -8, 0.08),
+              blob(W - 44, H * 0.82, 40, 24, 12, 0.08),
+            ];
+          })()}
+        </svg>
+
+        {/* Trunk + forking limbs + leaf clusters */}
+        <svg
+          width={width + PAD}
+          height={height + PAD}
+          style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
+        >
+          {(() => {
+            const limbs: React.ReactNode[] = [];
+            const BARK = "#8A6A4A";
+            const BARK_D = "#6E5238";
+            const widthAt = (depth: number) => Math.max(3.5, 13 - depth * 3);
+            const rootP = positions[root.id];
+
+            // Central trunk: descends from the milestone tip to the base of
+            // the canvas, thickening as it goes.
+            if (rootP) {
+              const cx = rootP.x + NODE_W / 2;
+              const topY = rootP.y + NODE_H / 2;
+              const baseY = height + PAD - 18;
+              const topH = widthAt(0) / 2;
+              const baseH = 15;
+              limbs.push(
+                <path
+                  key="trunk"
+                  d={`M${cx - topH},${topY} L${cx - baseH},${baseY} Q${cx},${baseY + 10} ${cx + baseH},${baseY} L${cx + topH},${topY} Z`}
+                  fill={BARK_D}
+                />,
+              );
+            }
+
+            // Forking tapered branches from each parent card bottom to child top.
             nodes.forEach((n) => {
               if (n.collapsed) return;
               const p = positions[n.id];
-              const x1 = p.x + NODE_W / 2;
-              const y1 = p.y + NODE_H;
+              const w1 = widthAt(p.depth);
               n.children.forEach((c) => {
                 const cp = positions[c.id];
                 if (!cp) return;
+                const x1 = p.x + NODE_W / 2;
+                const y1 = p.y + NODE_H;
                 const x2 = cp.x + NODE_W / 2;
                 const y2 = cp.y;
+                const w2 = widthAt(cp.depth);
                 const my = (y1 + y2) / 2;
-                lines.push(
-                  <path
-                    key={n.id + c.id}
-                    d={`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`}
-                    stroke={LINE}
-                    strokeWidth={1.4}
-                    fill="none"
-                    strokeLinecap="round"
-                  />,
-                );
+                const h1 = w1 / 2;
+                const h2 = w2 / 2;
+                const d =
+                  `M${x1 - h1},${y1} ` +
+                  `C${x1 - h1},${my} ${x2 - h2},${my} ${x2 - h2},${y2} ` +
+                  `L${x2 + h2},${y2} ` +
+                  `C${x2 + h2},${my} ${x1 + h1},${my} ${x1 + h1},${y1} Z`;
+                limbs.push(<path key={n.id + c.id} d={d} fill={BARK} />);
+                limbs.push(<circle key={n.id + c.id + "j"} cx={x1} cy={y1} r={h1} fill={BARK} />);
               });
             });
-            return lines;
+
+            // Foliage clusters on childless visible nodes.
+            nodes.forEach((n) => {
+              if (n.collapsed) return;
+              if (n.children && n.children.length) return;
+              const p = positions[n.id];
+              const bx = p.x + NODE_W / 2;
+              const by = p.y + NODE_H + 6;
+              const leaf = (dx: number, dy: number, r: number, rot: number, fill: string, op: number) => (
+                <ellipse
+                  key={`${n.id}lf${dx}${dy}`}
+                  cx={bx + dx}
+                  cy={by + dy}
+                  rx={r}
+                  ry={r * 0.62}
+                  fill={fill}
+                  opacity={op}
+                  transform={`rotate(${rot} ${bx + dx} ${by + dy})`}
+                />
+              );
+              limbs.push(leaf(-18, 4, 13, -28, "#8FB98C", 0.9));
+              limbs.push(leaf(0, 9, 15, 8, "#7FAE7C", 0.9));
+              limbs.push(leaf(18, 4, 13, 30, "#9CC499", 0.9));
+              limbs.push(leaf(-8, 15, 11, -12, "#88B585", 0.85));
+              limbs.push(leaf(9, 15, 11, 18, "#93BE90", 0.85));
+            });
+
+            return limbs;
           })()}
         </svg>
 
@@ -583,9 +681,9 @@ function NodeCard({
         width: NODE_W,
         height: NODE_H,
         background: cardBg,
-        borderRadius: 10,
-        border: "1px solid #EBE8DE",
-        borderLeft: `3px solid ${c.bar}`,
+        borderRadius: 12,
+        border: "0.5px solid #E4E1D8",
+        borderTop: `3px solid ${c.bar}`,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
