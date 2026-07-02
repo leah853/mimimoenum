@@ -49,12 +49,16 @@ type Attachment = {
   uploaded_at: string;
 };
 
-// ─── Card + layout constants (verbatim from reference) ───────────────────────
-const NODE_W = 176;
-const NODE_H = 58;
-const H_GAP = 26;
-const V_GAP = 72;
-const TRUNK = 90;
+// ─── Card + layout constants ────────────────────────────────────────────────
+// Reference values were NODE_W=176, NODE_H=58, H_GAP=26, V_GAP=72. Tightened
+// slightly because Milestone 1's real tree has ~34 leaf nodes at depth 6 —
+// with the reference values the canvas is ~4000px wide and spills off any
+// reasonable screen. The pine visual survives compaction fine.
+const NODE_W = 156;
+const NODE_H = 54;
+const H_GAP = 14;
+const V_GAP = 56;
+const TRUNK = 70;
 
 const COLORS: Record<
   Status,
@@ -380,6 +384,10 @@ function defaultChildKind(root: TreeNode, parentId: string | null): Kind {
 }
 
 // ─── The pine canvas: ambient backdrop + trunk/limbs/leaves + node cards ────
+// Wraps the raw pine in an auto-fit-to-width scaler so 60+ node trees don't
+// spill off the viewport. Users can override with the zoom controls.
+type ZoomMode = "fit" | "actual" | number;
+
 function PineCanvas({
   root,
   onOpen,
@@ -395,8 +403,87 @@ function PineCanvas({
   const nodes = useMemo(() => flatten(root, []), [root]);
   const PAD = 40;
 
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(0);
+  const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
+
+  useEffect(() => {
+    if (!outerRef.current) return;
+    const el = outerRef.current;
+    const ro = new ResizeObserver(() => setContainerW(el.clientWidth));
+    ro.observe(el);
+    setContainerW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const canvasW = width + PAD;
+  const canvasH = height + PAD;
+  const fitScale =
+    containerW > 0 && canvasW > containerW ? Math.max(0.35, containerW / canvasW) : 1;
+  const scale =
+    zoomMode === "fit"
+      ? fitScale
+      : zoomMode === "actual"
+        ? 1
+        : (zoomMode as number);
+  const scaledH = canvasH * scale;
+  const scaledW = canvasW * scale;
+
+  const zoomPct = Math.round(scale * 100);
+
   return (
-    <div style={{ overflow: "auto", padding: PAD, background: "#F7F5EF", borderRadius: 12 }}>
+    <div ref={outerRef} style={{ background: "#F7F5EF", borderRadius: 12, padding: 12 }}>
+      {/* Zoom toolbar */}
+      <div className="flex items-center justify-end gap-1.5 mb-2 text-[11px]">
+        <button
+          onClick={() => setZoomMode("fit")}
+          className={`px-2 py-0.5 rounded-md border ${
+            zoomMode === "fit"
+              ? "bg-indigo-500 text-white border-indigo-500"
+              : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+          }`}
+        >
+          Fit
+        </button>
+        <button
+          onClick={() => setZoomMode("actual")}
+          className={`px-2 py-0.5 rounded-md border ${
+            zoomMode === "actual"
+              ? "bg-indigo-500 text-white border-indigo-500"
+              : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+          }`}
+        >
+          100%
+        </button>
+        <button
+          onClick={() => setZoomMode(Math.max(0.25, scale - 0.1))}
+          className="px-1.5 py-0.5 rounded-md border bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+        >
+          −
+        </button>
+        <span className="w-10 text-center text-gray-500 tabular-nums">{zoomPct}%</span>
+        <button
+          onClick={() => setZoomMode(Math.min(2, scale + 0.1))}
+          className="px-1.5 py-0.5 rounded-md border bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+        >
+          +
+        </button>
+      </div>
+
+      {/* Scaled canvas — wrapper reserves scaled-size so scroll works when zoomed in */}
+      <div style={{ overflow: "auto", padding: PAD - 12 }}>
+        <div style={{ width: scaledW, height: scaledH, position: "relative" }}>
+          <div
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              width: canvasW,
+              height: canvasH,
+              position: "absolute",
+              left: 0,
+              top: 0,
+            }}
+          >
       <div style={{ position: "relative", width: width + PAD, height: height + PAD }}>
         {/* ambient backdrop — sizes to content, never aligns to nodes */}
         <svg
@@ -545,6 +632,9 @@ function PineCanvas({
             onAdd={onAdd}
           />
         ))}
+      </div>
+          </div>
+        </div>
       </div>
     </div>
   );
