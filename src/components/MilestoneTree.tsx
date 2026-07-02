@@ -432,7 +432,7 @@ function PineCanvas({
   const zoomPct = Math.round(scale * 100);
 
   return (
-    <div ref={outerRef} style={{ background: "#F7F5EF", borderRadius: 12, padding: 12 }}>
+    <div ref={outerRef} style={{ background: "#FAFAF7", borderRadius: 12, padding: 12, border: "1px solid #EEEBE2" }}>
       {/* Zoom toolbar */}
       <div className="flex items-center justify-end gap-1.5 mb-2 text-[11px]">
         <button
@@ -485,139 +485,42 @@ function PineCanvas({
             }}
           >
       <div style={{ position: "relative", width: width + PAD, height: height + PAD }}>
-        {/* ambient backdrop — sizes to content, never aligns to nodes */}
+        {/* Clean connectors: thin rounded curves from parent bottom-center to
+            child top-center. No trunk, no leaves, no ambient noise — the
+            hierarchy has to read at a glance. */}
         <svg
           width={width + PAD}
           height={height + PAD}
           style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
           aria-hidden="true"
         >
-          <defs>
-            <radialGradient id={`canopy-${root.id}`} cx="50%" cy="14%" r="60%">
-              <stop offset="0%" stopColor="#CFE0D2" stopOpacity="0.55" />
-              <stop offset="100%" stopColor="#CFE0D2" stopOpacity="0" />
-            </radialGradient>
-            <linearGradient id={`ground-${root.id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#E4DCCB" stopOpacity="0" />
-              <stop offset="100%" stopColor="#E4DCCB" stopOpacity="0.5" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width={width + PAD} height={height + PAD} fill={`url(#canopy-${root.id})`} />
-          <rect
-            x="0"
-            y={(height + PAD) * 0.62}
-            width={width + PAD}
-            height={(height + PAD) * 0.38}
-            fill={`url(#ground-${root.id})`}
-          />
-          {/* Ambient foliage blobs — soft green ellipses in the corners for
-              atmosphere. Never align to nodes. */}
           {(() => {
-            const W = width + PAD;
-            const H = height + PAD;
-            const blob = (cx: number, cy: number, rx: number, ry: number, rot: number, op: number) => (
-              <ellipse
-                key={`${cx}-${cy}`}
-                cx={cx}
-                cy={cy}
-                rx={rx}
-                ry={ry}
-                fill="#9FC0A8"
-                opacity={op}
-                transform={`rotate(${rot} ${cx} ${cy})`}
-              />
-            );
-            return [
-              blob(28, H * 0.2, 46, 28, -18, 0.14),
-              blob(W - 30, H * 0.16, 52, 30, 22, 0.13),
-              blob(18, H * 0.55, 38, 24, 10, 0.1),
-              blob(W - 20, H * 0.5, 44, 26, -14, 0.1),
-              blob(40, H * 0.85, 40, 22, -8, 0.08),
-              blob(W - 44, H * 0.82, 40, 24, 12, 0.08),
-            ];
-          })()}
-        </svg>
-
-        {/* trunk + forking limbs + leaf clusters — computed from positions */}
-        <svg
-          width={width + PAD}
-          height={height + PAD}
-          style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
-        >
-          {(() => {
-            const limbs: React.ReactNode[] = [];
-            const BARK = "#8A6A4A";
-            const BARK_D = "#6E5238";
-            const widthAt = (depth: number) => Math.max(3.5, 13 - depth * 3);
-            const rootP = positions[root.id];
-
-            if (rootP) {
-              const cx = rootP.x + NODE_W / 2;
-              const topY = rootP.y + NODE_H / 2;
-              const baseY = height + PAD - 18;
-              const topH = widthAt(0) / 2;
-              const baseH = 15;
-              limbs.push(
-                <path
-                  key="trunk"
-                  d={`M${cx - topH},${topY} L${cx - baseH},${baseY} Q${cx},${baseY + 10} ${cx + baseH},${baseY} L${cx + topH},${topY} Z`}
-                  fill={BARK_D}
-                />,
-              );
-            }
-
+            const lines: React.ReactNode[] = [];
+            const LINE = "#CFCFC5";
             nodes.forEach((n) => {
               if (n.collapsed) return;
               const p = positions[n.id];
-              const w1 = widthAt(p.depth);
+              const x1 = p.x + NODE_W / 2;
+              const y1 = p.y + NODE_H;
               n.children.forEach((c) => {
                 const cp = positions[c.id];
                 if (!cp) return;
-                const x1 = p.x + NODE_W / 2;
-                const y1 = p.y + NODE_H;
                 const x2 = cp.x + NODE_W / 2;
                 const y2 = cp.y;
-                const w2 = widthAt(cp.depth);
                 const my = (y1 + y2) / 2;
-                const h1 = w1 / 2;
-                const h2 = w2 / 2;
-                const d =
-                  `M${x1 - h1},${y1} ` +
-                  `C${x1 - h1},${my} ${x2 - h2},${my} ${x2 - h2},${y2} ` +
-                  `L${x2 + h2},${y2} ` +
-                  `C${x2 + h2},${my} ${x1 + h1},${my} ${x1 + h1},${y1} Z`;
-                limbs.push(<path key={n.id + c.id} d={d} fill={BARK} />);
-                limbs.push(<circle key={n.id + c.id + "j"} cx={x1} cy={y1} r={h1} fill={BARK} />);
+                lines.push(
+                  <path
+                    key={n.id + c.id}
+                    d={`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`}
+                    stroke={LINE}
+                    strokeWidth={1.4}
+                    fill="none"
+                    strokeLinecap="round"
+                  />,
+                );
               });
             });
-
-            // foliage on childless (data-leaf) visible nodes
-            nodes.forEach((n) => {
-              if (n.collapsed) return;
-              if (n.children && n.children.length) return;
-              const p = positions[n.id];
-              const bx = p.x + NODE_W / 2;
-              const by = p.y + NODE_H + 6;
-              const leaf = (dx: number, dy: number, r: number, rot: number, fill: string, op: number) => (
-                <ellipse
-                  key={`${n.id}lf${dx}${dy}`}
-                  cx={bx + dx}
-                  cy={by + dy}
-                  rx={r}
-                  ry={r * 0.62}
-                  fill={fill}
-                  opacity={op}
-                  transform={`rotate(${rot} ${bx + dx} ${by + dy})`}
-                />
-              );
-              limbs.push(leaf(-18, 4, 13, -28, "#8FB98C", 0.9));
-              limbs.push(leaf(0, 9, 15, 8, "#7FAE7C", 0.9));
-              limbs.push(leaf(18, 4, 13, 30, "#9CC499", 0.9));
-              limbs.push(leaf(-8, 15, 11, -12, "#88B585", 0.85));
-              limbs.push(leaf(9, 15, 11, 18, "#93BE90", 0.85));
-            });
-
-            return limbs;
+            return lines;
           })()}
         </svg>
 
@@ -662,6 +565,14 @@ function NodeCard({
   const rolledUp = hasKids && own !== disp;
   const assignee = node.assignee || node.owner?.full_name || null;
   const hasAtt = node.attachment_count > 0;
+  const isMilestone = node.kind === "Milestone";
+  const isGoal = node.kind === "Goal";
+  const isTask = node.kind === "Task";
+
+  // Kind-driven typography — Milestone reads as the anchor, Task the leaf.
+  const titleSize = isMilestone ? 14 : isGoal ? 13.5 : isTask ? 12.5 : 13;
+  const titleWeight = isMilestone ? 700 : isGoal ? 600 : 500;
+  const cardBg = isMilestone ? "#FFFEF9" : "#FFFFFF";
 
   return (
     <div
@@ -671,32 +582,49 @@ function NodeCard({
         top: pos.y,
         width: NODE_W,
         height: NODE_H,
-        background: "#fff",
-        borderRadius: 14,
-        border: "0.5px solid #E4E1D8",
-        borderTop: `3px solid ${c.bar}`,
+        background: cardBg,
+        borderRadius: 10,
+        border: "1px solid #EBE8DE",
+        borderLeft: `3px solid ${c.bar}`,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        padding: "6px 12px",
+        padding: "6px 10px",
         cursor: "pointer",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+        boxShadow: isMilestone
+          ? "0 2px 6px rgba(0,0,0,0.06)"
+          : "0 1px 2px rgba(0,0,0,0.03)",
+        transition: "box-shadow .15s, transform .15s",
       }}
       onClick={() => onOpen(node.id)}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-        <span
-          style={{ width: 9, height: 9, borderRadius: 3, background: c.dot, flex: "none" }}
-        />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
         <span
           style={{
-            fontSize: 13.5,
-            fontWeight: 500,
+            fontSize: 8.5,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            padding: "1px 5px",
+            borderRadius: 4,
+            background: c.pill,
+            color: c.pillText,
+            flexShrink: 0,
+            textTransform: "uppercase",
+          }}
+        >
+          {node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MS" : node.kind === "Goal" ? "GOAL" : "TASK"}
+        </span>
+        <span
+          style={{
+            fontSize: titleSize,
+            fontWeight: titleWeight,
             color: "#2C2C2A",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
+            flex: 1,
+            minWidth: 0,
           }}
         >
           {node.title}
@@ -706,47 +634,62 @@ function NodeCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          marginTop: 4,
-          fontSize: 11,
-          color: "#7A7972",
+          gap: 6,
+          marginTop: 3,
+          fontSize: 10.5,
+          color: "#8A897F",
+          minWidth: 0,
         }}
       >
-        <span>{node.kind}</span>
-        <span style={{ opacity: 0.5 }}>·</span>
-        <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
           <span
             style={{
-              width: 14,
-              height: 14,
+              width: 12,
+              height: 12,
               borderRadius: "50%",
-              background: assignee ? "#E7EDF3" : "#EEECE5",
+              background: assignee ? "#E7EDF3" : "#F0EEE7",
               color: assignee ? "#185FA5" : "#A8A69C",
-              fontSize: 9,
-              display: "flex",
+              fontSize: 8,
+              display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
+              flexShrink: 0,
+              fontWeight: 600,
             }}
           >
-            {assignee ? assignee[0] : "—"}
+            {assignee ? assignee[0].toUpperCase() : "—"}
           </span>
-          {assignee || "unassigned"}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+            {assignee || "unassigned"}
+          </span>
         </span>
         {hasAtt && (
-          <span title="has deliverable" style={{ marginLeft: "auto", color: "#5F5E5A" }}>
+          <span title="has attachment" style={{ color: "#8A897F", flexShrink: 0 }}>
             📎
           </span>
         )}
         {node.score != null && (
           <span
             style={{
-              marginLeft: hasAtt ? 6 : "auto",
               background: c.pill,
               color: c.pillText,
-              borderRadius: 10,
-              padding: "1px 7px",
-              fontSize: 11,
-              fontWeight: 500,
+              borderRadius: 8,
+              padding: "0 6px",
+              fontSize: 10,
+              fontWeight: 700,
+              flexShrink: 0,
+              lineHeight: "16px",
             }}
           >
             {node.score}
