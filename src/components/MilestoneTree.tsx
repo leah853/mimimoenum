@@ -322,13 +322,13 @@ export default function MilestoneTree() {
           <p className="text-sm text-gray-500">No milestones yet. Plant one to grow the tree.</p>
           {isDoer && (
             <div className="flex items-center justify-center gap-3 flex-wrap">
-              <button
+              <button type="button"
                 onClick={() => setCreateUnder({ parentId: null, kind: "Milestone" })}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl shadow-md hover:brightness-110 transition-all"
               >
                 + Create first Milestone
               </button>
-              <button
+              <button type="button"
                 onClick={seedSampleTree}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-indigo-600 text-sm border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-all"
               >
@@ -354,7 +354,7 @@ export default function MilestoneTree() {
 
       {isDoer && roots.length > 0 && !createUnder && (
         <div className="text-center">
-          <button
+          <button type="button"
             onClick={() => setCreateUnder({ parentId: null, kind: "Milestone" })}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 rounded-lg transition-all"
           >
@@ -474,7 +474,7 @@ function PineCanvas({
     <div ref={outerRef} style={{ background: "#F7F5EF", borderRadius: 12, padding: 12 }}>
       {/* Zoom toolbar */}
       <div className="flex items-center justify-end gap-1.5 mb-2 text-[11px]">
-        <button
+        <button type="button"
           onClick={() => setZoomMode("fit")}
           className={`px-2 py-0.5 rounded-md border ${
             zoomMode === "fit"
@@ -484,7 +484,7 @@ function PineCanvas({
         >
           Fit
         </button>
-        <button
+        <button type="button"
           onClick={() => setZoomMode("actual")}
           className={`px-2 py-0.5 rounded-md border ${
             zoomMode === "actual"
@@ -494,14 +494,14 @@ function PineCanvas({
         >
           100%
         </button>
-        <button
+        <button type="button"
           onClick={() => setZoomMode(Math.max(0.25, scale - 0.1))}
           className="px-1.5 py-0.5 rounded-md border bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
         >
           −
         </button>
         <span className="w-10 text-center text-gray-500 tabular-nums">{zoomPct}%</span>
-        <button
+        <button type="button"
           onClick={() => setZoomMode(Math.min(2, scale + 0.1))}
           className="px-1.5 py-0.5 rounded-md border bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
         >
@@ -870,7 +870,7 @@ function NodeCard({
         )}
       </div>
       {hasKids && (
-        <button
+        <button type="button"
           onClick={(e) => {
             e.stopPropagation();
             onToggle(node.id);
@@ -895,7 +895,7 @@ function NodeCard({
           {node.collapsed ? `+${subtreeCount(node)}` : "–"}
         </button>
       )}
-      <button
+      <button type="button"
         onClick={(e) => {
           e.stopPropagation();
           onAdd(node.id);
@@ -1094,7 +1094,7 @@ function NodeModal({
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 rounded flex-shrink-0">
+          <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 rounded flex-shrink-0">
             <HiX className="w-4 h-4" />
           </button>
         </div>
@@ -1213,7 +1213,7 @@ function NodeModal({
                         {a.size_bytes ? ` · ${humanBytes(a.size_bytes)}` : ""}
                       </p>
                     </div>
-                    <button
+                    <button type="button"
                       onClick={() => download(a.id)}
                       title="Download"
                       className="p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all"
@@ -1221,7 +1221,7 @@ function NodeModal({
                       <HiOutlineDownload className="w-3.5 h-3.5" />
                     </button>
                     {isDoer && (
-                      <button
+                      <button type="button"
                         onClick={() => deleteAttachment(a.id)}
                         title="Delete file"
                         className="p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
@@ -1260,7 +1260,7 @@ function NodeModal({
                 placeholder="Add feedback…"
                 className="flex-1 px-3 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
               />
-              <button
+              <button type="button"
                 onClick={submitFeedback}
                 disabled={!fbBody.trim()}
                 className="px-3 py-1.5 text-xs bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white rounded-lg transition-all"
@@ -1273,7 +1273,7 @@ function NodeModal({
 
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800">
           {isDoer && node.kind !== "Milestone" ? (
-            <button
+            <button type="button"
               onClick={() => onDelete(node.id)}
               className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
             >
@@ -1285,11 +1285,11 @@ function NodeModal({
             </span>
           )}
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 rounded-lg">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 rounded-lg">
               Close
             </button>
             {isDoer && (
-              <button
+              <button type="button"
                 onClick={saveMeta}
                 className="px-4 py-1.5 text-xs bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg shadow-md hover:brightness-110"
               >
@@ -1376,10 +1376,10 @@ function CreateNodeModal({
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 rounded-lg">
+          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 rounded-lg">
             Cancel
           </button>
-          <button
+          <button type="button"
             onClick={() => onCreate(parentId, kind, title)}
             disabled={!title.trim()}
             className="px-4 py-1.5 text-xs bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg shadow-md hover:brightness-110 disabled:opacity-40"
