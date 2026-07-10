@@ -24,10 +24,20 @@ export async function GET(request: NextRequest) {
   const attachmentsByNode: Record<string, number> = {};
   const pendingByNode: Record<string, number> = {};
   if (nodeIds.length > 0) {
-    const [{ data: fb }, { data: att }] = await Promise.all([
+    const [{ data: fb }, attRes] = await Promise.all([
       sb.from("milestone_node_feedback").select("node_id").in("node_id", nodeIds),
+      // Try selecting the new `reviewed` column first. If the migration hasn't
+      // been applied yet, retry without it so the tree still loads.
       sb.from("milestone_node_attachments").select("node_id, reviewed").in("node_id", nodeIds),
     ]);
+    let att = attRes.data as { node_id: string; reviewed?: boolean }[] | null;
+    if (attRes.error && /column.*reviewed.*does not exist/i.test(attRes.error.message)) {
+      const fallback = await sb
+        .from("milestone_node_attachments")
+        .select("node_id")
+        .in("node_id", nodeIds);
+      att = fallback.data as { node_id: string; reviewed?: boolean }[] | null;
+    }
     for (const r of fb || []) feedbackByNode[r.node_id] = (feedbackByNode[r.node_id] || 0) + 1;
     for (const r of att || []) {
       attachmentsByNode[r.node_id] = (attachmentsByNode[r.node_id] || 0) + 1;
