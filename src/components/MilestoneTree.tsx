@@ -32,6 +32,7 @@ type ApiNode = {
   owner?: { id: string; full_name: string };
   feedback_count: number;
   attachment_count: number;
+  pending_attachment_count?: number;
 };
 
 type TreeNode = ApiNode & {
@@ -42,11 +43,17 @@ type TreeNode = ApiNode & {
 type Feedback = { id: string; author: string; body: string; created_at: string };
 type Attachment = {
   id: string;
+  kind?: "file" | "link" | "text";
   filename: string;
+  link_url?: string | null;
+  text_body?: string | null;
   content_type: string | null;
   size_bytes: number | null;
   uploaded_by: string;
   uploaded_at: string;
+  reviewed?: boolean;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
 };
 
 // ─── Card + layout constants ────────────────────────────────────────────────
@@ -186,6 +193,15 @@ function subtreeCount(node: TreeNode): number {
   let c = 0;
   node.children.forEach((k) => { c += 1 + subtreeCount(k); });
   return c;
+}
+
+/** Total pending-review submissions in this node + all descendants. Used to
+ *  drive the "N pending" badge on cards so a collapsed branch surfaces what
+ *  still needs a look. */
+function subtreePendingCount(node: TreeNode): number {
+  let sum = node.pending_attachment_count || 0;
+  for (const c of node.children) sum += subtreePendingCount(c);
+  return sum;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -772,7 +788,32 @@ function NodeCard({
         >
           {node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MS" : node.kind === "Goal" ? "GOAL" : "TASK"}
         </span>
-        {progressText && (
+        {/* Pending-review rollup — this node + everything under it. When the
+            branch is collapsed the count still surfaces here so you know
+            expanding will reveal something new. */}
+        {subtreePendingCount(node) > 0 && (
+          <span
+            title={
+              node.collapsed
+                ? `${subtreePendingCount(node)} pending review inside this branch — click "+N" to expand`
+                : `${subtreePendingCount(node)} pending review in this subtree`
+            }
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              padding: "1px 6px",
+              borderRadius: 8,
+              background: "#FEF3C7",
+              color: "#8B5F00",
+              border: "1px solid #F1CB4E",
+              marginLeft: "auto",
+              flexShrink: 0,
+            }}
+          >
+            {subtreePendingCount(node)} NEW
+          </span>
+        )}
+        {progressText && !subtreePendingCount(node) && (
           <span
             title="descendants with attachment or score"
             style={{
@@ -958,6 +999,12 @@ function NodeModal({
   const [scoreEdit, setScoreEdit] = useState<number | "">(node.score ?? "");
   const [fbBody, setFbBody] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [addMode, setAddMode] = useState<"none" | "link" | "text">("none");
+  const [linkLabel, setLinkLabel] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [textLabel, setTextLabel] = useState("");
+  const [textBody, setTextBody] = useState("");
+  const [expandedText, setExpandedText] = useState<Set<string>>(new Set());
   const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -1026,6 +1073,44 @@ function NodeModal({
     }
   }
 
+  async function submitLink() {
+    if (!linkLabel.trim() || !linkUrl.trim()) { toast("Label and URL required", "error"); return; }
+    try {
+      await apiPost(`/api/milestone-nodes/${node.id}/attachments`, {
+        kind: "link",
+        filename: linkLabel.trim(),
+        link_url: linkUrl.trim(),
+      });
+      setLinkLabel(""); setLinkUrl(""); setAddMode("none");
+      await refetchAttachments();
+      await onRefetchTree();
+      toast("Link added", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
+  async function submitText() {
+    if (!textLabel.trim() || !textBody.trim()) { toast("Label and note body required", "error"); return; }
+    try {
+      await apiPost(`/api/milestone-nodes/${node.id}/attachments`, {
+        kind: "text",
+        filename: textLabel.trim(),
+        text_body: textBody.trim(),
+      });
+      setTextLabel(""); setTextBody(""); setAddMode("none");
+      await refetchAttachments();
+      await onRefetchTree();
+      toast("Note added", "success");
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
+  async function toggleReviewed(attId: string, next: boolean) {
+    try {
+      await apiPatch(`/api/milestone-nodes/attachments/${attId}`, { reviewed: next });
+      await refetchAttachments();
+      await onRefetchTree();
+    } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
   async function download(attId: string) {
     try {
       const { url } = await (await fetch(`/api/milestone-nodes/attachments/${attId}/url`)).json();
@@ -1035,7 +1120,7 @@ function NodeModal({
   }
 
   async function deleteAttachment(attId: string) {
-    if (!confirm("Delete this file? This can't be undone.")) return;
+    if (!confirm("Delete this submission? This can't be undone.")) return;
     try {
       await apiDelete(`/api/milestone-nodes/attachments/${attId}`);
       await refetchAttachments();
@@ -1175,62 +1260,208 @@ function NodeModal({
             </div>
           )}
 
-          {/* Attachments */}
+          {/* Submissions — files, links, and notes. New items land with
+              reviewed=false and get highlighted amber until someone marks
+              them reviewed. */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                Attachments ({attachments?.length || 0})
+                Submissions ({attachments?.length || 0})
+                {(attachments || []).some((a) => a.reviewed !== true) && (
+                  <span className="ml-2 text-[9.5px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-1.5 py-0.5">
+                    {(attachments || []).filter((a) => a.reviewed !== true).length} pending
+                  </span>
+                )}
               </p>
-              <label className="cursor-pointer text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                <HiOutlinePaperClip className="w-3.5 h-3.5" />
-                {uploading ? "Uploading…" : "Upload"}
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleUpload(f);
-                  }}
-                  disabled={uploading}
-                />
-              </label>
+              <div className="flex items-center gap-2 text-xs">
+                <label className="cursor-pointer text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                  <HiOutlinePaperClip className="w-3.5 h-3.5" />
+                  {uploading ? "Uploading…" : "File"}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUpload(f);
+                    }}
+                    disabled={uploading}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAddMode(addMode === "link" ? "none" : "link")}
+                  className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                >
+                  🔗 Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddMode(addMode === "text" ? "none" : "text")}
+                  className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                >
+                  📝 Note
+                </button>
+              </div>
             </div>
-            {(attachments || []).length === 0 ? (
-              <p className="text-xs text-gray-400 italic">No files attached.</p>
+
+            {addMode === "link" && (
+              <div className="mb-2 p-2.5 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-200/60 dark:border-indigo-800/30 rounded-lg space-y-2">
+                <input
+                  autoFocus
+                  value={linkLabel}
+                  onChange={(e) => setLinkLabel(e.target.value)}
+                  placeholder="Label (e.g. Figma spec, Q3 doc)"
+                  className="w-full px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded"
+                />
+                <input
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitLink(); }}
+                  placeholder="https://..."
+                  className="w-full px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded"
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button type="button" onClick={() => setAddMode("none")} className="px-2 py-0.5 text-[11px] text-gray-500 hover:text-gray-700">Cancel</button>
+                  <button type="button" onClick={submitLink} className="px-3 py-0.5 text-[11px] bg-indigo-500 hover:bg-indigo-600 text-white rounded">Add link</button>
+                </div>
+              </div>
+            )}
+
+            {addMode === "text" && (
+              <div className="mb-2 p-2.5 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-200/60 dark:border-indigo-800/30 rounded-lg space-y-2">
+                <input
+                  autoFocus
+                  value={textLabel}
+                  onChange={(e) => setTextLabel(e.target.value)}
+                  placeholder="Label (e.g. Status update, Blocker note)"
+                  className="w-full px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded"
+                />
+                <textarea
+                  value={textBody}
+                  onChange={(e) => setTextBody(e.target.value)}
+                  placeholder="Note body…"
+                  rows={4}
+                  className="w-full px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded resize-vertical"
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button type="button" onClick={() => setAddMode("none")} className="px-2 py-0.5 text-[11px] text-gray-500 hover:text-gray-700">Cancel</button>
+                  <button type="button" onClick={submitText} className="px-3 py-0.5 text-[11px] bg-indigo-500 hover:bg-indigo-600 text-white rounded">Add note</button>
+                </div>
+              </div>
+            )}
+
+            {(attachments || []).length === 0 && addMode === "none" ? (
+              <p className="text-xs text-gray-400 italic">No submissions yet.</p>
             ) : (
-              <ul className="space-y-1">
-                {(attachments || []).map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/40 group"
-                  >
-                    <HiOutlinePaperClip className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-700 dark:text-gray-300 truncate">{a.filename}</p>
-                      <p className="text-[9px] text-gray-400">
-                        {a.uploaded_by} · {formatShort(a.uploaded_at)}
-                        {a.size_bytes ? ` · ${humanBytes(a.size_bytes)}` : ""}
-                      </p>
-                    </div>
-                    <button type="button"
-                      onClick={() => download(a.id)}
-                      title="Download"
-                      className="p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all"
+              <ul className="space-y-1.5">
+                {(attachments || []).map((a) => {
+                  const isPending = a.reviewed !== true;
+                  const isLink = a.kind === "link";
+                  const isText = a.kind === "text";
+                  const isFile = !isLink && !isText;
+                  const bg = isPending
+                    ? "bg-amber-50/70 dark:bg-amber-900/10 border-l-2 border-amber-400"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-800/40";
+                  return (
+                    <li
+                      key={a.id}
+                      className={`py-1.5 px-2 rounded-md group ${bg}`}
                     >
-                      <HiOutlineDownload className="w-3.5 h-3.5" />
-                    </button>
-                    {isDoer && (
-                      <button type="button"
-                        onClick={() => deleteAttachment(a.id)}
-                        title="Delete file"
-                        className="p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <HiOutlineTrash className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </li>
-                ))}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm flex-shrink-0" title={a.kind || "file"}>
+                          {isLink ? "🔗" : isText ? "📝" : "📎"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="text-xs text-gray-700 dark:text-gray-300 truncate font-medium">{a.filename}</p>
+                            {isPending && (
+                              <span className="text-[8.5px] font-bold text-amber-700 bg-amber-200 rounded px-1 py-0.5 flex-shrink-0">
+                                NEW
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[9px] text-gray-400 truncate">
+                            {a.uploaded_by} · {formatShort(a.uploaded_at)}
+                            {a.size_bytes ? ` · ${humanBytes(a.size_bytes)}` : ""}
+                          </p>
+                        </div>
+                        {isFile && (
+                          <button
+                            type="button"
+                            onClick={() => download(a.id)}
+                            title="Download"
+                            className="p-1 text-gray-400 hover:text-blue-600 flex-shrink-0"
+                          >
+                            <HiOutlineDownload className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isLink && a.link_url && (
+                          <a
+                            href={a.link_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open link"
+                            className="p-1 text-blue-500 hover:text-blue-700 text-xs flex-shrink-0"
+                          >
+                            ↗
+                          </a>
+                        )}
+                        {isText && a.text_body && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedText((prev) => {
+                                const n = new Set(prev);
+                                if (n.has(a.id)) n.delete(a.id); else n.add(a.id);
+                                return n;
+                              })
+                            }
+                            title={expandedText.has(a.id) ? "Collapse" : "Expand"}
+                            className="p-1 text-gray-400 hover:text-gray-700 text-xs flex-shrink-0"
+                          >
+                            {expandedText.has(a.id) ? "−" : "+"}
+                          </button>
+                        )}
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => toggleReviewed(a.id, true)}
+                            title="Mark reviewed"
+                            className="px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded flex-shrink-0"
+                          >
+                            ✓ Reviewed
+                          </button>
+                        )}
+                        {!isPending && (
+                          <button
+                            type="button"
+                            onClick={() => toggleReviewed(a.id, false)}
+                            title="Un-mark reviewed"
+                            className="text-[9px] text-gray-400 hover:text-gray-600 flex-shrink-0"
+                          >
+                            un-review
+                          </button>
+                        )}
+                        {isDoer && (
+                          <button
+                            type="button"
+                            onClick={() => deleteAttachment(a.id)}
+                            title="Delete"
+                            className="p-1 text-gray-400 hover:text-red-600 flex-shrink-0"
+                          >
+                            <HiOutlineTrash className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {isText && expandedText.has(a.id) && a.text_body && (
+                        <div className="mt-1.5 ml-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap bg-white dark:bg-gray-900 rounded p-2 border border-gray-100 dark:border-gray-800">
+                          {a.text_body}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

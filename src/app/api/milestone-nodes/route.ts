@@ -20,15 +20,22 @@ export async function GET(request: NextRequest) {
   // Bulk-fetch feedback + attachment counts so the client can render the tree
   // without per-node round-trips.
   const nodeIds = (nodes || []).map((n: { id: string }) => n.id);
-  let feedbackByNode: Record<string, number> = {};
-  let attachmentsByNode: Record<string, number> = {};
+  const feedbackByNode: Record<string, number> = {};
+  const attachmentsByNode: Record<string, number> = {};
+  const pendingByNode: Record<string, number> = {};
   if (nodeIds.length > 0) {
     const [{ data: fb }, { data: att }] = await Promise.all([
       sb.from("milestone_node_feedback").select("node_id").in("node_id", nodeIds),
-      sb.from("milestone_node_attachments").select("node_id").in("node_id", nodeIds),
+      sb.from("milestone_node_attachments").select("node_id, reviewed").in("node_id", nodeIds),
     ]);
     for (const r of fb || []) feedbackByNode[r.node_id] = (feedbackByNode[r.node_id] || 0) + 1;
-    for (const r of att || []) attachmentsByNode[r.node_id] = (attachmentsByNode[r.node_id] || 0) + 1;
+    for (const r of att || []) {
+      attachmentsByNode[r.node_id] = (attachmentsByNode[r.node_id] || 0) + 1;
+      // Untouched migrations return reviewed=undefined → treat as pending.
+      if (r.reviewed !== true) {
+        pendingByNode[r.node_id] = (pendingByNode[r.node_id] || 0) + 1;
+      }
+    }
   }
 
   return ok(
@@ -36,6 +43,7 @@ export async function GET(request: NextRequest) {
       ...n,
       feedback_count: feedbackByNode[n.id] || 0,
       attachment_count: attachmentsByNode[n.id] || 0,
+      pending_attachment_count: pendingByNode[n.id] || 0,
     })),
   );
 }
