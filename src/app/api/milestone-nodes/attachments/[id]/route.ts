@@ -5,9 +5,17 @@ import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
 const BUCKET = "milestone_attachments";
 
-/** Mark a submission as reviewed (or un-reviewed). Any authenticated user can
- *  do this — the "reviewed" flag is about "someone's looked at it" not about
- *  authorship. Wire this to a "Mark reviewed" button in the UI. */
+/** Mark a submission as reviewed (or un-reviewed).
+ *
+ *  Marking as reviewed requires the parent node to have BOTH:
+ *    - a score (1-10) set on the node
+ *    - at least one feedback message
+ *  Otherwise 422. Un-reviewing has no gate.
+ *
+ *  This encodes the workflow: a submission is only "reviewed" when a reviewer
+ *  has scored the work and left a written note. Prevents accidental
+ *  green-lighting of items nobody's actually assessed.
+ */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const role = getCallerRole(request);
   if (!role) return err("Not authenticated", 401);
@@ -20,6 +28,31 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body.reviewed !== "boolean") return err("reviewed (boolean) required");
 
   const sb = createServiceClient();
+
+  if (body.reviewed) {
+    // Look up the parent node to check score + feedback exist.
+    const { data: att, error: attErr } = await sb
+      .from("milestone_node_attachments")
+      .select("node_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (attErr) return err(attErr.message, 500);
+    if (!att) return err("Submission not found", 404);
+
+    const [{ data: node }, { count: fbCount, error: fbErr }] = await Promise.all([
+      sb.from("milestone_nodes").select("score").eq("id", att.node_id).maybeSingle(),
+      sb.from("milestone_node_feedback").select("id", { count: "exact", head: true }).eq("node_id", att.node_id),
+    ]);
+    if (fbErr) return err(fbErr.message, 500);
+    if (!node) return err("Parent node not found", 404);
+    if (node.score == null) {
+      return err("Cannot mark reviewed until this task has a score (1-10)", 422);
+    }
+    if ((fbCount || 0) === 0) {
+      return err("Cannot mark reviewed until this task has at least one feedback message", 422);
+    }
+  }
+
   const patch: Record<string, unknown> = { reviewed: body.reviewed };
   if (body.reviewed) {
     patch.reviewed_at = new Date().toISOString();

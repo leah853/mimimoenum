@@ -1157,7 +1157,13 @@ function NodeModal({
       await apiPatch(`/api/milestone-nodes/attachments/${attId}`, { reviewed: next });
       await refetchAttachments();
       await onRefetchTree();
-    } catch (e) { toast(handleApiError(e), "error"); }
+      if (next) toast("Marked reviewed", "success");
+    } catch (e) {
+      const msg = handleApiError(e);
+      // Server rejects with 422 when node lacks score or feedback — surface
+      // that message directly so the user knows what to add.
+      toast(msg, "error");
+    }
   }
 
   async function download(attId: string) {
@@ -1311,14 +1317,39 @@ function NodeModal({
 
           {/* Submissions — files, links, and notes. New items land with
               reviewed=false and get highlighted amber until someone marks
-              them reviewed. */}
+              them reviewed. Reviewing requires the task to have a score AND
+              at least one feedback message (both server-enforced). */}
           <div>
+            {/* Review-gate check. Uses saved node values (not the draft in the
+                Edit fields), because reviewing is an action on saved state. */}
+            {(() => null)()}
+            {/* Gate hint banner + condition */}
+            {(() => {
+              const _pending = (attachments || []).filter((a) => a.reviewed !== true).length;
+              const _canReview = node.score != null && (feedback || []).length > 0;
+              if (_pending > 0 && !_canReview) {
+                const missing = [];
+                if (node.score == null) missing.push("a score");
+                if ((feedback || []).length === 0) missing.push("at least one feedback message");
+                return (
+                  <div className="mb-2 px-2.5 py-1.5 text-[10.5px] rounded-md bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300">
+                    Add {missing.join(" and ")} above before submissions can be marked reviewed.
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                 Submissions ({attachments?.length || 0})
                 {(attachments || []).some((a) => a.reviewed !== true) && (
                   <span className="ml-2 text-[9.5px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-1.5 py-0.5">
                     {(attachments || []).filter((a) => a.reviewed !== true).length} pending
+                  </span>
+                )}
+                {(attachments || []).some((a) => a.reviewed === true) && (
+                  <span className="ml-2 text-[9.5px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 rounded-full px-1.5 py-0.5">
+                    ✓ {(attachments || []).filter((a) => a.reviewed === true).length} reviewed
                   </span>
                 )}
               </p>
@@ -1409,30 +1440,60 @@ function NodeModal({
                   const isLink = a.kind === "link";
                   const isText = a.kind === "text";
                   const isFile = !isLink && !isText;
+                  const canReview = node.score != null && (feedback || []).length > 0;
+                  const scoreC = node.score != null ? COLORS[scoreColorSafe(node.score) || "grey"] : null;
+
+                  // Row styling: pending gets full amber; reviewed gets a
+                  // score-tinted left bar so the row itself says "green: strong,
+                  // yellow: ok, red: needs work" alongside the REVIEWED label.
                   const bg = isPending
-                    ? "bg-amber-50/70 dark:bg-amber-900/10 border-l-2 border-amber-400"
-                    : "hover:bg-gray-50 dark:hover:bg-gray-800/40";
+                    ? "bg-amber-50/70 dark:bg-amber-900/10 border-l-4 border-amber-400"
+                    : scoreC
+                      ? "border-l-4"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-800/40";
+                  const reviewedBorderColor = !isPending && scoreC ? scoreC.bar : undefined;
+                  const reviewedBg = !isPending && scoreC ? scoreC.pill + "80" : undefined;
+
                   return (
                     <li
                       key={a.id}
                       className={`py-1.5 px-2 rounded-md group ${bg}`}
+                      style={
+                        !isPending && scoreC
+                          ? { borderLeftColor: reviewedBorderColor, background: reviewedBg }
+                          : undefined
+                      }
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-sm flex-shrink-0" title={a.kind || "file"}>
                           {isLink ? "🔗" : isText ? "📝" : "📎"}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                             <p className="text-xs text-gray-700 dark:text-gray-300 truncate font-medium">{a.filename}</p>
                             {isPending && (
-                              <span className="text-[8.5px] font-bold text-amber-700 bg-amber-200 rounded px-1 py-0.5 flex-shrink-0">
-                                NEW
+                              <span className="text-[8.5px] font-bold text-amber-800 bg-amber-200 rounded px-1.5 py-0.5 flex-shrink-0">
+                                NEW · needs review
                               </span>
+                            )}
+                            {!isPending && scoreC && (
+                              <>
+                                <span
+                                  className="text-[9px] font-bold rounded px-1.5 py-0.5 flex-shrink-0"
+                                  style={{ background: scoreC.bar, color: "#FFFFFF" }}
+                                  title="Task score at time of review"
+                                >
+                                  ✓ REVIEWED · {node.score}/10
+                                </span>
+                              </>
                             )}
                           </div>
                           <p className="text-[9px] text-gray-400 truncate">
                             {a.uploaded_by} · {formatShort(a.uploaded_at)}
                             {a.size_bytes ? ` · ${humanBytes(a.size_bytes)}` : ""}
+                            {!isPending && a.reviewed_at && (
+                              <> · reviewed {formatShort(a.reviewed_at)}</>
+                            )}
                           </p>
                         </div>
                         {isFile && (
@@ -1476,8 +1537,17 @@ function NodeModal({
                           <button
                             type="button"
                             onClick={() => toggleReviewed(a.id, true)}
-                            title="Mark reviewed"
-                            className="px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded flex-shrink-0"
+                            disabled={!canReview}
+                            title={
+                              canReview
+                                ? "Mark reviewed"
+                                : "Add a score and at least one feedback message to enable review"
+                            }
+                            className={`px-1.5 py-0.5 text-[9.5px] font-semibold rounded flex-shrink-0 ${
+                              canReview
+                                ? "text-emerald-700 bg-emerald-100 hover:bg-emerald-200"
+                                : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                            }`}
                           >
                             ✓ Reviewed
                           </button>
