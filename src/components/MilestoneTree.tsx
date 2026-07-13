@@ -732,7 +732,6 @@ function NodeCard({
   // Kind-driven typography — Milestone reads as the anchor, Task the leaf.
   const titleSize = isMilestone ? 14 : isGoal ? 13.5 : isTask ? 12.5 : 13;
   const titleWeight = isMilestone ? 700 : isGoal ? 600 : 500;
-  const cardBg = isMilestone ? "#FFFEF9" : "#FFFFFF";
 
   // Aggregate progress badge on the Milestone card — how many descendants
   // have some sign of progress (attachment or score). Lets you eyeball
@@ -746,6 +745,29 @@ function NodeCard({
     progressText = `${touched}/${all.length}`;
   }
 
+  // Pending-submission highlight. Uses rollup so a collapsed Goal shouting
+  // "12 NEW" also looks distinctly different from a calm Goal. The whole
+  // card is washed amber + gets a thick amber ring, not just a thin bar —
+  // eyeball-able from across the tree.
+  const pendingRollup = subtreePendingCount(node);
+  const hasPendingHere = (node.pending_attachment_count || 0) > 0;
+  const isPending = pendingRollup > 0;
+
+  const cardBg = isPending
+    ? "#FFF4C5" // full amber wash
+    : isMilestone
+      ? "#FFFEF9"
+      : "#FFFFFF";
+  const borderColor = isPending ? "#E9A100" : "#E4E1D8";
+  const borderWidth = isPending ? 2 : 0.5;
+  const topBar = isPending ? "#E9A100" : c.bar;
+  const topBarWidth = isPending ? 5 : 3;
+  const shadow = isPending
+    ? "0 3px 10px rgba(233,161,0,0.28)"
+    : isMilestone
+      ? "0 2px 6px rgba(0,0,0,0.06)"
+      : "0 1px 2px rgba(0,0,0,0.03)";
+
   return (
     <div
       style={{
@@ -756,8 +778,8 @@ function NodeCard({
         height: cardHeight,
         background: cardBg,
         borderRadius: 12,
-        border: "0.5px solid #E4E1D8",
-        borderTop: `3px solid ${c.bar}`,
+        border: `${borderWidth}px solid ${borderColor}`,
+        borderTop: `${topBarWidth}px solid ${topBar}`,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
@@ -765,9 +787,7 @@ function NodeCard({
         gap: 3,
         padding: "6px 10px",
         cursor: "pointer",
-        boxShadow: isMilestone
-          ? "0 2px 6px rgba(0,0,0,0.06)"
-          : "0 1px 2px rgba(0,0,0,0.03)",
+        boxShadow: shadow,
         transition: "box-shadow .15s, transform .15s",
       }}
       onClick={() => onOpen(node.id)}
@@ -791,26 +811,27 @@ function NodeCard({
         {/* Pending-review rollup — this node + everything under it. When the
             branch is collapsed the count still surfaces here so you know
             expanding will reveal something new. */}
-        {subtreePendingCount(node) > 0 && (
+        {pendingRollup > 0 && (
           <span
             title={
               node.collapsed
-                ? `${subtreePendingCount(node)} pending review inside this branch — click "+N" to expand`
-                : `${subtreePendingCount(node)} pending review in this subtree`
+                ? `${pendingRollup} pending review inside this branch — click "+N" to expand`
+                : `${pendingRollup} pending review in this subtree`
             }
             style={{
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "1px 6px",
-              borderRadius: 8,
-              background: "#FEF3C7",
-              color: "#8B5F00",
-              border: "1px solid #F1CB4E",
+              fontSize: 10.5,
+              fontWeight: 800,
+              padding: "2px 7px",
+              borderRadius: 10,
+              background: "#E9A100",
+              color: "#FFFFFF",
+              boxShadow: "0 1px 3px rgba(233,161,0,0.4)",
               marginLeft: "auto",
               flexShrink: 0,
+              letterSpacing: 0.3,
             }}
           >
-            {subtreePendingCount(node)} NEW
+            {hasPendingHere ? "● " : ""}{pendingRollup} NEW
           </span>
         )}
         {progressText && !subtreePendingCount(node) && (
