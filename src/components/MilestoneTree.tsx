@@ -745,25 +745,35 @@ function NodeCard({
     progressText = `${touched}/${all.length}`;
   }
 
-  // Pending-submission highlight. Uses rollup so a collapsed Goal shouting
-  // "12 NEW" also looks distinctly different from a calm Goal. The whole
-  // card is washed amber + gets a thick amber ring, not just a thin bar —
-  // eyeball-able from across the tree.
+  // Pending-submission highlight — TWO distinct treatments:
+  //   1. Direct pending (this card has unreviewed items) → SOLID amber wash,
+  //      thick ring, prominent pill. "Open this one to review."
+  //   2. Rollup pending (only descendants are pending) → SUBTLE tint + dashed
+  //      amber outline, ghost pill. "Expand and drill in."
+  // Eye is drawn to the solid amber cards first; the dashed ones just tell
+  // you where to expand.
   const pendingRollup = subtreePendingCount(node);
   const hasPendingHere = (node.pending_attachment_count || 0) > 0;
-  const isPending = pendingRollup > 0;
+  const rollupOnly = !hasPendingHere && pendingRollup > 0;
 
-  const cardBg = isPending
-    ? "#FFF4C5" // full amber wash
-    : isMilestone
-      ? "#FFFEF9"
-      : "#FFFFFF";
-  const borderColor = isPending ? "#E9A100" : "#E4E1D8";
-  const borderWidth = isPending ? 2 : 0.5;
-  const topBar = isPending ? "#E9A100" : c.bar;
-  const topBarWidth = isPending ? 5 : 3;
-  const shadow = isPending
-    ? "0 3px 10px rgba(233,161,0,0.28)"
+  const cardBg = hasPendingHere
+    ? "#FFF4C5" // solid amber wash
+    : rollupOnly
+      ? "#FDFBF0" // barely-there tint
+      : isMilestone
+        ? "#FFFEF9"
+        : "#FFFFFF";
+  const borderColor = hasPendingHere
+    ? "#E9A100"
+    : rollupOnly
+      ? "#D6B84A"
+      : "#E4E1D8";
+  const borderWidth = hasPendingHere ? 2 : rollupOnly ? 1.5 : 0.5;
+  const borderStyle = rollupOnly ? "dashed" : "solid";
+  const topBar = hasPendingHere ? "#E9A100" : c.bar;
+  const topBarWidth = hasPendingHere ? 5 : 3;
+  const shadow = hasPendingHere
+    ? "0 3px 10px rgba(233,161,0,0.32)"
     : isMilestone
       ? "0 2px 6px rgba(0,0,0,0.06)"
       : "0 1px 2px rgba(0,0,0,0.03)";
@@ -778,7 +788,7 @@ function NodeCard({
         height: cardHeight,
         background: cardBg,
         borderRadius: 12,
-        border: `${borderWidth}px solid ${borderColor}`,
+        border: `${borderWidth}px ${borderStyle} ${borderColor}`,
         borderTop: `${topBarWidth}px solid ${topBar}`,
         boxSizing: "border-box",
         display: "flex",
@@ -808,20 +818,16 @@ function NodeCard({
         >
           {node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MS" : node.kind === "Goal" ? "GOAL" : "TASK"}
         </span>
-        {/* Pending-review rollup — this node + everything under it. When the
-            branch is collapsed the count still surfaces here so you know
-            expanding will reveal something new. */}
-        {pendingRollup > 0 && (
+        {/* Pending-review rollup — this node + everything under it.
+            Direct pending (this card): solid loud pill.
+            Rollup only (children): ghost outline pill telling you where to look. */}
+        {pendingRollup > 0 && hasPendingHere && (
           <span
-            title={
-              node.collapsed
-                ? `${pendingRollup} pending review inside this branch — click "+N" to expand`
-                : `${pendingRollup} pending review in this subtree`
-            }
+            title={`${node.pending_attachment_count} pending on this card, ${pendingRollup} total in subtree`}
             style={{
               fontSize: 10.5,
               fontWeight: 800,
-              padding: "2px 7px",
+              padding: "2px 8px",
               borderRadius: 10,
               background: "#E9A100",
               color: "#FFFFFF",
@@ -831,7 +837,29 @@ function NodeCard({
               letterSpacing: 0.3,
             }}
           >
-            {hasPendingHere ? "● " : ""}{pendingRollup} NEW
+            {node.pending_attachment_count} REVIEW
+          </span>
+        )}
+        {pendingRollup > 0 && !hasPendingHere && (
+          <span
+            title={
+              node.collapsed
+                ? `${pendingRollup} pending review inside this branch — click "+N" to expand`
+                : `${pendingRollup} pending review below this card`
+            }
+            style={{
+              fontSize: 9.5,
+              fontWeight: 700,
+              padding: "1px 6px",
+              borderRadius: 8,
+              background: "transparent",
+              color: "#A87700",
+              border: "1px dashed #D6B84A",
+              marginLeft: "auto",
+              flexShrink: 0,
+            }}
+          >
+            {pendingRollup} below
           </span>
         )}
         {progressText && !subtreePendingCount(node) && (
