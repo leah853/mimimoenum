@@ -106,6 +106,11 @@ export default function EODPage() {
   const [editingEod, setEditingEod] = useState(false);
   const [editDone, setEditDone] = useState<DoneByGroup>(emptyDone);
   const [editObstacles, setEditObstacles] = useState("");
+  // Sunday-only: one textarea per category, each newline = a planned task title.
+  // On save these become Task nodes in the milestone tree under a "Week of ..."
+  // Sub-goal under the matched Goal.
+  const [sundayPlan, setSundayPlan] = useState<DoneByGroup>(emptyDone);
+  const [savingSundayPlan, setSavingSundayPlan] = useState(false);
 
   // Summary stats for current month
   const eodStats = useMemo(() => {
@@ -169,6 +174,52 @@ export default function EODPage() {
       toast("EOD update saved", "success");
     } catch (e) { toast(handleApiError(e), "error"); setUploadingVideo(false); }
     setSubmitting(false);
+  }
+
+  // ── Sunday planning ─────────────────────────────────────────────────────
+  // Sunday's `getDay()` is 0. Detect from the selected date so users planning
+  // for the coming week can pick a specific Sunday if they want.
+  const isSunday = new Date(selectedDate + "T12:00:00").getDay() === 0;
+  const sundayHasSomething = Object.values(sundayPlan).some(
+    (v) => v.split("\n").some((line) => line.trim().length > 0),
+  );
+
+  async function submitSundayPlan() {
+    const payload: Record<string, string[]> = {};
+    (Object.keys(sundayPlan) as GroupKey[]).forEach((g) => {
+      const lines = sundayPlan[g].split("\n").map((l) => l.trim()).filter(Boolean);
+      if (lines.length) payload[g] = lines;
+    });
+    if (Object.keys(payload).length === 0) return;
+    setSavingSundayPlan(true);
+    try {
+      const res = (await apiPost("/api/eod/sunday-plan", { date: selectedDate, tasks: payload })) as {
+        created: number;
+        per_category: Record<GroupKey, { goal_title: string; sub_goal_title: string; created_task_titles: string[]; matched: boolean }>;
+      };
+      const parts: string[] = [];
+      const unmatchedGroups: string[] = [];
+      (Object.keys(res.per_category) as GroupKey[]).forEach((g) => {
+        const pc = res.per_category[g];
+        if (pc.created_task_titles.length > 0) {
+          parts.push(`${pc.created_task_titles.length} → ${pc.goal_title} / ${pc.sub_goal_title}`);
+          if (!pc.matched) unmatchedGroups.push(g);
+        }
+      });
+      if (parts.length === 0) {
+        toast("No new tasks — all titles already existed", "success");
+      } else {
+        toast(`Added ${res.created} task(s) to milestone tree — ${parts.join(" · ")}`, "success");
+      }
+      if (unmatchedGroups.length > 0) {
+        toast(
+          `Placed under "Unplaced plan tasks" (categories: ${unmatchedGroups.join(", ")}) — reparent from the Tree tab if needed`,
+          "info",
+        );
+      }
+      setSundayPlan(emptyDone);
+    } catch (e) { toast(handleApiError(e), "error"); }
+    setSavingSundayPlan(false);
   }
 
   async function attachVideoToExisting(eodId: string, file: File) {
@@ -454,6 +505,47 @@ export default function EODPage() {
                     Send
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {isSunday && isDoer && (
+            <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-900/10 dark:to-violet-900/10 border border-indigo-200/60 dark:border-indigo-800/40 rounded-2xl shadow-sm p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span className="text-lg">🗓️</span>
+                    Plan for upcoming week
+                  </h3>
+                  <p className="text-[10.5px] text-gray-500 mt-0.5">
+                    Sunday is a planning day. Each line becomes a Task in the milestone tree under &ldquo;Week of {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}&rdquo;.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={submitSundayPlan}
+                  disabled={!sundayHasSomething || savingSundayPlan}
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-sm rounded-xl shadow-md transition-all active:scale-[0.97] flex-shrink-0"
+                >
+                  {savingSundayPlan ? "Adding…" : "Add to milestone tree"}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {GROUP_LABELS.map((g) => (
+                  <div key={g.key}>
+                    <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-1.5">
+                      <span>{g.emoji}</span> {g.label}
+                    </label>
+                    <textarea
+                      value={sundayPlan[g.key]}
+                      onChange={(e) => setSundayPlan({ ...sundayPlan, [g.key]: e.target.value })}
+                      rows={3}
+                      placeholder={`One planned task per line…`}
+                      className="w-full px-3 py-2 bg-white/80 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white leading-relaxed resize-none"
+                      style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}
