@@ -106,10 +106,11 @@ export default function EODPage() {
   const [editingEod, setEditingEod] = useState(false);
   const [editDone, setEditDone] = useState<DoneByGroup>(emptyDone);
   const [editObstacles, setEditObstacles] = useState("");
-  // Sunday-only: one textarea per category, each newline = a planned task title.
-  // On save these become Task nodes in the milestone tree under a "Week of ..."
-  // Sub-goal under the matched Goal.
+  // Sunday-only: for each category the user names this week's focus (optional)
+  // + lists tasks (one per line). On save tasks nest under a Sub-goal named
+  // after the focus. If no focus is given, tasks go flat under the Goal.
   const [sundayPlan, setSundayPlan] = useState<DoneByGroup>(emptyDone);
+  const [sundayFocus, setSundayFocus] = useState<DoneByGroup>(emptyDone);
   const [savingSundayPlan, setSavingSundayPlan] = useState(false);
 
   // Summary stats for current month
@@ -185,10 +186,14 @@ export default function EODPage() {
   );
 
   async function submitSundayPlan() {
-    const payload: Record<string, string[]> = {};
+    // Compose the payload as {focus, items} per group. Only groups with at
+    // least one task line are sent.
+    const payload: Record<string, { focus: string; items: string[] }> = {};
     (Object.keys(sundayPlan) as GroupKey[]).forEach((g) => {
-      const lines = sundayPlan[g].split("\n").map((l) => l.trim()).filter(Boolean);
-      if (lines.length) payload[g] = lines;
+      const items = sundayPlan[g].split("\n").map((l) => l.trim()).filter(Boolean);
+      if (items.length) {
+        payload[g] = { focus: sundayFocus[g].trim(), items };
+      }
     });
     if (Object.keys(payload).length === 0) return;
     setSavingSundayPlan(true);
@@ -196,14 +201,16 @@ export default function EODPage() {
       const res = (await apiPost("/api/eod/sunday-plan", { date: selectedDate, tasks: payload })) as {
         created: number;
         week_label: string;
-        per_category: Record<GroupKey, { goal_title: string; created_task_titles: string[]; matched: boolean }>;
+        per_category: Record<GroupKey, { goal_title: string; focus_title: string | null; created_task_titles: string[]; matched: boolean }>;
       };
       const parts: string[] = [];
       const unmatchedGroups: string[] = [];
       (Object.keys(res.per_category) as GroupKey[]).forEach((g) => {
         const pc = res.per_category[g];
         if (pc.created_task_titles.length > 0) {
-          parts.push(`${pc.created_task_titles.length} → ${pc.goal_title}`);
+          // "3 → Milestone and Branding / Digital branding push"
+          const path = pc.focus_title ? `${pc.goal_title} / ${pc.focus_title}` : pc.goal_title;
+          parts.push(`${pc.created_task_titles.length} → ${path}`);
           if (!pc.matched) unmatchedGroups.push(g);
         }
       });
@@ -219,6 +226,7 @@ export default function EODPage() {
         );
       }
       setSundayPlan(emptyDone);
+      setSundayFocus(emptyDone);
     } catch (e) { toast(handleApiError(e), "error"); }
     setSavingSundayPlan(false);
   }
@@ -519,7 +527,7 @@ export default function EODPage() {
                     Plan for upcoming week
                   </h3>
                   <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Sunday is a planning day. Each line becomes a Task placed directly under the matching Goal in the milestone tree.
+                    Sunday is a planning day. Name this week&rsquo;s focus per category (optional) and list the tasks — one per line. Tasks nest under the focus Sub-goal in the milestone tree; blank focus lands them flat under the Goal.
                   </p>
                 </div>
                 <button
@@ -531,12 +539,18 @@ export default function EODPage() {
                   {savingSundayPlan ? "Adding…" : "Add to milestone tree"}
                 </button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {GROUP_LABELS.map((g) => (
-                  <div key={g.key}>
-                    <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-1.5">
+                  <div key={g.key} className="space-y-1.5">
+                    <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                       <span>{g.emoji}</span> {g.label}
                     </label>
+                    <input
+                      value={sundayFocus[g.key]}
+                      onChange={(e) => setSundayFocus({ ...sundayFocus, [g.key]: e.target.value })}
+                      placeholder="This week's focus (optional) — becomes a Sub-goal grouping the tasks below"
+                      className="w-full px-3 py-1.5 bg-white/80 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-lg text-[12.5px] italic text-gray-800 dark:text-gray-200"
+                    />
                     <textarea
                       value={sundayPlan[g.key]}
                       onChange={(e) => setSundayPlan({ ...sundayPlan, [g.key]: e.target.value })}

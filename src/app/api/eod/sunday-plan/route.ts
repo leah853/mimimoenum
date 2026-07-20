@@ -39,8 +39,19 @@ type NodeRow = { id: string; parent_id: string | null; title: string; kind: stri
 
 /** Post one Sunday plan. Body:
  *    { date: "2026-07-19",
- *      tasks: { apex?: string[], platform?: string[], people?: string[] } }
- *  Returns { created, per_category: { apex: {goal_title, sub_goal_title, count} ... } }
+ *      tasks: {
+ *        apex?: string[] | { focus?: string; items: string[] },
+ *        platform?: ...,
+ *        people?: ...,
+ *      }
+ *    }
+ *
+ *  Per category, if `focus` is set → tasks go under a Sub-goal named `focus`
+ *  under the matched Goal (Sub-goal is created lazily, reused across weeks
+ *  when the same focus name repeats). If `focus` is empty (or the group is
+ *  a plain string[]), tasks are inserted directly under the matched Goal.
+ *
+ *  Returns { created, week_label, per_category: { ... focus_title, ... } }
  */
 export async function POST(request: NextRequest) {
   const role = getCallerRole(request);
@@ -129,44 +140,77 @@ export async function POST(request: NextRequest) {
   const weekMonday = mondayOf(body.date);
   const weekLabel = friendlyMonday(weekMonday);
 
-  const result: {
-    created: number;
-    week_label: string;
-    per_category: Record<GroupKey, { goal_title: string; created_task_ids: string[]; created_task_titles: string[]; matched: boolean }>;
-  } = {
+  type PerCat = {
+    goal_title: string;
+    focus_title: string | null; // Sub-goal that was created / reused, if any
+    created_task_ids: string[];
+    created_task_titles: string[];
+    matched: boolean;
+  };
+
+  const result: { created: number; week_label: string; per_category: Record<GroupKey, PerCat> } = {
     created: 0,
     week_label: weekLabel,
     per_category: {
-      apex: { goal_title: "", created_task_ids: [], created_task_titles: [], matched: false },
-      platform: { goal_title: "", created_task_ids: [], created_task_titles: [], matched: false },
-      people: { goal_title: "", created_task_ids: [], created_task_titles: [], matched: false },
+      apex: { goal_title: "", focus_title: null, created_task_ids: [], created_task_titles: [], matched: false },
+      platform: { goal_title: "", focus_title: null, created_task_ids: [], created_task_titles: [], matched: false },
+      people: { goal_title: "", focus_title: null, created_task_ids: [], created_task_titles: [], matched: false },
     },
   };
 
+  // Accept both shapes per group:
+  //   apex: ["a","b"]                          // legacy — no focus
+  //   apex: { focus: "Digital branding", items: ["a","b"] }
+  function normaliseGroup(v: unknown): { focus: string; items: string[] } {
+    if (Array.isArray(v)) {
+      return { focus: "", items: v.map((t) => String(t || "").trim()).filter(Boolean) };
+    }
+    if (v && typeof v === "object") {
+      const o = v as { focus?: string; items?: unknown };
+      return {
+        focus: String(o.focus || "").trim(),
+        items: Array.isArray(o.items)
+          ? (o.items as unknown[]).map((t) => String(t || "").trim()).filter(Boolean)
+          : [],
+      };
+    }
+    return { focus: "", items: [] };
+  }
+
   try {
     for (const g of ["apex", "platform", "people"] as GroupKey[]) {
-      const rawTitles: string[] = Array.isArray(body.tasks[g]) ? body.tasks[g] : [];
-      const titles = rawTitles.map((t) => String(t || "").trim()).filter(Boolean);
-      if (titles.length === 0) continue;
+      const { focus, items } = normaliseGroup(body.tasks[g]);
+      if (items.length === 0) continue;
 
+      // Step 1: figure out which Goal we're anchored under.
       const goal = matchGoal(g);
-      // Direct parent for the tasks — no intermediate "Week of ..." wrapper.
-      // Matched → the Goal itself. Unmatched → the Unplaced milestone.
-      let parentId: string;
+      let goalParentId: string;
       if (goal) {
         result.per_category[g].matched = true;
         result.per_category[g].goal_title = goal.title;
-        parentId = goal.id;
+        goalParentId = goal.id;
       } else {
         result.per_category[g].matched = false;
         result.per_category[g].goal_title = "Unplaced plan tasks";
-        parentId = await unplacedMilestoneId();
+        goalParentId = await unplacedMilestoneId();
       }
 
-      // Skip titles that already exist under the same parent so re-submits
-      // are a no-op.
+      // Step 2: if the user named a weekly focus, tasks nest under a
+      // Sub-goal by that name. Otherwise they go straight under the Goal
+      // (flat fallback). Sub-goal is reused across weeks when the same
+      // focus name repeats.
+      let parentId: string;
+      if (focus) {
+        parentId = await findOrCreateChild(goalParentId, focus, "Sub-goal");
+        result.per_category[g].focus_title = focus;
+      } else {
+        parentId = goalParentId;
+      }
+
+      // Step 3: insert each task title under the chosen parent, skipping
+      // titles that already exist so re-submits are a no-op.
       const existingTitles = new Set(kidsOf(parentId).map((n) => n.title));
-      const fresh = titles.filter((t) => !existingTitles.has(t));
+      const fresh = items.filter((t) => !existingTitles.has(t));
 
       for (const [i, t] of fresh.entries()) {
         const { data, error: e } = await sb
