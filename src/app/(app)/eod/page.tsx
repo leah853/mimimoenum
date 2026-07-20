@@ -195,14 +195,15 @@ export default function EODPage() {
     try {
       const res = (await apiPost("/api/eod/sunday-plan", { date: selectedDate, tasks: payload })) as {
         created: number;
-        per_category: Record<GroupKey, { goal_title: string; sub_goal_title: string; created_task_titles: string[]; matched: boolean }>;
+        week_label: string;
+        per_category: Record<GroupKey, { goal_title: string; created_task_titles: string[]; matched: boolean }>;
       };
       const parts: string[] = [];
       const unmatchedGroups: string[] = [];
       (Object.keys(res.per_category) as GroupKey[]).forEach((g) => {
         const pc = res.per_category[g];
         if (pc.created_task_titles.length > 0) {
-          parts.push(`${pc.created_task_titles.length} → ${pc.goal_title} / ${pc.sub_goal_title}`);
+          parts.push(`${pc.created_task_titles.length} → ${pc.goal_title}`);
           if (!pc.matched) unmatchedGroups.push(g);
         }
       });
@@ -518,7 +519,7 @@ export default function EODPage() {
                     Plan for upcoming week
                   </h3>
                   <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Sunday is a planning day. Each line becomes a Task in the milestone tree under &ldquo;Week of {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}&rdquo;.
+                    Sunday is a planning day. Each line becomes a Task placed directly under the matching Goal in the milestone tree.
                   </p>
                 </div>
                 <button

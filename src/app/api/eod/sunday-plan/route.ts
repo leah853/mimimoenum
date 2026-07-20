@@ -101,46 +101,45 @@ export async function POST(request: NextRequest) {
   }
 
   // Unplaced fallback: create/reuse a top-level Milestone called "Unplaced
-  // plan tasks". Prevents silent loss of user input when a category can't
-  // find its Goal home.
-  async function unplacedSubGoalId(weekMonday: string): Promise<string> {
-    const orphanMilestone = nodes.find((n) => n.kind === "Milestone" && n.title === "Unplaced plan tasks");
-    let orphanId: string;
-    if (orphanMilestone) {
-      orphanId = orphanMilestone.id;
-    } else {
-      const { data, error } = await sb
-        .from("milestone_nodes")
-        .insert({
-          parent_id: null,
-          owner_id: callerId,
-          title: "Unplaced plan tasks",
-          kind: "Milestone",
-          sort_order: nodes.filter((n) => !n.parent_id).length,
-        })
-        .select("id, parent_id, title, kind")
-        .single();
-      if (error) throw new Error(`create Unplaced milestone: ${error.message}`);
-      const row = data as NodeRow;
-      nodes.push(row);
-      byId.set(row.id, row);
-      orphanId = row.id;
-    }
-    return findOrCreateChild(orphanId, `Week of ${friendlyMonday(weekMonday)}`, "Sub-goal");
+  // plan tasks" and drop tasks directly under it. Prevents silent loss of
+  // user input when a category can't find its Goal home.
+  async function unplacedMilestoneId(): Promise<string> {
+    const existing = nodes.find((n) => n.kind === "Milestone" && n.title === "Unplaced plan tasks");
+    if (existing) return existing.id;
+    const { data, error } = await sb
+      .from("milestone_nodes")
+      .insert({
+        parent_id: null,
+        owner_id: callerId,
+        title: "Unplaced plan tasks",
+        kind: "Milestone",
+        sort_order: nodes.filter((n) => !n.parent_id).length,
+      })
+      .select("id, parent_id, title, kind")
+      .single();
+    if (error) throw new Error(`create Unplaced milestone: ${error.message}`);
+    const row = data as NodeRow;
+    nodes.push(row);
+    byId.set(row.id, row);
+    return row.id;
   }
 
+  // Weekly Monday, kept for the response so the frontend can tell the user
+  // which week these tasks belong to (based on created_at + label).
   const weekMonday = mondayOf(body.date);
-  const weekSubGoalTitle = `Week of ${friendlyMonday(weekMonday)}`;
+  const weekLabel = friendlyMonday(weekMonday);
 
   const result: {
     created: number;
-    per_category: Record<GroupKey, { goal_title: string; sub_goal_title: string; created_task_ids: string[]; created_task_titles: string[]; matched: boolean }>;
+    week_label: string;
+    per_category: Record<GroupKey, { goal_title: string; created_task_ids: string[]; created_task_titles: string[]; matched: boolean }>;
   } = {
     created: 0,
+    week_label: weekLabel,
     per_category: {
-      apex: { goal_title: "", sub_goal_title: weekSubGoalTitle, created_task_ids: [], created_task_titles: [], matched: false },
-      platform: { goal_title: "", sub_goal_title: weekSubGoalTitle, created_task_ids: [], created_task_titles: [], matched: false },
-      people: { goal_title: "", sub_goal_title: weekSubGoalTitle, created_task_ids: [], created_task_titles: [], matched: false },
+      apex: { goal_title: "", created_task_ids: [], created_task_titles: [], matched: false },
+      platform: { goal_title: "", created_task_ids: [], created_task_titles: [], matched: false },
+      people: { goal_title: "", created_task_ids: [], created_task_titles: [], matched: false },
     },
   };
 
@@ -151,30 +150,33 @@ export async function POST(request: NextRequest) {
       if (titles.length === 0) continue;
 
       const goal = matchGoal(g);
-      let subGoalId: string;
+      // Direct parent for the tasks — no intermediate "Week of ..." wrapper.
+      // Matched → the Goal itself. Unmatched → the Unplaced milestone.
+      let parentId: string;
       if (goal) {
         result.per_category[g].matched = true;
         result.per_category[g].goal_title = goal.title;
-        subGoalId = await findOrCreateChild(goal.id, weekSubGoalTitle, "Sub-goal");
+        parentId = goal.id;
       } else {
         result.per_category[g].matched = false;
         result.per_category[g].goal_title = "Unplaced plan tasks";
-        subGoalId = await unplacedSubGoalId(weekMonday);
+        parentId = await unplacedMilestoneId();
       }
 
-      // Skip titles already present under the Sub-goal so re-submits don't clone.
-      const existingTitles = new Set(kidsOf(subGoalId).map((n) => n.title));
+      // Skip titles that already exist under the same parent so re-submits
+      // are a no-op.
+      const existingTitles = new Set(kidsOf(parentId).map((n) => n.title));
       const fresh = titles.filter((t) => !existingTitles.has(t));
 
       for (const [i, t] of fresh.entries()) {
         const { data, error: e } = await sb
           .from("milestone_nodes")
           .insert({
-            parent_id: subGoalId,
+            parent_id: parentId,
             owner_id: callerId,
             title: t,
             kind: "Task",
-            sort_order: kidsOf(subGoalId).length + i,
+            sort_order: kidsOf(parentId).length + i,
           })
           .select("id, parent_id, title, kind")
           .single();
