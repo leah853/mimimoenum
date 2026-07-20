@@ -560,7 +560,7 @@ export default function EODPage() {
               {sundayPlanRead && sundayPlanRead.total > 0 && (
                 <div className="bg-white/70 dark:bg-gray-900/40 border border-gray-200/60 dark:border-gray-800/60 rounded-xl p-3 space-y-2">
                   <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    ✓ Already planned this Sunday · {sundayPlanRead.total} task{sundayPlanRead.total === 1 ? "" : "s"}
+                    ✓ Planned this week · {sundayPlanRead.total} task{sundayPlanRead.total === 1 ? "" : "s"}
                   </p>
                   {(["apex", "platform", "people", "unplaced"] as (GroupKey | "unplaced")[])
                     .filter((g) => {

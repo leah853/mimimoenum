@@ -60,9 +60,18 @@ export async function GET(request: NextRequest) {
   }
   void milestones; void goalsById; // referenced by ancestryToGroup indirectly through byId
 
-  const tasksThatDay = nodes.filter(
-    (n) => n.kind === "Task" && n.created_at.slice(0, 10) === date,
-  );
+  // Show every task created within the week that contains `date`
+  // (Monday-Sunday, UTC). The user often plans on Sunday but submits days
+  // later; matching on "exact Sunday date only" would show nothing.
+  const weekMondayIso = mondayOf(date);
+  const weekEnd = new Date(weekMondayIso + "T00:00:00Z");
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7); // exclusive upper bound
+  const weekMondayDate = new Date(weekMondayIso + "T00:00:00Z");
+  const tasksThatDay = nodes.filter((n) => {
+    if (n.kind !== "Task") return false;
+    const t = new Date(n.created_at);
+    return t >= weekMondayDate && t < weekEnd;
+  });
 
   type GroupSummary = {
     goal_title: string;
