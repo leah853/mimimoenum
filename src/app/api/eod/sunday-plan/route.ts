@@ -5,6 +5,93 @@ import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
 type GroupKey = "apex" | "platform" | "people";
 
+/** Read-back for a specific Sunday. Returns everything created on that
+ *  UTC calendar date under the three mapped Goals (or the Unplaced
+ *  milestone), grouped by (Goal → Sub-goal focus → tasks). Powers the
+ *  "This Sunday's plan" summary on the EOD page so a doer can see what
+ *  they submitted after the form clears. */
+export async function GET(request: NextRequest) {
+  const role = getCallerRole(request);
+  if (!role) return err("Not authenticated", 401);
+
+  const url = new URL(request.url);
+  const date = url.searchParams.get("date");
+  if (!date) return err("date (yyyy-mm-dd) query param required");
+
+  const sb = createServiceClient();
+  const { data: nodesRaw } = await sb.from("milestone_nodes").select("id, parent_id, title, kind, created_at");
+  const nodes = (nodesRaw || []) as {
+    id: string;
+    parent_id: string | null;
+    title: string;
+    kind: string;
+    created_at: string;
+  }[];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+
+  // Find the three mapped Goals + Unplaced milestone.
+  const milestones = nodes.filter((n) => n.kind === "Milestone");
+  const goalsById = new Map(nodes.filter((n) => n.kind === "Goal").map((g) => [g.id, g]));
+
+  function ancestryToGroup(taskId: string): { group: GroupKey | "unplaced"; goal_title: string; focus_title: string | null } | null {
+    let cur = byId.get(taskId);
+    let focus: string | null = null;
+    // Walk up: skip Sub-goals (record first as focus), stop at Goal or Milestone.
+    while (cur) {
+      if (cur.id !== taskId && cur.kind === "Sub-goal" && focus === null) {
+        focus = cur.title;
+      }
+      const parent = cur.parent_id ? byId.get(cur.parent_id) : null;
+      if (!parent) break;
+      if (parent.kind === "Goal") {
+        const gt = parent.title.toLowerCase();
+        let group: GroupKey | "unplaced" = "unplaced";
+        if (gt.includes("milestone") || gt.includes("branding")) group = "apex";
+        else if (gt.includes("product") || gt.includes("platform") || gt.includes("workflow") || gt.includes("fedramp") || gt.includes("engine")) group = "platform";
+        else if (gt.includes("talent") || gt.includes("knowledge") || gt.includes("culture") || gt.includes("people")) group = "people";
+        return { group, goal_title: parent.title, focus_title: focus };
+      }
+      if (parent.kind === "Milestone" && parent.title === "Unplaced plan tasks") {
+        return { group: "unplaced", goal_title: "Unplaced plan tasks", focus_title: focus };
+      }
+      cur = parent;
+    }
+    return null;
+  }
+  void milestones; void goalsById; // referenced by ancestryToGroup indirectly through byId
+
+  const tasksThatDay = nodes.filter(
+    (n) => n.kind === "Task" && n.created_at.slice(0, 10) === date,
+  );
+
+  type GroupSummary = {
+    goal_title: string;
+    focus_groups: Record<string, { focus_title: string | null; task_titles: string[] }>;
+  };
+  const per_category: Record<GroupKey | "unplaced", GroupSummary> = {
+    apex: { goal_title: "", focus_groups: {} },
+    platform: { goal_title: "", focus_groups: {} },
+    people: { goal_title: "", focus_groups: {} },
+    unplaced: { goal_title: "Unplaced plan tasks", focus_groups: {} },
+  };
+  let total = 0;
+
+  for (const t of tasksThatDay) {
+    const anc = ancestryToGroup(t.id);
+    if (!anc) continue; // not under any mapped Goal — skip
+    const bucket = per_category[anc.group];
+    if (!bucket.goal_title) bucket.goal_title = anc.goal_title;
+    const focusKey = anc.focus_title || "__flat__";
+    if (!bucket.focus_groups[focusKey]) {
+      bucket.focus_groups[focusKey] = { focus_title: anc.focus_title, task_titles: [] };
+    }
+    bucket.focus_groups[focusKey].task_titles.push(t.title);
+    total += 1;
+  }
+
+  return ok({ date, total, per_category });
+}
+
 // Fuzzy-match each EOD category to a Goal by title keywords. Ordered by
 // preference so the first hit wins.
 const GOAL_KEYWORDS: Record<GroupKey, string[]> = {

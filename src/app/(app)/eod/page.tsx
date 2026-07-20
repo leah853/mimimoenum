@@ -113,6 +113,22 @@ export default function EODPage() {
   const [sundayFocus, setSundayFocus] = useState<DoneByGroup>(emptyDone);
   const [savingSundayPlan, setSavingSundayPlan] = useState(false);
 
+  // Read-back of what's already been planted in the tree on the selected
+  // Sunday. Lets the doer see their prior submissions after the form clears.
+  type SundayPlanRead = {
+    date: string;
+    total: number;
+    per_category: Record<
+      GroupKey | "unplaced",
+      { goal_title: string; focus_groups: Record<string, { focus_title: string | null; task_titles: string[] }> }
+    >;
+  };
+  const isSundaySelected = new Date(selectedDate + "T12:00:00").getDay() === 0;
+  const {
+    data: sundayPlanRead,
+    refetch: refetchSundayPlan,
+  } = useApi<SundayPlanRead>(isSundaySelected ? `/api/eod/sunday-plan?date=${selectedDate}` : null);
+
   // Summary stats for current month
   const eodStats = useMemo(() => {
     const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
@@ -178,9 +194,8 @@ export default function EODPage() {
   }
 
   // ── Sunday planning ─────────────────────────────────────────────────────
-  // Sunday's `getDay()` is 0. Detect from the selected date so users planning
-  // for the coming week can pick a specific Sunday if they want.
-  const isSunday = new Date(selectedDate + "T12:00:00").getDay() === 0;
+  // `isSundaySelected` is computed alongside the read-back useApi above.
+  const isSunday = isSundaySelected;
   const sundayHasSomething = Object.values(sundayPlan).some(
     (v) => v.split("\n").some((line) => line.trim().length > 0),
   );
@@ -227,6 +242,7 @@ export default function EODPage() {
       }
       setSundayPlan(emptyDone);
       setSundayFocus(emptyDone);
+      await refetchSundayPlan();
     } catch (e) { toast(handleApiError(e), "error"); }
     setSavingSundayPlan(false);
   }
@@ -539,6 +555,47 @@ export default function EODPage() {
                   {savingSundayPlan ? "Adding…" : "Add to milestone tree"}
                 </button>
               </div>
+              {/* Read-back: what's already been planted in the tree today.
+                  Survives page reload / refresh — source of truth is the DB. */}
+              {sundayPlanRead && sundayPlanRead.total > 0 && (
+                <div className="bg-white/70 dark:bg-gray-900/40 border border-gray-200/60 dark:border-gray-800/60 rounded-xl p-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    ✓ Already planned this Sunday · {sundayPlanRead.total} task{sundayPlanRead.total === 1 ? "" : "s"}
+                  </p>
+                  {(["apex", "platform", "people", "unplaced"] as (GroupKey | "unplaced")[])
+                    .filter((g) => {
+                      const bucket = sundayPlanRead.per_category[g];
+                      return bucket && Object.keys(bucket.focus_groups).length > 0;
+                    })
+                    .map((g) => {
+                      const bucket = sundayPlanRead.per_category[g];
+                      const meta = GROUP_LABELS.find((l) => l.key === g);
+                      const label = meta ? `${meta.emoji} ${meta.label}` : `📌 ${bucket.goal_title}`;
+                      return (
+                        <div key={g} className="space-y-1.5">
+                          <p className="text-[10.5px] font-medium text-gray-600 dark:text-gray-400">{label}</p>
+                          <div className="pl-3 space-y-1.5">
+                            {Object.values(bucket.focus_groups).map((fg, i) => (
+                              <div key={i}>
+                                {fg.focus_title && (
+                                  <p className="text-[11px] italic text-indigo-700 dark:text-indigo-300">
+                                    {fg.focus_title}
+                                  </p>
+                                )}
+                                <ul className="pl-3 list-disc marker:text-gray-300 dark:marker:text-gray-600 space-y-0.5">
+                                  {fg.task_titles.map((t, j) => (
+                                    <li key={j} className="text-[11.5px] text-gray-700 dark:text-gray-300">{t}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
               <div className="space-y-3">
                 {GROUP_LABELS.map((g) => (
                   <div key={g.key} className="space-y-1.5">
