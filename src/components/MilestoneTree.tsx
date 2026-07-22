@@ -15,9 +15,9 @@ import {
 } from "react-icons/hi";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type Kind = "Milestone" | "Goal" | "Sub-goal" | "Task";
+export type Kind = "Milestone" | "Goal" | "Sub-goal" | "Task";
 
-type ApiNode = {
+export type ApiNode = {
   id: string;
   parent_id: string | null;
   owner_id: string;
@@ -35,7 +35,7 @@ type ApiNode = {
   pending_attachment_count?: number;
 };
 
-type TreeNode = ApiNode & {
+export type TreeNode = ApiNode & {
   children: TreeNode[];
   attachmentCount: number; // alias for treeStatus lib
 };
@@ -1015,7 +1015,7 @@ function NodeCard({
 }
 
 // ─── Node modal (edit / feedback / attachments) ──────────────────────────────
-function NodeModal({
+export function NodeModal({
   node,
   path,
   currentUser,
