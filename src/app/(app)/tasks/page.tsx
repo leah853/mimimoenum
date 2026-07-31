@@ -377,24 +377,29 @@ function TasksInner() {
               List
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => prevQuarter && setQuarterId(prevQuarter.id)}
-            disabled={!prevQuarter}
-            aria-label="Previous quarter"
-            className="w-8 h-8 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <HiChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => nextQuarter && setQuarterId(nextQuarter.id)}
-            disabled={!nextQuarter}
-            aria-label="Next quarter"
-            className="w-8 h-8 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <HiChevronRight className="w-4 h-4" />
-          </button>
+          {/* Quarter switcher — segmented pills showing every quarter,
+              current one highlighted. Fixes "arrows don't say what's on
+              the other side" confusion. */}
+          <div className="inline-flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+            {[...allQuarters].reverse().map((q) => {
+              const isActive = q.id === quarterId;
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => setQuarterId(q.id)}
+                  title={`${q.name} · ${dateRange(q.start_date, q.end_date)}`}
+                  className={`px-2.5 py-1 text-[11.5px] font-medium rounded-md transition-all ${
+                    isActive
+                      ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  }`}
+                >
+                  {q.name}
+                </button>
+              );
+            })}
+          </div>
           {canAddNextQuarter && (
             <button
               type="button"
@@ -423,6 +428,10 @@ function TasksInner() {
       {view === "board" && (
         <BoardLayout
           iteration={iteration}
+          iterations={iterations}
+          iterId={iterId}
+          setIterId={setIterId}
+          allTasks={all}
           visible={visible}
           all={all}
           iterCounts={iterCounts}
@@ -704,12 +713,17 @@ const BOARD_COLUMNS: { status: TaskStatus; label: string; dot: string }[] = [
 ];
 
 function BoardLayout({
-  iteration, visible, all, iterCounts, activeWeekTab, setActiveWeekTab,
+  iteration, iterations, iterId, setIterId, allTasks,
+  visible, all, iterCounts, activeWeekTab, setActiveWeekTab,
   onDrop, draggingId, setDraggingId, dropTarget, setDropTarget,
   catFilter, setCatFilter, urgencyFilter, setUrgencyFilter,
   search, setSearch, categories, catCounts,
 }: {
   iteration: IterOption;
+  iterations: IterOption[];
+  iterId: string;
+  setIterId: (id: string) => void;
+  allTasks: FullTask[];
   visible: FullTask[];
   all: FullTask[];
   iterCounts: { total: number; done: number; late: number; due: number };
@@ -729,6 +743,7 @@ function BoardLayout({
   categories: string[];
   catCounts: Map<string, number>;
 }) {
+  void all;
   const [catOpen, setCatOpen] = useState(false);
   const weeks = (iteration.weeks || []).slice().sort((a, b) => a.week_number - b.week_number);
   const today = todayISO();
@@ -777,6 +792,49 @@ function BoardLayout({
 
   return (
     <>
+      {/* Iteration switcher — compact segmented row so users can jump
+          across the quarter without leaving Board view. Each pill shows
+          the iter name + a done/total or "shipped" summary. */}
+      <div className="flex gap-1">
+        {iterations.map((it) => {
+          const scoped = allTasks.filter((t) => t.iteration_id === it.id);
+          const done = scoped.filter((t) => t.status === "completed").length;
+          const total = scoped.length;
+          const isPast = it.end_date < today;
+          const isFuture = it.start_date > today;
+          const isCurrent = !isPast && !isFuture;
+          const isActive = it.id === iterId;
+          const late = scoped.filter((t) => isTaskOverdue(t, today)).length;
+          return (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => setIterId(it.id)}
+              className={`text-left rounded-lg px-3 py-1.5 transition-all flex-1 min-w-0 ${
+                isActive
+                  ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                  : isPast
+                    ? "bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                    : "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+              }`}
+            >
+              <div className="text-[11.5px] font-semibold truncate">
+                {it.name}
+                {isCurrent && <span className={`ml-1 ${isActive ? "opacity-70" : "text-gray-400"}`}>· now</span>}
+              </div>
+              <div className={`text-[9.5px] mt-0.5 truncate ${isActive ? "opacity-70" : "text-gray-400"}`}>
+                {shortDate(it.start_date)} · {isPast
+                  ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">shipped {done}</span>
+                  : isFuture
+                    ? <span>planned {total}</span>
+                    : <span>{done}/{total}{late > 0 ? <span className="text-amber-600 dark:text-amber-400 font-medium"> · {late} late</span> : ""}</span>
+                }
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Health strip */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-900/50 rounded-lg text-[11.5px] text-gray-500 dark:text-gray-400 flex-wrap">
         <span className="font-medium text-gray-800 dark:text-gray-100">{pct}% shipped</span>
