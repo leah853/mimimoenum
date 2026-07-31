@@ -10,7 +10,7 @@ import { useApi, apiPost, apiPatch } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canCreateTasks } from "@/lib/roles";
 import { HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiOutlineFilm, HiX, HiChevronLeft, HiChevronRight, HiSearch } from "react-icons/hi";
-import { FIXED_CATEGORIES } from "@/lib/constants";
+import { FIXED_CATEGORIES, CATEGORY_GROUP, FOUNDATION_ORDER, FOUNDATION_LABEL, type FoundationGroup } from "@/lib/constants";
 import { isTaskOverdue, isTaskDueToday } from "@/lib/utils";
 import { Skeleton, SkeletonRows, useToast } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
@@ -105,6 +105,7 @@ function TasksInner() {
   const [search, setSearch] = useState<string>(initialSearch);
   const [showShippedByWeek, setShowShippedByWeek] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
+  const [creatingQuarter, setCreatingQuarter] = useState(false);
 
   const { data: tasks, loading, refetch, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: quarters } = useApi<QuarterOption[]>("/api/quarters");
@@ -172,20 +173,32 @@ function TasksInner() {
     return m;
   }, [all, iterId]);
 
-  // Apply filters to build the visible task set.
+  // Apply filters to build the visible task set. catFilter can be:
+  //  "all"                     — no filter
+  //  "__group__:apex"          — every category inside the apex foundation
+  //  "<category name>"         — exact match
+  const catGroupSelected: FoundationGroup | null = catFilter.startsWith("__group__:")
+    ? (catFilter.slice("__group__:".length) as FoundationGroup)
+    : null;
   const visible = useMemo(() => {
     const today = todayISO();
     const q = search.trim().toLowerCase();
     return all.filter((t) => {
       if (t.iteration_id !== iterId) return false;
-      if (catFilter !== "all" && t.category !== catFilter) return false;
+      if (catFilter === "all") {
+        // pass
+      } else if (catGroupSelected) {
+        if (!t.category || CATEGORY_GROUP[t.category] !== catGroupSelected) return false;
+      } else if (t.category !== catFilter) {
+        return false;
+      }
       if (ownerFilter.length > 0 && !ownerFilter.includes(t.owner_id || "__none__")) return false;
       if (urgencyFilter === "overdue" && !isTaskOverdue(t, today)) return false;
       if (urgencyFilter === "due_today" && !isTaskDueToday(t, today)) return false;
       if (q && !t.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [all, iterId, catFilter, ownerFilter, urgencyFilter, search]);
+  }, [all, iterId, catFilter, catGroupSelected, ownerFilter, urgencyFilter, search]);
 
   // Iteration-scoped headline counts, for iter tiles + utility strip.
   const iterCounts = useMemo(() => {
@@ -261,6 +274,38 @@ function TasksInner() {
   const prevQuarter = quarterIdx < allQuarters.length - 1 ? allQuarters[quarterIdx + 1] : null;
   const nextQuarter = quarterIdx > 0 ? allQuarters[quarterIdx - 1] : null;
 
+  // "Next quarter" name derived from the latest quarter's name so the button
+  // label matches what will actually be created (Q2 2026 → Q3 2026 etc.).
+  const latestQuarter = allQuarters[0];
+  const suggestedNextName = (() => {
+    if (!latestQuarter) return "next quarter";
+    const m = latestQuarter.name.match(/^Q(\d)\s*(\d{4})$/i);
+    if (!m) return "next quarter";
+    const q = parseInt(m[1], 10);
+    const y = parseInt(m[2], 10);
+    return q === 4 ? `Q1 ${y + 1}` : `Q${q + 1} ${y}`;
+  })();
+  const canAddNextQuarter = isDoer && quarterIdx === 0; // sitting on the newest already
+
+  async function createNextQuarter() {
+    if (!confirm(`Create ${suggestedNextName} — 4 iterations of 3 weeks each?`)) return;
+    setCreatingQuarter(true);
+    try {
+      const res = await fetch("/api/quarters/next", { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      toast(`Created ${j.quarter?.name || "quarter"} · ${j.iterations_created} iters · ${j.weeks_created} weeks`, "success");
+      // Refetch quarters — useApi doesn't re-run without a nudge, so hit the
+      // browser's cache-buster by adding a query param via location.reload().
+      // Simpler: force a soft refresh of the quarters endpoint.
+      window.location.reload();
+    } catch (e) {
+      toast(handleApiError(e), "error");
+    } finally {
+      setCreatingQuarter(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-3 animate-fade-in">
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -293,6 +338,18 @@ function TasksInner() {
           >
             <HiChevronRight className="w-4 h-4" />
           </button>
+          {canAddNextQuarter && (
+            <button
+              type="button"
+              onClick={createNextQuarter}
+              disabled={creatingQuarter}
+              title={`Create ${suggestedNextName}: 4 iterations, 3 weeks each`}
+              className="ml-1 inline-flex items-center gap-1 px-2.5 py-1.5 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg text-[11.5px] font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-solid transition-all disabled:opacity-50"
+            >
+              <HiPlus className="w-3.5 h-3.5" />
+              {creatingQuarter ? "Creating…" : `Add ${suggestedNextName}`}
+            </button>
+          )}
           {isDoer && (
             <button
               type="button"
@@ -351,18 +408,46 @@ function TasksInner() {
         })}
       </div>
 
-      {/* ── Category chips ───────────────────────────────────────────── */}
-      <div className="flex gap-1.5 flex-wrap">
+      {/* ── Category chips — grouped by the 3 foundations ───────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
         <ChipButton active={catFilter === "all"} onClick={() => setCatFilter("all")} label="All" count={catCounts.get("__all__") || 0} />
-        {dynamicCats.map((c) => (
-          <ChipButton
-            key={c}
-            active={catFilter === c}
-            onClick={() => setCatFilter(c)}
-            label={c}
-            count={catCounts.get(c) || 0}
-          />
-        ))}
+        {FOUNDATION_ORDER.map((group, gi) => {
+          const groupCats = dynamicCats.filter((c) => CATEGORY_GROUP[c] === group);
+          if (groupCats.length === 0) return null;
+          const groupTotal = groupCats.reduce((s, c) => s + (catCounts.get(c) || 0), 0);
+          const groupActive = catFilter === `__group__:${group}`;
+          const isApex = group === "apex";
+          return (
+            <div key={group} className="inline-flex items-center gap-1">
+              {gi > 0 && <span className="w-px h-4 bg-gray-200 dark:bg-gray-800 mx-0.5" aria-hidden="true" />}
+              <button
+                type="button"
+                onClick={() => setCatFilter(groupActive ? "all" : `__group__:${group}`)}
+                title={`${FOUNDATION_LABEL[group]} — click to select the whole group`}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider transition-all ${
+                  groupActive
+                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                    : isApex
+                      ? "bg-amber-50 dark:bg-amber-900/15 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/25"
+                      : "bg-gray-100/60 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 hover:bg-gray-200/70 dark:hover:bg-gray-700/60"
+                }`}
+              >
+                {isApex && <span>★</span>}
+                {FOUNDATION_LABEL[group]}
+                <span className={groupActive ? "opacity-60" : "opacity-70"}>{groupTotal}</span>
+              </button>
+              {groupCats.map((c) => (
+                <ChipButton
+                  key={c}
+                  active={catFilter === c}
+                  onClick={() => setCatFilter(c)}
+                  label={c}
+                  count={catCounts.get(c) || 0}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Utility strip ────────────────────────────────────────────── */}
