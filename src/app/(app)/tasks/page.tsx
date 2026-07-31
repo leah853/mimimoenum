@@ -84,7 +84,10 @@ function TasksInner() {
   const searchParams = useSearchParams();
 
   // Persistent view state — sessionStorage-backed for back-button friendliness.
-  type Saved = { quarter?: string; iter?: string; cat?: string; owners?: string[]; urgency?: string; q?: string };
+  type Saved = {
+    quarter?: string; iter?: string; cat?: string; owners?: string[];
+    urgency?: string; q?: string; view?: "board" | "list"; scope?: "me" | "team"; week?: string;
+  };
   const saved: Saved = (() => {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(sessionStorage.getItem("tasksV3") || "{}"); } catch { return {}; }
@@ -96,6 +99,9 @@ function TasksInner() {
   const initialOwners = Array.isArray(saved.owners) ? saved.owners : [];
   const initialUrgency = (searchParams.get("urgency") as "all" | "overdue" | "due_today") || (saved.urgency as "all" | "overdue" | "due_today") || "all";
   const initialSearch = searchParams.get("q") || saved.q || "";
+  const initialView = (searchParams.get("view") as "board" | "list") || saved.view || "board";
+  const initialScope = (saved.scope as "me" | "team") || "me";
+  const initialWeekTab = saved.week || "";
 
   const [quarterId, setQuarterId] = useState<string>(initialQuarter);
   const [iterId, setIterId] = useState<string>(initialIter);
@@ -106,6 +112,12 @@ function TasksInner() {
   const [showShippedByWeek, setShowShippedByWeek] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [creatingQuarter, setCreatingQuarter] = useState(false);
+  const [view, setView] = useState<"board" | "list">(initialView);
+  const [ownerScope, setOwnerScope] = useState<"me" | "team">(initialScope);
+  const [activeWeekTab, setActiveWeekTab] = useState<string>(initialWeekTab); // "goals" | weekId
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
+  const { dbUser } = useAuth();
 
   const { data: tasks, loading, refetch, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: quarters } = useApi<QuarterOption[]>("/api/quarters");
@@ -151,9 +163,24 @@ function TasksInner() {
       sessionStorage.setItem("tasksV3", JSON.stringify({
         quarter: quarterId, iter: iterId, cat: catFilter,
         owners: ownerFilter, urgency: urgencyFilter, q: search,
+        view, scope: ownerScope, week: activeWeekTab,
       }));
     } catch {}
-  }, [quarterId, iterId, catFilter, ownerFilter, urgencyFilter, search]);
+  }, [quarterId, iterId, catFilter, ownerFilter, urgencyFilter, search, view, ownerScope, activeWeekTab]);
+
+  // When the iteration changes, snap to the current week (or first) — the
+  // week tab bar's "Now" tab must match reality.
+  useEffect(() => {
+    if (!iteration) return;
+    const today = todayISO();
+    const weeks = iteration.weeks || [];
+    if (weeks.length === 0) { setActiveWeekTab("goals"); return; }
+    const valid = new Set<string>(["goals", ...weeks.map((w) => w.id)]);
+    if (activeWeekTab && valid.has(activeWeekTab)) return;
+    const current = weeks.find((w) => w.start_date <= today && today <= w.end_date);
+    setActiveWeekTab((current || weeks[0]).id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iteration]);
 
   // Categories available in the current iteration (falls back to the fixed
   // set so chips don't disappear on an empty iteration).
@@ -192,13 +219,19 @@ function TasksInner() {
       } else if (t.category !== catFilter) {
         return false;
       }
-      if (ownerFilter.length > 0 && !ownerFilter.includes(t.owner_id || "__none__")) return false;
+      // Me scope narrows to the signed-in user's own tasks. Team scope respects
+      // any explicit multi-owner filter chips.
+      if (ownerScope === "me" && dbUser?.id) {
+        if (t.owner_id !== dbUser.id) return false;
+      } else if (ownerFilter.length > 0 && !ownerFilter.includes(t.owner_id || "__none__")) {
+        return false;
+      }
       if (urgencyFilter === "overdue" && !isTaskOverdue(t, today)) return false;
       if (urgencyFilter === "due_today" && !isTaskDueToday(t, today)) return false;
       if (q && !t.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [all, iterId, catFilter, catGroupSelected, ownerFilter, urgencyFilter, search]);
+  }, [all, iterId, catFilter, catGroupSelected, ownerFilter, urgencyFilter, search, ownerScope, dbUser?.id]);
 
   // Iteration-scoped headline counts, for iter tiles + utility strip.
   const iterCounts = useMemo(() => {
@@ -319,7 +352,31 @@ function TasksInner() {
             <span className="ml-2 text-gray-500 dark:text-gray-400 font-normal">· {dateRange(iteration.start_date, iteration.end_date)}</span>
           </h1>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Me / Team scope — hidden for reps (no dbUser owning tasks) */}
+          {dbUser && (
+            <div className="inline-flex bg-gray-100 dark:bg-gray-800 rounded-full p-0.5">
+              <button type="button" onClick={() => setOwnerScope("me")}
+                className={`px-2.5 py-1 text-[11.5px] font-medium rounded-full transition-all ${ownerScope === "me" ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm" : "text-gray-600 dark:text-gray-400"}`}>
+                Me
+              </button>
+              <button type="button" onClick={() => setOwnerScope("team")}
+                className={`px-2.5 py-1 text-[11.5px] font-medium rounded-full transition-all ${ownerScope === "team" ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm" : "text-gray-600 dark:text-gray-400"}`}>
+                Team
+              </button>
+            </div>
+          )}
+          {/* Board / List view */}
+          <div className="inline-flex bg-gray-100 dark:bg-gray-800 rounded-full p-0.5">
+            <button type="button" onClick={() => setView("board")}
+              className={`px-2.5 py-1 text-[11.5px] font-medium rounded-full transition-all ${view === "board" ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm" : "text-gray-600 dark:text-gray-400"}`}>
+              Board
+            </button>
+            <button type="button" onClick={() => setView("list")}
+              className={`px-2.5 py-1 text-[11.5px] font-medium rounded-full transition-all ${view === "list" ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm" : "text-gray-600 dark:text-gray-400"}`}>
+              List
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => prevQuarter && setQuarterId(prevQuarter.id)}
@@ -362,6 +419,42 @@ function TasksInner() {
         </div>
       </div>
 
+      {/* ── BOARD view ────────────────────────────────────────────── */}
+      {view === "board" && (
+        <BoardLayout
+          iteration={iteration}
+          visible={visible}
+          all={all}
+          iterCounts={iterCounts}
+          activeWeekTab={activeWeekTab}
+          setActiveWeekTab={setActiveWeekTab}
+          onDrop={async (taskId, newStatus) => {
+            if (newStatus === "completed") {
+              const t = all.find((x) => x.id === taskId);
+              if (t && !t.deliverables?.length) { toast("Cannot ship — no deliverable uploaded", "error"); return; }
+              if (t && !t.feedback?.length) { toast("Cannot ship — no feedback received", "error"); return; }
+            }
+            setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, status: newStatus } as FullTask : t) : prev);
+            try { await apiPatch(`/api/tasks/${taskId}`, { status: newStatus }); }
+            catch (e) { toast(handleApiError(e), "error"); await refetch(); }
+          }}
+          draggingId={draggingId}
+          setDraggingId={setDraggingId}
+          dropTarget={dropTarget}
+          setDropTarget={setDropTarget}
+          catFilter={catFilter}
+          setCatFilter={setCatFilter}
+          urgencyFilter={urgencyFilter}
+          setUrgencyFilter={setUrgencyFilter}
+          search={search}
+          setSearch={setSearch}
+          categories={dynamicCats}
+          catCounts={catCounts}
+        />
+      )}
+
+      {/* ── LIST view (v3 focus feed) — everything below is unchanged  */}
+      {view === "list" && (<>
       {/* ── Iteration tiles ──────────────────────────────────────────── */}
       <div className="flex gap-1">
         {iterations.map((it) => {
@@ -585,6 +678,7 @@ function TasksInner() {
           );
         })}
       </div>
+      </>)}
 
       {showCreate && (
         <CreateTaskModal
@@ -597,6 +691,307 @@ function TasksInner() {
         />
       )}
     </div>
+  );
+}
+
+// ─── Board layout ──────────────────────────────────────────────────────────
+// Health strip + filter chips + week tabs + kanban columns for the active week.
+const BOARD_COLUMNS: { status: TaskStatus; label: string; dot: string }[] = [
+  { status: "not_started", label: "To do", dot: "#B4B2A9" },
+  { status: "in_progress", label: "In progress", dot: "#EF9F27" },
+  { status: "under_review", label: "Review", dot: "#185FA5" },
+  { status: "completed", label: "Shipped", dot: "#639922" },
+];
+
+function BoardLayout({
+  iteration, visible, all, iterCounts, activeWeekTab, setActiveWeekTab,
+  onDrop, draggingId, setDraggingId, dropTarget, setDropTarget,
+  catFilter, setCatFilter, urgencyFilter, setUrgencyFilter,
+  search, setSearch, categories, catCounts,
+}: {
+  iteration: IterOption;
+  visible: FullTask[];
+  all: FullTask[];
+  iterCounts: { total: number; done: number; late: number; due: number };
+  activeWeekTab: string;
+  setActiveWeekTab: (s: string) => void;
+  onDrop: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+  draggingId: string | null;
+  setDraggingId: (s: string | null) => void;
+  dropTarget: TaskStatus | null;
+  setDropTarget: (s: TaskStatus | null) => void;
+  catFilter: string;
+  setCatFilter: (s: string) => void;
+  urgencyFilter: "all" | "overdue" | "due_today";
+  setUrgencyFilter: (v: "all" | "overdue" | "due_today") => void;
+  search: string;
+  setSearch: (s: string) => void;
+  categories: string[];
+  catCounts: Map<string, number>;
+}) {
+  const [catOpen, setCatOpen] = useState(false);
+  const weeks = (iteration.weeks || []).slice().sort((a, b) => a.week_number - b.week_number);
+  const today = todayISO();
+
+  // Counts per week (uses `visible` so tab counts reflect the current filters).
+  const weekTabs: { key: string; label: string; sub: string; count: number; isCurrent: boolean; isPast: boolean; isFuture: boolean; shipped: number }[] = [];
+  const goalsTasks = visible.filter((t) => !t.week_id);
+  weekTabs.push({
+    key: "goals", label: "Iter goals",
+    sub: goalsTasks.length ? `${goalsTasks.length} · no week` : "no week",
+    count: goalsTasks.length, isCurrent: false, isPast: false, isFuture: false, shipped: 0,
+  });
+  for (const w of weeks) {
+    const wTasks = visible.filter((t) => t.week_id === w.id);
+    const shipped = wTasks.filter((t) => t.status === "completed").length;
+    const open = wTasks.length - shipped;
+    const isPast = w.end_date < today;
+    const isFuture = w.start_date > today;
+    const isCurrent = !isPast && !isFuture;
+    weekTabs.push({
+      key: w.id,
+      label: `Week ${w.week_number}`,
+      sub: `${shortDate(w.start_date)} – ${shortDate(w.end_date)}${isPast ? ` · shipped ${shipped}` : isFuture ? ` · ${wTasks.length} planned` : ` · ${open} open`}`,
+      count: wTasks.length,
+      isCurrent, isPast, isFuture, shipped,
+    });
+  }
+
+  // Tasks in the currently-selected week tab, further split by status.
+  const inActiveTab = visible.filter((t) => activeWeekTab === "goals" ? !t.week_id : t.week_id === activeWeekTab);
+  const byStatus: Record<TaskStatus, FullTask[]> = {
+    not_started: [], in_progress: [], under_review: [], completed: [], blocked: [],
+  };
+  for (const t of inActiveTab) byStatus[t.status].push(t);
+  // Sort within column: urgency-first, then deadline
+  for (const s of Object.keys(byStatus) as TaskStatus[]) {
+    byStatus[s].sort((a, b) => {
+      const aLate = isTaskOverdue(a, today) ? 0 : isTaskDueToday(a, today) ? 1 : 2;
+      const bLate = isTaskOverdue(b, today) ? 0 : isTaskDueToday(b, today) ? 1 : 2;
+      if (aLate !== bLate) return aLate - bLate;
+      return (a.deadline || "").localeCompare(b.deadline || "");
+    });
+  }
+
+  const pct = iterCounts.total > 0 ? Math.round((iterCounts.done / iterCounts.total) * 100) : 0;
+
+  return (
+    <>
+      {/* Health strip */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-900/50 rounded-lg text-[11.5px] text-gray-500 dark:text-gray-400 flex-wrap">
+        <span className="font-medium text-gray-800 dark:text-gray-100">{pct}% shipped</span>
+        {iterCounts.late > 0 && (
+          <button type="button" onClick={() => setUrgencyFilter(urgencyFilter === "overdue" ? "all" : "overdue")}
+            className={`px-1.5 py-0.5 rounded font-medium transition-all ${urgencyFilter === "overdue" ? "bg-red-500 text-white" : "text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20"}`}>
+            {iterCounts.late} late
+          </button>
+        )}
+        {iterCounts.due > 0 && (
+          <button type="button" onClick={() => setUrgencyFilter(urgencyFilter === "due_today" ? "all" : "due_today")}
+            className={`px-1.5 py-0.5 rounded font-medium transition-all ${urgencyFilter === "due_today" ? "bg-amber-500 text-white" : "text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20"}`}>
+            {iterCounts.due} due today
+          </button>
+        )}
+        <span className="text-gray-500 dark:text-gray-400">· {visible.filter((t) => t.status === "under_review").length} in review</span>
+        <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+          <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full px-2 py-0.5">
+            <HiSearch className="w-3 h-3 text-gray-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search"
+              className="bg-transparent border-0 outline-none text-[11.5px] w-20 sm:w-32" />
+          </div>
+          {/* Category dropdown — grouped by foundation */}
+          <div className="relative">
+            <button type="button" onClick={() => setCatOpen(!catOpen)}
+              className={`inline-flex items-center gap-1 border rounded-full px-2.5 py-0.5 text-[11.5px] transition-all ${catFilter === "all" ? "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" : "border-gray-900 dark:border-white bg-gray-900 dark:bg-white text-white dark:text-gray-900"}`}>
+              {catFilter === "all"
+                ? "All categories"
+                : catFilter.startsWith("__group__:")
+                  ? FOUNDATION_LABEL[catFilter.slice("__group__:".length) as FoundationGroup]
+                  : catFilter}
+              <span className="opacity-60">▾</span>
+            </button>
+            {catOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setCatOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 w-64 max-h-96 overflow-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1">
+                  <button type="button" onClick={() => { setCatFilter("all"); setCatOpen(false); }}
+                    className={`w-full text-left px-3 py-1.5 text-[12px] flex items-center justify-between ${catFilter === "all" ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}>
+                    <span>All categories</span>
+                    <span className="text-gray-500 text-[11px]">{catCounts.get("__all__") || 0}</span>
+                  </button>
+                  {FOUNDATION_ORDER.map((g) => {
+                    const groupCats = categories.filter((c) => CATEGORY_GROUP[c] === g);
+                    if (!groupCats.length) return null;
+                    const groupCount = groupCats.reduce((s, c) => s + (catCounts.get(c) || 0), 0);
+                    const isApex = g === "apex";
+                    return (
+                      <div key={g} className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
+                        <button type="button" onClick={() => { setCatFilter(`__group__:${g}`); setCatOpen(false); }}
+                          className={`w-full text-left px-3 py-1.5 text-[11.5px] font-semibold uppercase tracking-wider flex items-center justify-between ${
+                            catFilter === `__group__:${g}` ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                          } ${isApex ? "text-amber-700 dark:text-amber-400" : "text-gray-500 dark:text-gray-400"}`}>
+                          <span>{isApex ? "★ " : ""}{FOUNDATION_LABEL[g]}</span>
+                          <span className="text-[10.5px] font-normal opacity-70">{groupCount}</span>
+                        </button>
+                        {groupCats.map((c) => (
+                          <button key={c} type="button" onClick={() => { setCatFilter(c); setCatOpen(false); }}
+                            className={`w-full text-left pl-6 pr-3 py-1 text-[12px] flex items-center justify-between ${catFilter === c ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}>
+                            <span>{c}</span>
+                            <span className="text-gray-500 text-[10.5px]">{catCounts.get(c) || 0}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          {urgencyFilter !== "all" && (
+            <button type="button" onClick={() => setUrgencyFilter("all")} className="text-[10.5px] text-gray-400 hover:text-gray-700">clear</button>
+          )}
+        </div>
+      </div>
+
+      {/* Week tabs */}
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800 overflow-x-auto -mx-1 px-1">
+        {weekTabs.map((t) => {
+          const isActive = activeWeekTab === t.key;
+          return (
+            <button key={t.key} type="button" onClick={() => setActiveWeekTab(t.key)}
+              className={`flex-shrink-0 text-left px-3 py-2 rounded-t-md border-b-2 -mb-px transition-all ${
+                isActive
+                  ? "border-gray-900 dark:border-white"
+                  : t.isPast
+                    ? "border-transparent opacity-70 hover:opacity-100"
+                    : "border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/40"
+              }`}>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[12px] ${isActive ? "font-semibold text-gray-900 dark:text-white" : "font-medium text-gray-700 dark:text-gray-300"}`}>{t.label}</span>
+                {t.isCurrent && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white bg-blue-600 px-1 py-0.5 rounded">now</span>
+                )}
+              </div>
+              <div className={`text-[10px] mt-0.5 ${isActive ? "text-gray-600 dark:text-gray-400" : "text-gray-400 dark:text-gray-500"}`}>{t.sub}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Kanban columns */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {BOARD_COLUMNS.map((col) => {
+          const cards = byStatus[col.status];
+          const isTarget = dropTarget === col.status && draggingId != null;
+          return (
+            <div key={col.status}
+              onDragOver={(e) => { e.preventDefault(); setDropTarget(col.status); }}
+              onDragLeave={(e) => { if (e.currentTarget === e.target) setDropTarget(null); }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("text/plain");
+                setDraggingId(null);
+                setDropTarget(null);
+                if (id) await onDrop(id, col.status);
+              }}
+              className={`bg-gray-50 dark:bg-gray-900/40 rounded-xl p-2 flex flex-col gap-1.5 min-h-[240px] transition-colors ${isTarget ? "ring-2 ring-indigo-400 ring-offset-1 ring-offset-white dark:ring-offset-gray-950" : ""}`}>
+              <div className="flex items-center justify-between px-1 py-1">
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: col.dot }} />
+                  <span className="text-[10.5px] font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">{col.label}</span>
+                </div>
+                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 rounded-full">{cards.length}</span>
+              </div>
+              {cards.length === 0 && (
+                <div className="text-[10.5px] text-gray-300 dark:text-gray-700 italic px-1 py-4 text-center">
+                  {col.status === "completed" ? "no wins yet" : "drop tasks here"}
+                </div>
+              )}
+              {cards.map((t) => (
+                <BoardCard key={t.id} task={t} onDragStart={() => setDraggingId(t.id)} onDragEnd={() => { setDraggingId(null); setDropTarget(null); }} dragging={draggingId === t.id} />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function BoardCard({ task, onDragStart, onDragEnd, dragging }: { task: FullTask; onDragStart: () => void; onDragEnd: () => void; dragging: boolean }) {
+  const today = todayISO();
+  const overdue = isTaskOverdue(task, today);
+  const dueToday = isTaskDueToday(task, today);
+  const completed = task.status === "completed";
+  const owner = task.owner?.full_name || null;
+  const ownerTint = ownerTintOf(owner);
+  const daysLate = overdue && task.deadline
+    ? Math.max(1, Math.floor((new Date(today).getTime() - new Date(task.deadline).getTime()) / 86400000))
+    : 0;
+
+  const delivCount = task.deliverables?.length || 0;
+  const fbCount = task.feedback?.length || 0;
+  const avgScore = task.feedback && task.feedback.length
+    ? task.feedback.reduce((s, f) => s + (f.rating || 0), 0) / task.feedback.length
+    : null;
+  const category = task.category || "";
+  const group = category ? CATEGORY_GROUP[category] : null;
+  const catDot = group === "apex" ? "#EF9F27" : group === "platform" ? "#0F6E56" : group === "people" ? "#534AB7" : "#B4B2A9";
+
+  const cardBg = overdue ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30"
+    : dueToday ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30"
+    : "bg-white dark:bg-gray-900 border-gray-200/70 dark:border-gray-800/60";
+
+  return (
+    <Link href={`/tasks/${task.id}`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", task.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      className={`block border rounded-lg p-2 text-left cursor-grab active:cursor-grabbing hover:shadow-sm transition-all ${cardBg} ${completed ? "opacity-70" : ""} ${dragging ? "opacity-40" : ""}`}
+    >
+      {category && (
+        <div className="flex items-center justify-between gap-1 mb-1">
+          <div className="inline-flex items-center gap-1 min-w-0">
+            <span className="w-1.5 h-1.5 rounded-sm flex-shrink-0" style={{ background: catDot }} />
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 truncate">{category}</span>
+          </div>
+          {overdue && <span className="text-[8.5px] font-semibold text-white bg-red-500 rounded px-1 py-0.5 flex-shrink-0">{daysLate}d late</span>}
+          {dueToday && !overdue && <span className="text-[8.5px] font-semibold text-white bg-amber-500 rounded px-1 py-0.5 flex-shrink-0">due today</span>}
+          {completed && avgScore != null && (
+            <span className="text-[9px] font-semibold rounded px-1 py-0.5 flex-shrink-0"
+              style={{
+                background: avgScore >= 9 ? "#EAF3DE" : avgScore >= 6 ? "#FAEEDA" : "#FCEBEB",
+                color: avgScore >= 9 ? "#3B6D11" : avgScore >= 6 ? "#854F0B" : "#A32D2D",
+              }}>
+              {avgScore.toFixed(1)}
+            </span>
+          )}
+        </div>
+      )}
+      <div className={`text-[12.5px] font-medium leading-tight text-gray-900 dark:text-white ${completed ? "line-through decoration-gray-400" : ""}`}>
+        {task.title}
+      </div>
+      <div className="flex items-center justify-between gap-1.5 mt-1.5 text-[10px] text-gray-500 dark:text-gray-400">
+        <span className={overdue ? "text-red-600 dark:text-red-400 font-medium" : dueToday ? "text-amber-700 dark:text-amber-400 font-medium" : ""}>
+          {task.deadline ? shortDate(task.deadline) : "no date"}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {delivCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-blue-500"><HiOutlinePaperClip className="w-3 h-3" />{delivCount}</span>
+          )}
+          {fbCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-violet-500"><HiOutlineChatAlt className="w-3 h-3" />{fbCount}</span>
+          )}
+          {owner
+            ? <span className="w-4 h-4 rounded-full flex items-center justify-center text-[8.5px] font-medium" style={{ background: ownerTint.bg, color: ownerTint.fg }}>{owner[0]}</span>
+            : <span className="w-4 h-4 rounded-full border border-dashed border-gray-400 flex items-center justify-center text-[7px] text-gray-400">?</span>}
+        </div>
+      </div>
+    </Link>
   );
 }
 
