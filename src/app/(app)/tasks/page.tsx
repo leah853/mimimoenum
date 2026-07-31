@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Task, TaskStatus } from "@/lib/types";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
+import { STATUS_LABELS } from "@/lib/types";
 import { useApi, apiPost, apiPatch } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
-import { canEditTasks, canCreateTasks } from "@/lib/roles";
-import { HiChevronDown, HiChevronRight, HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiCheck, HiOutlineFilm, HiX } from "react-icons/hi";
-import Link from "next/link";
-import { FIXED_CATEGORIES, OWNER_STYLE, CAT_SHORT, CATEGORY_GROUP, FOUNDATION_ORDER, FOUNDATION_LABEL } from "@/lib/constants";
-import { formatDate, isReplyComment, isVideoUrl, isTaskOverdue, isTaskDueToday } from "@/lib/utils";
+import { canCreateTasks } from "@/lib/roles";
+import { HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiOutlineFilm, HiX, HiChevronLeft, HiChevronRight, HiSearch } from "react-icons/hi";
+import { FIXED_CATEGORIES } from "@/lib/constants";
+import { isTaskOverdue, isTaskDueToday } from "@/lib/utils";
 import { Skeleton, SkeletonRows, useToast } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
 
@@ -26,8 +26,55 @@ type WeekOption = { id: string; week_number: number; start_date: string; end_dat
 type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
 type QuarterOption = { id: string; name: string; start_date: string; end_date: string; iterations: IterOption[] };
 
+// ─── Palette per owner (soft chip colours matched to the app's existing
+//    OWNER_STYLE tints — keeps continuity with the rest of the pages). ───
+const OWNER_TINT: Record<string, { bg: string; fg: string; dot: string }> = {
+  Chloe: { bg: "#E7EFFA", fg: "#1F4E82", dot: "#1F4E82" },
+  Leah: { bg: "#FAEEDA", fg: "#854F0B", dot: "#854F0B" },
+  Nate: { bg: "#EAF3DE", fg: "#3B6D11", dot: "#3B6D11" },
+  Rep: { bg: "#EEEDFE", fg: "#3C3489", dot: "#3C3489" },
+};
+function ownerTintOf(name?: string | null) {
+  if (!name) return { bg: "#F1EFE8", fg: "#5F5E5A", dot: "#5F5E5A" };
+  const key = Object.keys(OWNER_TINT).find((k) => name.startsWith(k));
+  return key ? OWNER_TINT[key] : { bg: "#F1EFE8", fg: "#5F5E5A", dot: "#5F5E5A" };
+}
+
+const STATUS_PILL: Record<TaskStatus, { bg: string; fg: string; label: string }> = {
+  not_started: { bg: "#F1EFE8", fg: "#5F5E5A", label: "Not started" },
+  in_progress: { bg: "#FAEEDA", fg: "#854F0B", label: "In progress" },
+  under_review: { bg: "#E7EFFA", fg: "#1F4E82", label: "Under review" },
+  completed: { bg: "#EAF3DE", fg: "#3B6D11", label: "Shipped" },
+  blocked: { bg: "#FCEBEB", fg: "#A32D2D", label: "Blocked" },
+};
+
+function shortDate(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+function dateRange(a?: string | null, b?: string | null) {
+  if (!a || !b) return "";
+  return `${shortDate(a)} – ${shortDate(b)}`;
+}
+function todayISO() { return new Date().toISOString().split("T")[0]; }
+
 export default function TasksPage() {
-  return <Suspense fallback={<div className="p-8 space-y-4 animate-fade-in"><div className="flex items-center justify-between"><div className="skeleton h-8 w-48" /><div className="skeleton h-9 w-28 rounded-xl" /></div><div className="flex gap-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-7 w-20 rounded-full" />)}</div><SkeletonRows count={8} /></div>}><TasksInner /></Suspense>;
+  return (
+    <Suspense fallback={<TasksSkeleton />}>
+      <TasksInner />
+    </Suspense>
+  );
+}
+
+function TasksSkeleton() {
+  return (
+    <div className="p-6 space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between"><Skeleton className="h-9 w-72" /><Skeleton className="h-9 w-40 rounded-xl" /></div>
+      <Skeleton className="h-16 rounded-2xl" />
+      <div className="flex gap-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-7 w-20 rounded-full" />)}</div>
+      <SkeletonRows count={6} />
+    </div>
+  );
 }
 
 function TasksInner() {
@@ -36,650 +83,587 @@ function TasksInner() {
   const isDoer = canCreateTasks(appRole);
   const searchParams = useSearchParams();
 
-  // Hydrate filter state — sessionStorage is the source of truth (router-agnostic,
-  // survives back-button reliably). URL params still work for shareable links and
-  // win if explicitly present.
-  type Saved = {
-    cat?: string; iter?: string; week?: string; owner?: string;
-    status?: string; urgency?: string; q?: string; expanded?: string[];
-  };
+  // Persistent view state — sessionStorage-backed for back-button friendliness.
+  type Saved = { quarter?: string; iter?: string; cat?: string; owners?: string[]; urgency?: string; q?: string };
   const saved: Saved = (() => {
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(sessionStorage.getItem("tasksView") || "{}"); } catch { return {}; }
+    try { return JSON.parse(sessionStorage.getItem("tasksV3") || "{}"); } catch { return {}; }
   })();
 
-  const initialStatus = (searchParams.get("status") as TaskStatus) || (saved.status as TaskStatus) || "all";
+  const initialQuarter = searchParams.get("quarter") || saved.quarter || "";
+  const initialIter = searchParams.get("iter") || saved.iter || "";
   const initialCat = searchParams.get("cat") || saved.cat || "all";
-  const initialIter = searchParams.get("iter") || saved.iter || "all";
-  const initialWeek = searchParams.get("week") || saved.week || "all";
-  const initialOwner = searchParams.get("owner") || saved.owner || "all";
+  const initialOwners = Array.isArray(saved.owners) ? saved.owners : [];
   const initialUrgency = (searchParams.get("urgency") as "all" | "overdue" | "due_today") || (saved.urgency as "all" | "overdue" | "due_today") || "all";
   const initialSearch = searchParams.get("q") || saved.q || "";
-  const initialExpanded = Array.isArray(saved.expanded) ? new Set(saved.expanded) : new Set<string>();
+
+  const [quarterId, setQuarterId] = useState<string>(initialQuarter);
+  const [iterId, setIterId] = useState<string>(initialIter);
+  const [catFilter, setCatFilter] = useState<string>(initialCat);
+  const [ownerFilter, setOwnerFilter] = useState<string[]>(initialOwners);
+  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "due_today">(initialUrgency);
+  const [search, setSearch] = useState<string>(initialSearch);
+  const [showShippedByWeek, setShowShippedByWeek] = useState<Set<string>>(new Set());
+  const [showCreate, setShowCreate] = useState(false);
 
   const { data: tasks, loading, refetch, setData: setTasks } = useApi<FullTask[]>("/api/tasks");
   const { data: quarters } = useApi<QuarterOption[]>("/api/quarters");
   const { data: users } = useApi<UserOption[]>("/api/users/owners");
-  const [search, setSearch] = useState(initialSearch);
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">(initialStatus);
-  const [catFilter, setCatFilter] = useState<string>(initialCat);
-  const [iterFilter, setIterFilter] = useState<string>(initialIter);
-  const [weekFilter, setWeekFilter] = useState<string>(initialWeek);
-  const [ownerFilter, setOwnerFilter] = useState<string>(initialOwner);
-  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "due_today">(initialUrgency);
-  const [expanded, setExpanded] = useState<Set<string>>(initialExpanded);
-  const [showCreate, setShowCreate] = useState(false);
-  const [addingTo, setAddingTo] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState("");
-  const [initialized, setInitialized] = useState(false);
 
   const all = tasks || [];
-  const quarter = quarters?.[0];
-  const iterations = quarter?.iterations || [];
+  const allQuarters = quarters || [];
   const allUsers = users || [];
-  const dynamicCats = [...new Set(all.map((t) => t.category).filter(Boolean))] as string[];
-  const categories = useMemo(() => [...new Set([...FIXED_CATEGORIES, ...dynamicCats])], [all]);
 
-  // Persist filter + expanded state to sessionStorage so the browser Back
-  // button restores the exact same view (filters, categories, iterations
-  // expanded). sessionStorage is router-agnostic — works regardless of
-  // Next.js's internal URL snapshotting.
+  // Auto-pick a quarter + iteration once data lands. Quarter = current (today
+  // is inside it) → else most recent. Iteration = current → else the last one
+  // that has any activity → else the first.
+  useEffect(() => {
+    if (!allQuarters.length) return;
+    const today = todayISO();
+    if (!quarterId || !allQuarters.some((q) => q.id === quarterId)) {
+      const current = allQuarters.find((q) => q.start_date <= today && today <= q.end_date);
+      setQuarterId((current || allQuarters[0]).id);
+    }
+  }, [allQuarters, quarterId]);
+
+  const quarter = allQuarters.find((q) => q.id === quarterId) || null;
+  const iterations = quarter?.iterations || [];
+
+  useEffect(() => {
+    if (!iterations.length) return;
+    const today = todayISO();
+    if (!iterId || !iterations.some((i) => i.id === iterId)) {
+      const current = iterations.find((i) => i.start_date <= today && today <= i.end_date);
+      const active = current
+        || [...iterations].reverse().find((i) => all.some((t) => t.iteration_id === i.id && t.status !== "completed"))
+        || iterations[0];
+      setIterId(active.id);
+    }
+  }, [iterations, iterId, all]);
+
+  const iteration = iterations.find((i) => i.id === iterId) || null;
+
+  // Persist selected filters.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const payload = {
-      cat: catFilter, iter: iterFilter, week: weekFilter,
-      owner: ownerFilter, status: statusFilter, urgency: urgencyFilter,
-      q: search, expanded: [...expanded],
-    };
-    try { sessionStorage.setItem("tasksView", JSON.stringify(payload)); } catch {}
-  }, [catFilter, iterFilter, weekFilter, ownerFilter, statusFilter, urgencyFilter, search, expanded]);
+    try {
+      sessionStorage.setItem("tasksV3", JSON.stringify({
+        quarter: quarterId, iter: iterId, cat: catFilter,
+        owners: ownerFilter, urgency: urgencyFilter, q: search,
+      }));
+    } catch {}
+  }, [quarterId, iterId, catFilter, ownerFilter, urgencyFilter, search]);
 
-  // Auto-expand on first load AND whenever filters change.
-  // Wait until BOTH tasks (all) and iterations have actually loaded — otherwise
-  // expandForCurrentView walks zero tasks and produces an empty set, leaving
-  // the page looking like every iteration is empty.
-  const filterKey = `${catFilter}|${iterFilter}|${weekFilter}|${statusFilter}|${ownerFilter}|${urgencyFilter}`;
-  const readyToInit = !initialized && all.length > 0 && iterations.length > 0;
-  useEffect(() => {
-    if (!readyToInit) return;
-    if (initialExpanded.size > 0) {
-      // Honor a saved expanded set from sessionStorage so Back keeps the view
-      setInitialized(true);
-    } else {
-      expandForCurrentView();
-      setInitialized(true);
+  // Categories available in the current iteration (falls back to the fixed
+  // set so chips don't disappear on an empty iteration).
+  const dynamicCats = useMemo(() => {
+    const inIter = all.filter((t) => t.iteration_id === iterId).map((t) => t.category).filter(Boolean) as string[];
+    return [...new Set([...FIXED_CATEGORIES, ...inIter])];
+  }, [all, iterId]);
+
+  const catCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    m.set("__all__", all.filter((t) => t.iteration_id === iterId).length);
+    for (const t of all) {
+      if (t.iteration_id !== iterId) continue;
+      const c = t.category || "Uncategorized";
+      m.set(c, (m.get(c) || 0) + 1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyToInit]);
+    return m;
+  }, [all, iterId]);
 
-  function expandForCurrentView() {
-    const auto = new Set<string>();
-    auto.add("q");
-    const todayStr = new Date().toISOString().split("T")[0];
-    const tasksToShow = all.filter((t) => {
+  // Apply filters to build the visible task set.
+  const visible = useMemo(() => {
+    const today = todayISO();
+    const q = search.trim().toLowerCase();
+    return all.filter((t) => {
+      if (t.iteration_id !== iterId) return false;
       if (catFilter !== "all" && t.category !== catFilter) return false;
-      if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
-      if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
-      if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
-      if (statusFilter !== "all" && t.status !== statusFilter) return false;
-      if (urgencyFilter === "overdue" && !isTaskOverdue(t, todayStr)) return false;
-      if (urgencyFilter === "due_today" && !isTaskDueToday(t, todayStr)) return false;
+      if (ownerFilter.length > 0 && !ownerFilter.includes(t.owner_id || "__none__")) return false;
+      if (urgencyFilter === "overdue" && !isTaskOverdue(t, today)) return false;
+      if (urgencyFilter === "due_today" && !isTaskDueToday(t, today)) return false;
+      if (q && !t.title.toLowerCase().includes(q)) return false;
       return true;
     });
-    // Expand categories that have matching tasks
-    categories.forEach((c) => { if (tasksToShow.some((t) => t.category === c)) auto.add(c); });
-    // Expand iterations that have matching tasks
-    iterations.forEach((i) => {
-      if (tasksToShow.some((t) => t.iteration_id === i.id)) {
-        auto.add(i.id);
-        // Also expand matching iteration key per category
-        categories.forEach((cat) => {
-          if (tasksToShow.some((t) => t.iteration_id === i.id && t.category === cat)) {
-            auto.add(`${cat}|${i.id}`);
-          }
-        });
-      }
-      // Expand weeks that have matching tasks
-      (i.weeks || []).forEach((w) => {
-        if (tasksToShow.some((t) => t.week_id === w.id)) {
-          categories.forEach((cat) => auto.add(`${cat}|${i.id}|w${w.id}`));
-        }
+  }, [all, iterId, catFilter, ownerFilter, urgencyFilter, search]);
+
+  // Iteration-scoped headline counts, for iter tiles + utility strip.
+  const iterCounts = useMemo(() => {
+    const scoped = all.filter((t) => t.iteration_id === iterId);
+    const today = todayISO();
+    return {
+      total: scoped.length,
+      done: scoped.filter((t) => t.status === "completed").length,
+      late: scoped.filter((t) => isTaskOverdue(t, today)).length,
+      due: scoped.filter((t) => isTaskDueToday(t, today)).length,
+    };
+  }, [all, iterId]);
+
+  // Bucket the visible tasks into groups: week rows + "no week" iteration goals.
+  const grouped = useMemo(() => {
+    const buckets: {
+      key: string;
+      kind: "iter_goals" | "week";
+      label: string;
+      subLabel: string;
+      week?: WeekOption;
+      status: "past" | "current" | "future" | "loose";
+      tasks: FullTask[];
+    }[] = [];
+    const today = todayISO();
+
+    const noWeek = visible.filter((t) => !t.week_id);
+    if (noWeek.length) {
+      buckets.push({
+        key: "iter-goals",
+        kind: "iter_goals",
+        label: "Iteration goals",
+        subLabel: "no specific week",
+        status: "loose",
+        tasks: noWeek,
       });
-    });
-    setExpanded(auto);
-  }
-
-  // Re-expand when filters change
-  const prevFilterKey = useRef(filterKey);
-  useEffect(() => {
-    if (initialized && prevFilterKey.current !== filterKey) {
-      prevFilterKey.current = filterKey;
-      expandForCurrentView();
     }
-  });
-
-  if (loading) return (
-    <div className="p-8 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between"><div className="skeleton h-8 w-48" /><div className="skeleton h-9 w-28 rounded-xl" /></div>
-      <div className="flex gap-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-7 w-20 rounded-full" />)}</div>
-      <SkeletonRows count={8} />
-    </div>
-  );
-
-  const toggle = (k: string) => { const n = new Set(expanded); n.has(k) ? n.delete(k) : n.add(k); setExpanded(n); };
-
-  const todayISO = new Date().toISOString().split("T")[0];
-  const filtered = all.filter((t) => {
-    if (statusFilter !== "all" && t.status !== statusFilter) return false;
-    if (catFilter !== "all" && t.category !== catFilter) return false;
-    if (iterFilter !== "all" && t.iteration_id !== iterFilter) return false;
-    if (weekFilter !== "all" && t.week_id !== weekFilter) return false;
-    if (ownerFilter !== "all" && t.owner_id !== ownerFilter) return false;
-    if (urgencyFilter === "overdue") {
-      if (!isTaskOverdue(t, todayISO)) return false;
+    const weeks = (iteration?.weeks || []).slice().sort((a, b) => a.week_number - b.week_number);
+    for (const w of weeks) {
+      const inWeek = visible.filter((t) => t.week_id === w.id);
+      // If no tasks after filtering, still show empty weeks — the user's mental model is week-by-week.
+      const status: "past" | "current" | "future" =
+        w.end_date < today ? "past" : w.start_date > today ? "future" : "current";
+      buckets.push({
+        key: `w-${w.id}`,
+        kind: "week",
+        label: `Week ${w.week_number}`,
+        subLabel: dateRange(w.start_date, w.end_date),
+        week: w,
+        status,
+        tasks: inWeek,
+      });
     }
-    if (urgencyFilter === "due_today") {
-      if (!isTaskDueToday(t, todayISO)) return false;
-    }
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+    return buckets;
+  }, [visible, iteration]);
 
-  const overdueCount = all.filter((t) => isTaskOverdue(t)).length;
-  const dueTodayCount = all.filter((t) => isTaskDueToday(t)).length;
-
-  async function updateField(taskId: string, field: string, value: string) {
+  async function updateField(taskId: string, field: string, value: string | null) {
     if (field === "status" && value === "completed") {
-      const task = all.find((t) => t.id === taskId);
-      if (task && !task.deliverables?.length) { toast("Cannot complete: no deliverable uploaded", "error"); return; }
-      if (task && !task.feedback?.length) { toast("Cannot complete: no feedback received", "error"); return; }
+      const t = all.find((x) => x.id === taskId);
+      if (t && !t.deliverables?.length) { toast("Cannot ship — no deliverable uploaded", "error"); return; }
+      if (t && !t.feedback?.length) { toast("Cannot ship — no feedback received", "error"); return; }
     }
-    // Optimistic update — instant UI, no flash
-    setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, [field]: value || null } : t) : prev);
-    // Sync to API in background
-    try { await apiPatch(`/api/tasks/${taskId}`, { [field]: value || null }); }
-    catch (e) {
-      toast(handleApiError(e), "error");
-      await refetch(); // Revert on error
-    }
+    setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, [field]: value } as FullTask : t) : prev);
+    try { await apiPatch(`/api/tasks/${taskId}`, { [field]: value }); }
+    catch (e) { toast(handleApiError(e), "error"); await refetch(); }
   }
 
-  async function quickAddTask(category: string, iterationId: string) {
-    if (!newTitle.trim() || !allUsers[0]) return;
-    const title = newTitle.trim();
-    setNewTitle(""); setAddingTo(null);
-    try {
-      const created = await apiPost("/api/tasks", {
-        title, category, owner_id: allUsers[0].id,
-        deadline: iterations.find((i) => i.id === iterationId)?.end_date || "2026-07-04",
-        quarter_id: quarter?.id || null, iteration_id: iterationId, status: "not_started",
-      });
-      setTasks((prev) => prev ? [...prev, { ...created, owner: allUsers[0], subtasks: [], deliverables: [], feedback: [] }] : prev);
-    } catch (e) { toast(handleApiError(e), "error"); await refetch(); }
+  if (loading || !iteration) {
+    return <TasksSkeleton />;
   }
 
-  async function quickAddWeekTask(category: string, iterationId: string, weekId: string) {
-    if (!newTitle.trim() || !allUsers[0]) return;
-    const title = newTitle.trim();
-    const week = iterations.flatMap((i) => i.weeks || []).find((w) => w.id === weekId);
-    setNewTitle(""); setAddingTo(null);
-    try {
-      const created = await apiPost("/api/tasks", {
-        title, category, owner_id: allUsers[0].id,
-        deadline: week?.end_date || "2026-07-04",
-        quarter_id: quarter?.id || null, iteration_id: iterationId, week_id: weekId, status: "not_started",
-      });
-      setTasks((prev) => prev ? [...prev, { ...created, owner: allUsers[0], subtasks: [], deliverables: [], feedback: [] }] : prev);
-    } catch (e) { toast(handleApiError(e), "error"); await refetch(); }
-  }
+  const quarterIdx = allQuarters.findIndex((q) => q.id === quarterId);
+  const prevQuarter = quarterIdx < allQuarters.length - 1 ? allQuarters[quarterIdx + 1] : null;
+  const nextQuarter = quarterIdx > 0 ? allQuarters[quarterIdx - 1] : null;
 
   return (
-    <div className="p-6 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">{filtered.length} items</span>
-          {isDoer && <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm rounded-xl shadow-md hover:shadow-lg hover:brightness-110 transition-all active:scale-[0.97]">
-            <HiPlus className="w-4 h-4" /> New Task
-          </button>}
+    <div className="p-6 space-y-3 animate-fade-in">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            {quarter?.name || "Quarter"} · {dateRange(quarter?.start_date, quarter?.end_date)}
+          </div>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white mt-0.5">
+            {iteration.name}
+            <span className="ml-2 text-gray-500 dark:text-gray-400 font-normal">· {dateRange(iteration.start_date, iteration.end_date)}</span>
+          </h1>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => prevQuarter && setQuarterId(prevQuarter.id)}
+            disabled={!prevQuarter}
+            aria-label="Previous quarter"
+            className="w-8 h-8 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <HiChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => nextQuarter && setQuarterId(nextQuarter.id)}
+            disabled={!nextQuarter}
+            aria-label="Next quarter"
+            className="w-8 h-8 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <HiChevronRight className="w-4 h-4" />
+          </button>
+          {isDoer && (
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="ml-1 inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-all"
+            >
+              <HiPlus className="w-4 h-4" /> New
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── Navigation Filters ── */}
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm p-4 space-y-4">
+      {/* ── Iteration tiles ──────────────────────────────────────────── */}
+      <div className="flex gap-1">
+        {iterations.map((it) => {
+          const scoped = all.filter((t) => t.iteration_id === it.id);
+          const done = scoped.filter((t) => t.status === "completed").length;
+          const total = scoped.length;
+          const today = todayISO();
+          const isPast = it.end_date < today;
+          const isFuture = it.start_date > today;
+          const isCurrent = !isPast && !isFuture;
+          const isActive = it.id === iterId;
+          const late = scoped.filter((t) => isTaskOverdue(t, today)).length;
 
-        {/* Row 1: Primary filters — Iteration, Category, Week as prominent button groups */}
-        <div className="space-y-2.5">
-          {/* Iteration selector — large, always visible */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Iteration</label>
-            <div className="flex gap-1.5 flex-wrap">
-              <button onClick={() => { setIterFilter("all"); setWeekFilter("all"); }}
-                className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${iterFilter === "all" ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                All
-              </button>
-              {iterations.map((i) => {
-                // Iteration chip shows TOTAL tasks in that iteration regardless
-                // of category/week/status filters — switching iterations should
-                // never make other iterations' counts collapse to zero.
-                const count = all.filter(t => t.iteration_id === i.id).length;
-                return (
-                  <button key={i.id} onClick={() => { setIterFilter(i.id); setWeekFilter("all"); }}
-                    className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${iterFilter === i.id ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                    {i.name} <span className={iterFilter === i.id ? "text-white/60" : "text-gray-400"}>({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          const baseCls = "text-left rounded-lg px-3 py-2 transition-all flex-1 min-w-0";
+          const style = isActive
+            ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+            : isPast
+              ? "bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+              : isFuture
+                ? "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                : "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50";
 
-          {/* Week selector — shows weeks for selected iteration, or all weeks */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Week</label>
-            <div className="flex gap-1.5 flex-wrap">
-              <button onClick={() => setWeekFilter("all")}
-                className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${weekFilter === "all" ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                All Weeks
-              </button>
-              {(iterFilter !== "all"
-                ? (iterations.find(i => i.id === iterFilter)?.weeks || [])
-                : iterations.flatMap(i => (i.weeks || []).map(w => ({ ...w, iterName: i.name })))
-              ).map((w) => {
-                // Week chip = total in that week (independent of category) —
-                // mirrors the iteration-chip rule so counts stay stable.
-                const weekCount = all.filter(t => t.week_id === w.id).length;
-                const label = "iterName" in w ? `${(w as { iterName: string }).iterName} · W${w.week_number}` : `Week ${w.week_number}`;
-                return (
-                  <button key={w.id} onClick={() => setWeekFilter(w.id)}
-                    className={`px-3.5 py-2 text-xs font-medium rounded-xl transition-all ${weekFilter === w.id ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                    {label} {weekCount > 0 && <span className={weekFilter === w.id ? "text-white/60" : "text-gray-400"}>({weekCount})</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          return (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => setIterId(it.id)}
+              className={`${baseCls} ${style} ${isActive ? "flex-[1.4]" : ""}`}
+            >
+              <div className="text-[11.5px] font-semibold truncate">
+                {it.name}
+                {isCurrent && <span className={`ml-1 ${isActive ? "opacity-70" : "text-gray-400"}`}>· now</span>}
+              </div>
+              <div className={`text-[9.5px] mt-0.5 truncate ${isActive ? "opacity-70" : "text-gray-400"}`}>
+                {shortDate(it.start_date)} · {isPast
+                  ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">shipped {done}</span>
+                  : isFuture
+                    ? <span>planned {total}</span>
+                    : <span>{done}/{total}{late > 0 ? <span className="text-amber-600 dark:text-amber-400 font-medium"> · {late} late</span> : ""}</span>
+                }
+              </div>
+            </button>
+          );
+        })}
+      </div>
 
-          {/* Category selector — grouped by Apex / Platform / People / Branding */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Category</label>
-            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-              {/* "All" stays a single pill on the left */}
-              <button onClick={() => setCatFilter("all")}
-                className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${catFilter === "all" ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                All
-              </button>
-              {FOUNDATION_ORDER.map((group) => {
-                const groupCats = categories.filter((c) => CATEGORY_GROUP[c] === group);
-                if (groupCats.length === 0) return null;
-                const isApex = group === "apex";
-                return (
-                  <div key={group} className="flex flex-col gap-1">
-                    <span className={`text-[9px] font-semibold uppercase tracking-[0.08em] ${isApex ? "text-amber-600 dark:text-amber-400" : "text-gray-400"}`}>
-                      {isApex ? "★ " : ""}{FOUNDATION_LABEL[group]}
-                    </span>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {groupCats.map((c) => {
-                        const count = all.filter(t => t.category === c && (iterFilter === "all" || t.iteration_id === iterFilter) && (weekFilter === "all" || t.week_id === weekFilter)).length;
-                        const active = catFilter === c;
-                        const apexActive = isApex && active;
-                        return (
-                          <button key={c} onClick={() => setCatFilter(c)}
-                            className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${
-                              apexActive
-                                ? "bg-gradient-to-r from-amber-500 to-indigo-500 text-white shadow-md ring-1 ring-amber-400"
-                                : active
-                                ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm"
-                                : isApex
-                                ? "bg-gradient-to-br from-amber-50 to-indigo-50 dark:from-amber-900/15 dark:to-indigo-900/10 text-amber-700 dark:text-amber-300 hover:brightness-105 ring-1 ring-amber-200/60 dark:ring-amber-800/30"
-                                : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"
-                            }`}>
-                            {CAT_SHORT[c] || c} <span className={active ? "text-white/60" : "text-gray-400"}>({count})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+      {/* ── Category chips ───────────────────────────────────────────── */}
+      <div className="flex gap-1.5 flex-wrap">
+        <ChipButton active={catFilter === "all"} onClick={() => setCatFilter("all")} label="All" count={catCounts.get("__all__") || 0} />
+        {dynamicCats.map((c) => (
+          <ChipButton
+            key={c}
+            active={catFilter === c}
+            onClick={() => setCatFilter(c)}
+            label={c}
+            count={catCounts.get(c) || 0}
+          />
+        ))}
+      </div>
 
-          {/* Owner selector */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">Owner</label>
-            <div className="flex gap-1.5 flex-wrap">
-              <button onClick={() => setOwnerFilter("all")}
-                className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${ownerFilter === "all" ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                Everyone
-              </button>
-              {allUsers.map((u) => {
-                const count = all.filter(t => t.owner_id === u.id && (catFilter === "all" || t.category === catFilter) && (iterFilter === "all" || t.iteration_id === iterFilter) && (weekFilter === "all" || t.week_id === weekFilter)).length;
-                return (
-                  <button key={u.id} onClick={() => setOwnerFilter(u.id)}
-                    className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${ownerFilter === u.id ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm" : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"}`}>
-                    {u.full_name} {count > 0 && <span className={ownerFilter === u.id ? "text-white/60" : "text-gray-400"}>({count})</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      {/* ── Utility strip ────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-900/50 rounded-lg text-xs flex-wrap">
+        <div className="flex items-center gap-1.5 flex-1 min-w-[140px] max-w-[240px]">
+          <HiSearch className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search"
+            className="bg-transparent border-0 outline-none text-xs w-full text-gray-800 dark:text-gray-200"
+          />
         </div>
-
-        {/* Row 2: Search + Status pills + alerts */}
-        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-200/60 dark:border-gray-800/40">
-          <div className="relative min-w-[180px] max-w-[220px]">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks..."
-              className="w-full pl-8 pr-3 py-1.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/40 dark:border-gray-700/40 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all" />
-            <svg className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          </div>
-          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
-          {[{ key: "all", label: "All" }, ...Object.entries(STATUS_LABELS).map(([k, l]) => ({ key: k, label: l }))].map(({ key, label }) => {
-            const isActive = statusFilter === key;
-            const color = key !== "all" ? STATUS_COLORS[key as TaskStatus] : undefined;
-            const count = key === "all" ? filtered.length : filtered.filter((t) => t.status === key).length;
-            if (key !== "all" && count === 0) return null;
+        <span className="text-gray-500 dark:text-gray-400">Owner</span>
+        <div className="flex items-center gap-1">
+          {allUsers.map((u) => {
+            const active = ownerFilter.includes(u.id);
+            const tint = ownerTintOf(u.full_name);
             return (
-              <button key={key} onClick={() => setStatusFilter(key as TaskStatus | "all")}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm"
-                    : "bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/60"
-                }`}>
-                {color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isActive ? (color === "#9CA3AF" ? "white" : color) : color }} />}
-                {label} <span className={`${isActive ? "opacity-60" : "text-gray-400"}`}>{count}</span>
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setOwnerFilter((prev) => prev.includes(u.id) ? prev.filter((x) => x !== u.id) : [...prev, u.id])}
+                title={active ? `${u.full_name} — click to remove` : `Filter to ${u.full_name}`}
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium transition-all ${active ? "" : "opacity-50 hover:opacity-100"}`}
+                style={{
+                  background: tint.bg,
+                  color: tint.fg,
+                  boxShadow: active ? `0 0 0 1.5px ${tint.dot}` : "none",
+                }}
+              >
+                {u.full_name[0]}
               </button>
             );
           })}
-          <div className="flex items-center gap-2 ml-auto">
-            {dueTodayCount > 0 && (
-              <button
-                onClick={() => setUrgencyFilter(urgencyFilter === "due_today" ? "all" : "due_today")}
-                aria-pressed={urgencyFilter === "due_today"}
-                title={urgencyFilter === "due_today" ? "Showing only tasks due today — click to clear" : "Show only tasks due today"}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all ${
-                  urgencyFilter === "due_today"
-                    ? "bg-amber-500 text-white shadow-sm ring-1 ring-amber-400"
-                    : "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/30"
-                }`}>
-                Due Today: {dueTodayCount}
-              </button>
-            )}
-            {overdueCount > 0 && (
-              <button
-                onClick={() => setUrgencyFilter(urgencyFilter === "overdue" ? "all" : "overdue")}
-                aria-pressed={urgencyFilter === "overdue"}
-                title={urgencyFilter === "overdue" ? "Showing only overdue tasks — click to clear" : "Show only overdue tasks"}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all ${
-                  urgencyFilter === "overdue"
-                    ? "bg-red-500 text-white shadow-sm ring-1 ring-red-400"
-                    : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/30"
-                }`}>
-                Overdue: {overdueCount}
-              </button>
-            )}
-            {(catFilter !== "all" || iterFilter !== "all" || weekFilter !== "all" || statusFilter !== "all" || ownerFilter !== "all" || urgencyFilter !== "all" || search) && (
-              <button onClick={() => { setCatFilter("all"); setIterFilter("all"); setWeekFilter("all"); setStatusFilter("all"); setOwnerFilter("all"); setUrgencyFilter("all"); setSearch(""); }}
-                className="px-2.5 py-1 text-[10px] text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all font-medium">
-                Clear all
-              </button>
-            )}
-          </div>
+          {ownerFilter.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOwnerFilter([])}
+              className="text-[10px] text-gray-400 hover:text-gray-600 ml-1"
+            >
+              clear
+            </button>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+          <span>{visible.length} shown</span>
+          {iterCounts.late > 0 && (
+            <button
+              type="button"
+              onClick={() => setUrgencyFilter(urgencyFilter === "overdue" ? "all" : "overdue")}
+              className={`px-2 py-0.5 rounded-md font-medium transition-all ${urgencyFilter === "overdue" ? "bg-red-500 text-white" : "text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20"}`}
+            >
+              {iterCounts.late} late
+            </button>
+          )}
+          {iterCounts.due > 0 && (
+            <button
+              type="button"
+              onClick={() => setUrgencyFilter(urgencyFilter === "due_today" ? "all" : "due_today")}
+              className={`px-2 py-0.5 rounded-md font-medium transition-all ${urgencyFilter === "due_today" ? "bg-amber-500 text-white" : "text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20"}`}
+            >
+              {iterCounts.due} due today
+            </button>
+          )}
+          {urgencyFilter !== "all" && (
+            <button
+              type="button"
+              onClick={() => setUrgencyFilter("all")}
+              className="text-[10px] text-gray-400 hover:text-gray-600"
+            >
+              clear
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Task Table — shows only matching items, no empty shells */}
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/60 rounded-2xl shadow-sm overflow-x-auto">
-        {/* Quarter + Iteration summary header */}
-        <div className="border-b border-gray-200 dark:border-gray-800">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <span className="text-base font-bold text-gray-900 dark:text-white">{quarter?.name || "Q2 2026"}</span>
-            {quarter && <span className="text-xs text-gray-400">{formatDate(quarter.start_date)} — {formatDate(quarter.end_date)}</span>}
-            <span className="ml-auto text-xs text-gray-500">{filtered.length} of {all.length}</span>
-          </div>
-          {iterations.length > 0 && (
-            <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              {iterations.map((iter) => {
-                // Iteration progress cards show the ABSOLUTE per-iteration
-                // breakdown — not the current filter. Otherwise selecting
-                // iteration A would zero out the cards for B/C/D.
-                const iterScopedAll = all.filter((t) => t.iteration_id === iter.id);
-                const total = iterScopedAll.length;
-                const done = iterScopedAll.filter((t) => t.status === "completed").length;
-                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-                const isActive = iterFilter === iter.id;
-                return (
-                  <button key={iter.id}
-                    onClick={() => { setIterFilter(isActive ? "all" : iter.id); setWeekFilter("all"); }}
-                    className={`text-left p-2.5 rounded-xl border transition-all ${
-                      isActive
-                        ? "bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/30 dark:to-violet-900/20 border-indigo-300 dark:border-indigo-700 ring-1 ring-indigo-300 dark:ring-indigo-700"
-                        : "bg-gray-50/70 dark:bg-gray-800/30 border-gray-200/60 dark:border-gray-800/60 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10"
-                    }`}>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <span className="text-xs font-semibold text-gray-800 dark:text-white">{iter.name}</span>
-                      <span className="text-[10px] text-gray-500">{done}/{total}</span>
-                    </div>
-                    <div className="h-1.5 bg-gray-200/70 dark:bg-gray-700/50 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[9px] text-gray-400">{formatDate(iter.start_date)} – {formatDate(iter.end_date)}</span>
-                      <span className="text-[9px] text-gray-500 font-medium">{pct}%</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Column headers */}
-        <div className="grid grid-cols-[minmax(220px,1fr)_100px_110px_110px_40px] gap-0 px-6 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800/30 sticky top-0 bg-white/95 dark:bg-gray-900/95 z-10">
-          <span>Task / Goal</span><span>Owner</span><span>Status</span><span>Deadline</span><span></span>
-        </div>
-
-        <div className="stagger-children">{categories.map((cat) => {
-          const catTasks = filtered.filter((t) => t.category === cat);
-          if (catTasks.length === 0) return null;
-
+      {/* ── Week-grouped feed ───────────────────────────────────────── */}
+      <div className="space-y-4">
+        {grouped.map((g) => {
+          if (g.tasks.length === 0 && g.kind === "iter_goals") return null;
+          const showShipped = showShippedByWeek.has(g.key);
+          const shipped = g.tasks.filter((t) => t.status === "completed");
+          const activeTasks = g.tasks.filter((t) => t.status !== "completed");
+          // Sort urgency first, then by deadline
+          const sortedActive = activeTasks.slice().sort((a, b) => {
+            const today = todayISO();
+            const aLate = isTaskOverdue(a, today) ? 0 : isTaskDueToday(a, today) ? 1 : 2;
+            const bLate = isTaskOverdue(b, today) ? 0 : isTaskDueToday(b, today) ? 1 : 2;
+            if (aLate !== bLate) return aLate - bLate;
+            return (a.deadline || "").localeCompare(b.deadline || "");
+          });
+          const rendered = showShipped ? [...sortedActive, ...shipped] : sortedActive;
           return (
-            <div key={cat} className="border-b border-gray-100 dark:border-gray-800/50 last:border-b-0">
-              {/* Category header */}
-              <button onClick={() => toggle(cat)}
-                className="flex items-center gap-2 w-full text-left px-5 py-2 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 bg-gray-50/50 dark:bg-gray-800/20">
-                {expanded.has(cat) ? <HiChevronDown className="w-4 h-4 text-gray-400" /> : <HiChevronRight className="w-4 h-4 text-gray-400" />}
-                <span className="text-sm font-semibold text-gray-800 dark:text-white">{cat}</span>
-                <span className="ml-auto text-xs text-gray-400">{catTasks.length}</span>
-              </button>
-
-              {expanded.has(cat) && (
-                <div>
-                  {/* Iterations — only show those with matching tasks */}
-                  {iterations.map((iter) => {
-                    const iterGoals = catTasks.filter((t) => t.iteration_id === iter.id && !t.week_id);
-                    const iterWeekTasks = catTasks.filter((t) => t.iteration_id === iter.id && t.week_id);
-                    if (iterGoals.length === 0 && iterWeekTasks.length === 0) return null;
-                    const iterKey = `${cat}|${iter.id}`;
-
-                    return (
-                      <div key={iter.id}>
-                        {/* Iteration sub-header */}
-                        <button onClick={() => toggle(iterKey)}
-                          className="flex items-center gap-2 w-full text-left px-6 py-1.5 bg-gray-50/30 dark:bg-gray-800/10 border-b border-gray-100/60 dark:border-gray-800/20 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all">
-                          {expanded.has(iterKey) ? <HiChevronDown className="w-3 h-3 text-gray-400" /> : <HiChevronRight className="w-3 h-3 text-gray-400" />}
-                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">{iter.name}</span>
-                          <span className="text-[10px] text-gray-400">{formatDate(iter.start_date)} — {formatDate(iter.end_date)}</span>
-                          <span className="ml-auto text-[10px] text-gray-400">{iterGoals.length + iterWeekTasks.length}</span>
-                        </button>
-
-                        {expanded.has(iterKey) && (
-                          <>
-                            {/* Iteration goals */}
-                            {iterGoals.length > 0 && (
-                              <div className="border-l-2 border-amber-400/40 ml-6">
-                                {iterGoals.map((task) => (
-                                  <TaskRow key={task.id} task={task} onUpdate={updateField} owners={allUsers} editable={isDoer} />
-                                ))}
-                              </div>
-                            )}
-                            {isDoer && (addingTo === iterKey ? (
-                              <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100/50 dark:border-gray-800/15">
-                                <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="New goal..." autoFocus
-                                  className="flex-1 px-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                                  onKeyDown={(e) => { if (e.key === "Enter") quickAddTask(cat, iter.id); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} />
-                                <button onClick={() => quickAddTask(cat, iter.id)} className="text-green-500"><HiCheck className="w-4 h-4" /></button>
-                                <button onClick={() => { setAddingTo(null); setNewTitle(""); }} className="text-xs text-gray-400">✕</button>
-                              </div>
-                            ) : (
-                              <button onClick={() => { setAddingTo(iterKey); setNewTitle(""); }}
-                                className="flex items-center gap-1.5 px-6 py-1 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 w-full text-left border-b border-gray-100/30 dark:border-gray-800/10 transition-all">
-                                <HiPlus className="w-3 h-3" /> Add goal
-                              </button>
-                            ))}
-
-                            {/* Weeks — only show those with matching tasks */}
-                            {(iter.weeks || []).map((week) => {
-                              const weekTasks = catTasks.filter((t) => t.week_id === week.id);
-                              if (weekTasks.length === 0 && weekFilter === "all" && iterFilter === "all") return null;
-                              if (weekTasks.length === 0 && weekFilter !== "all" && weekFilter !== week.id) return null;
-                              const weekKey = `${cat}|${iter.id}|w${week.id}`;
-
-                              return (
-                                <div key={week.id}>
-                                  <div className="flex items-center border-b border-gray-100/40 dark:border-gray-800/10">
-                                    <button onClick={() => toggle(weekKey)}
-                                      className="flex items-center gap-2 flex-1 text-left pl-10 pr-2 py-1.5 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all">
-                                      {expanded.has(weekKey) ? <HiChevronDown className="w-2.5 h-2.5 text-gray-300" /> : <HiChevronRight className="w-2.5 h-2.5 text-gray-300" />}
-                                      <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">W{week.week_number}</span>
-                                      <span className="text-[10px] text-gray-300 dark:text-gray-600">{formatDate(week.start_date)} — {formatDate(week.end_date)}</span>
-                                      <span className="text-[10px] text-gray-400 ml-1">{weekTasks.length}</span>
-                                    </button>
-                                    <Link href={`/weeks/${week.id}`} className="text-[9px] text-indigo-500 hover:text-indigo-400 pr-4 transition-all">Open →</Link>
-                                  </div>
-
-                                  {expanded.has(weekKey) && (
-                                    <div className="border-l-2 border-indigo-400/20 ml-10">
-                                      {weekTasks.map((task) => (
-                                        <TaskRow key={task.id} task={task} onUpdate={updateField} owners={allUsers} editable={isDoer} />
-                                      ))}
-                                      {weekTasks.length === 0 && <p className="text-[10px] text-gray-300 dark:text-gray-600 px-6 py-2 italic">No tasks</p>}
-                                      {isDoer && (addingTo === weekKey ? (
-                                        <div className="flex items-center gap-2 px-6 py-2">
-                                          <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="New task..." autoFocus
-                                            className="flex-1 px-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                                            onKeyDown={(e) => { if (e.key === "Enter") quickAddWeekTask(cat, iter.id, week.id); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} />
-                                          <button onClick={() => quickAddWeekTask(cat, iter.id, week.id)} className="text-green-500"><HiCheck className="w-4 h-4" /></button>
-                                          <button onClick={() => { setAddingTo(null); setNewTitle(""); }} className="text-xs text-gray-400">✕</button>
-                                        </div>
-                                      ) : (
-                                        <button onClick={() => { setAddingTo(weekKey); setNewTitle(""); }}
-                                          className="flex items-center gap-1 px-6 py-1.5 text-[10px] text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 w-full text-left border-b border-gray-100/30 dark:border-gray-800/10">
-                                          <HiPlus className="w-2.5 h-2.5" /> Add task
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+            <div key={g.key}>
+              <div className="flex items-baseline gap-2 mb-1.5">
+                <span className={`text-xs font-semibold ${g.status === "current" ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}>
+                  {g.label}
+                </span>
+                <span className={`text-[10.5px] ${g.status === "current" ? "text-gray-500 dark:text-gray-400" : "text-gray-400 dark:text-gray-500"}`}>
+                  {g.subLabel}
+                </span>
+                {g.status === "current" && g.kind === "week" && (
+                  <span className="text-[9.5px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">this week</span>
+                )}
+                {shipped.length > 0 && (
+                  <span className="text-[10.5px] text-emerald-600 dark:text-emerald-400">shipped {shipped.length}</span>
+                )}
+                <span className="flex-1 h-px bg-gray-200 dark:bg-gray-800 ml-1" />
+                {shipped.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowShippedByWeek((prev) => {
+                      const n = new Set(prev);
+                      n.has(g.key) ? n.delete(g.key) : n.add(g.key);
+                      return n;
+                    })}
+                    className="text-[10.5px] text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white"
+                  >
+                    {showShipped ? "hide shipped" : "show shipped"}
+                  </button>
+                )}
+              </div>
+              {rendered.length === 0 && (
+                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic pl-1">
+                  {g.status === "future" ? "Nothing planned yet." : "Nothing here — enjoy the moment."}
                 </div>
               )}
+              <div className={`flex flex-col gap-1 ${g.status === "future" ? "opacity-90" : ""}`}>
+                {rendered.map((t) => (
+                  <TaskCard key={t.id} task={t} onStatusChange={(v) => updateField(t.id, "status", v)} isDoer={isDoer} />
+                ))}
+              </div>
             </div>
           );
-        })}</div>
+        })}
       </div>
 
       {showCreate && (
-        <CreateTaskModal users={allUsers} quarters={quarters || []} categories={categories}
-          onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); refetch(); }} />
+        <CreateTaskModal
+          users={allUsers}
+          quarters={allQuarters}
+          categories={dynamicCats}
+          defaultIterationId={iterId}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); refetch(); }}
+        />
       )}
     </div>
   );
 }
 
-function TaskRow({ task, onUpdate, editable = true, owners = [] }: { task: FullTask; onUpdate: (id: string, field: string, value: string) => void; editable?: boolean; owners?: UserOption[] }) {
-  const todayStr = new Date().toISOString().split("T")[0];
-  const isOverdue = isTaskOverdue(task, todayStr);
-  const isDueToday = isTaskDueToday(task, todayStr);
-  const isUnderReview = task.status === "under_review";
-  const ownerName = task.owner?.full_name || owners.find((o) => o.id === task.owner_id)?.full_name || "";
-  const ownerStyle = OWNER_STYLE[ownerName];
+function ChipButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+        active
+          ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+          : "bg-white dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 border border-gray-200/70 dark:border-gray-700/70 hover:bg-gray-100 dark:hover:bg-gray-800/60"
+      }`}
+    >
+      {label}
+      <span className={active ? "opacity-60" : "text-gray-400 dark:text-gray-500"}>{count}</span>
+    </button>
+  );
+}
 
-  // Highlight states for review workflow
-  const hasDeliverables = (task.deliverables?.length || 0) > 0;
-  const hasFeedback = (task.feedback?.length || 0) > 0;
-  const hasUnacknowledgedFb = (task.feedback || []).some(f => !f.acknowledged && !isReplyComment(f.comment));
-  // Completed tasks are done — never flag them as needing review even if a
-  // feedback row was later deleted leaving deliverables-only state.
-  const isCompleted = task.status === "completed";
-  const needsReview = !isCompleted && (isUnderReview || (hasDeliverables && !hasFeedback));
-  const needsAck = hasFeedback && hasUnacknowledgedFb;
+function TaskCard({ task, onStatusChange, isDoer }: { task: FullTask; onStatusChange: (status: TaskStatus) => void; isDoer: boolean }) {
+  const today = todayISO();
+  const overdue = isTaskOverdue(task, today);
+  const dueToday = isTaskDueToday(task, today);
+  const completed = task.status === "completed";
+  const owner = task.owner?.full_name || null;
+  const ownerTint = ownerTintOf(owner);
+  const statusMeta = STATUS_PILL[task.status];
+  const daysLate = overdue && task.deadline
+    ? Math.max(1, Math.floor((new Date(today).getTime() - new Date(task.deadline).getTime()) / 86400000))
+    : 0;
+
+  const cardBg = completed
+    ? "bg-white dark:bg-gray-900/40"
+    : overdue
+      ? "bg-red-50/70 dark:bg-red-900/10"
+      : dueToday
+        ? "bg-amber-50/70 dark:bg-amber-900/10"
+        : "bg-white dark:bg-gray-900/40";
+  const cardBorder = overdue
+    ? "border-red-200 dark:border-red-900/30"
+    : dueToday
+      ? "border-amber-200 dark:border-amber-900/30"
+      : "border-gray-200/70 dark:border-gray-800/60";
+
+  const delivCount = task.deliverables?.length || 0;
+  const hasVideo = (task.deliverables || []).some((d) => (d.file_url || d.file_name || "").match(/\.(mp4|mov|webm|m4v|avi|mkv)$/i));
+  const fbCount = task.feedback?.length || 0;
+  const subCount = task.subtasks?.length || 0;
+  const avgScore = task.feedback && task.feedback.length
+    ? task.feedback.reduce((s, f) => s + (f.rating || 0), 0) / task.feedback.length
+    : null;
 
   return (
-    <div className={`grid grid-cols-[minmax(220px,1fr)_100px_110px_110px_40px] gap-0 px-6 py-2 border-b border-l-[3px] transition-all duration-200 group items-center ${
-      isOverdue
-        ? `border-red-200/60 dark:border-red-900/30 bg-red-50/40 dark:bg-red-900/8 hover:bg-red-50/70 dark:hover:bg-red-900/15 ${ownerStyle?.border || "border-l-transparent"}`
-        : isDueToday
-        ? `border-amber-200/60 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-900/5 hover:bg-amber-50/60 dark:hover:bg-amber-900/10 ${ownerStyle?.border || "border-l-transparent"}`
-        : needsReview
-        ? `border-blue-200/60 dark:border-blue-900/30 bg-gradient-to-r from-blue-50/60 to-cyan-50/40 dark:from-blue-900/10 dark:to-cyan-900/8 hover:from-blue-50/80 hover:to-cyan-50/60 ${ownerStyle?.border || "border-l-transparent"}`
-        : needsAck
-        ? `border-amber-200/60 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/50 to-yellow-50/40 dark:from-amber-900/10 dark:to-yellow-900/8 hover:from-amber-50/70 hover:to-yellow-50/60 ${ownerStyle?.border || "border-l-transparent"}`
-        : `border-gray-100/50 dark:border-gray-800/15 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 ${ownerStyle?.border || "border-l-transparent"}`
-    }`}>
-      <div className="flex items-center gap-2 min-w-0 pr-2">
-        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[task.status] }} />
-        <Link href={`/tasks/${task.id}`} className="text-sm text-gray-700 dark:text-gray-200 hover:text-indigo-500 truncate transition-all duration-200">{task.title}</Link>
-        {(task.subtasks?.length || 0) > 0 && <span className="text-[9px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded flex-shrink-0">{task.subtasks!.length}</span>}
-        {(task.deliverables?.length || 0) > 0 && <HiOutlinePaperClip className="w-3 h-3 text-blue-500 flex-shrink-0" />}
-        {(task.deliverables || []).some(d => isVideoUrl(d.file_url || d.file_name)) && <HiOutlineFilm className="w-3 h-3 text-purple-500 flex-shrink-0" title="Video attached" />}
-        {(task.feedback?.length || 0) > 0 && <HiOutlineChatAlt className="w-3 h-3 text-violet-400 flex-shrink-0" />}
-        {isOverdue && <span className="text-[8px] font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded flex-shrink-0">OVERDUE</span>}
-        {isDueToday && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex-shrink-0">DUE TODAY</span>}
-        {needsReview && <span className="text-[8px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded flex-shrink-0">NEEDS REVIEW</span>}
-        {needsAck && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex-shrink-0">ACTION REQ</span>}
+    <Link
+      href={`/tasks/${task.id}`}
+      className={`block border rounded-xl px-3 py-2.5 transition-all hover:shadow-sm ${cardBg} ${cardBorder} ${completed ? "opacity-70" : ""}`}
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`text-[13.5px] font-medium text-gray-900 dark:text-white ${completed ? "line-through decoration-gray-400" : ""}`}>
+              {task.title}
+            </span>
+            {overdue && (
+              <span className="text-[9px] font-semibold text-white bg-red-500 rounded px-1.5 py-0.5">
+                {daysLate === 1 ? "1 day late" : `${daysLate} days late`}
+              </span>
+            )}
+            {dueToday && !overdue && (
+              <span className="text-[9px] font-semibold text-white bg-amber-500 rounded px-1.5 py-0.5">due today</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-gray-500 dark:text-gray-400">
+            {task.category && <span>{task.category}</span>}
+            {task.category && <span className="text-gray-300 dark:text-gray-700">·</span>}
+            <span className="inline-flex items-center gap-1">
+              {owner
+                ? <>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ownerTint.dot }} /> {owner}
+                  </>
+                : <>
+                    <span className="w-1.5 h-1.5 rounded-full border border-dashed border-gray-400" /> unassigned
+                  </>
+              }
+            </span>
+            {task.deadline && (
+              <>
+                <span className="text-gray-300 dark:text-gray-700">·</span>
+                <span className={overdue ? "text-red-600 dark:text-red-400" : dueToday ? "text-amber-700 dark:text-amber-400" : ""}>
+                  {shortDate(task.deadline)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {subCount > 0 && (
+            <span title={`${subCount} subtask${subCount === 1 ? "" : "s"}`} className="text-[10.5px] text-gray-500 dark:text-gray-400 inline-flex items-center gap-0.5">
+              <span className="opacity-70">⋮</span>{subCount}
+            </span>
+          )}
+          {delivCount > 0 && (
+            <span title={`${delivCount} deliverable${delivCount === 1 ? "" : "s"}`} className="text-[10.5px] text-blue-500 inline-flex items-center gap-0.5">
+              <HiOutlinePaperClip className="w-3 h-3" />{delivCount}
+            </span>
+          )}
+          {hasVideo && <HiOutlineFilm className="w-3 h-3 text-purple-500" />}
+          {fbCount > 0 && (
+            <span title={`${fbCount} feedback message${fbCount === 1 ? "" : "s"}`} className="text-[10.5px] text-violet-500 inline-flex items-center gap-0.5">
+              <HiOutlineChatAlt className="w-3 h-3" />{fbCount}
+            </span>
+          )}
+          {completed && avgScore != null && (
+            <span
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+              style={{
+                background: avgScore >= 9 ? "#EAF3DE" : avgScore >= 6 ? "#FAEEDA" : "#FCEBEB",
+                color: avgScore >= 9 ? "#3B6D11" : avgScore >= 6 ? "#854F0B" : "#A32D2D",
+              }}
+            >
+              {avgScore.toFixed(1)}/10
+            </span>
+          )}
+          {isDoer ? (
+            <select
+              value={task.status}
+              onClick={(e) => e.preventDefault() /* Link swallow — allow the select */}
+              onChange={(e) => { e.preventDefault(); onStatusChange(e.target.value as TaskStatus); }}
+              className="text-[10.5px] font-medium px-2 py-0.5 rounded-full border-0 cursor-pointer appearance-none"
+              style={{ background: statusMeta.bg, color: statusMeta.fg }}
+            >
+              {(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, l]) => (
+                <option key={k} value={k}>{l}</option>
+              ))}
+            </select>
+          ) : (
+            <span
+              className="text-[10.5px] font-medium px-2 py-0.5 rounded-full"
+              style={{ background: statusMeta.bg, color: statusMeta.fg }}
+            >
+              {statusMeta.label}
+            </span>
+          )}
+        </div>
       </div>
-      {/* Owner — only Leah or Chloe, color coded */}
-      {editable ? (
-        <select value={task.owner_id || ""} onChange={(e) => onUpdate(task.id, "owner_id", e.target.value)}
-          className={`text-[11px] font-medium bg-transparent border-0 cursor-pointer w-full truncate ${ownerStyle?.text || "text-gray-500"}`}>
-          <option value="" className="bg-white dark:bg-gray-900">—</option>
-          {owners.map((o) => <option key={o.id} value={o.id} className="bg-white dark:bg-gray-900">{o.full_name}</option>)}
-        </select>
-      ) : (
-        <span className={`text-[11px] font-medium truncate ${ownerStyle?.text || "text-gray-500"}`}>{ownerName || "—"}</span>
-      )}
-      {/* Status */}
-      {editable ? (
-        <select value={task.status} onChange={(e) => onUpdate(task.id, "status", e.target.value)}
-          className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer appearance-none transition-all duration-200"
-          style={{ backgroundColor: STATUS_COLORS[task.status] + "20", color: STATUS_COLORS[task.status] }}>
-          {Object.entries(STATUS_LABELS).map(([k, l]) => <option key={k} value={k} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">{l}</option>)}
-        </select>
-      ) : (
-        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[task.status] + "18", color: STATUS_COLORS[task.status] }}>{STATUS_LABELS[task.status]}</span>
-      )}
-      {/* Deadline */}
-      <div className="flex items-center gap-1">
-        {editable ? (
-          <input type="date" value={task.deadline || ""} onChange={(e) => onUpdate(task.id, "deadline", e.target.value)}
-            className={`text-[11px] bg-transparent border-0 cursor-pointer w-full ${isOverdue ? "text-red-500 font-medium" : isDueToday ? "text-amber-600 font-medium" : "text-gray-500 dark:text-gray-400"}`} />
-        ) : (
-          <span className={`text-[11px] ${isOverdue ? "text-red-500 font-medium" : isDueToday ? "text-amber-600 font-medium" : "text-gray-500"}`}>{task.deadline || "—"}</span>
-        )}
-      </div>
-      <Link href={`/tasks/${task.id}`} className="text-[10px] text-gray-400 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all duration-200">Open</Link>
-    </div>
+    </Link>
   );
 }
 
-function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
-  users: UserOption[]; quarters: QuarterOption[]; categories: string[]; onClose: () => void; onCreated: () => void;
+function CreateTaskModal({ users, quarters, categories, defaultIterationId, onClose, onCreated }: {
+  users: UserOption[]; quarters: QuarterOption[]; categories: string[]; defaultIterationId?: string; onClose: () => void; onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -687,27 +671,21 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
   const [newCat, setNewCat] = useState("");
   const [ownerId, setOwnerId] = useState(users[0]?.id || "");
   const [deadline, setDeadline] = useState("");
-  const [iterationId, setIterationId] = useState("");
+  const [iterationId, setIterationId] = useState(defaultIterationId || "");
+  const [quarterIdLocal, setQuarterIdLocal] = useState(quarters[0]?.id || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const iterations = quarters[0]?.iterations || [];
+  const currentQuarter = quarters.find((q) => q.id === quarterIdLocal) || quarters[0];
+  const iterations = currentQuarter?.iterations || [];
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
 
-  // Bug 2 (tester round 2): the modal still felt "stuck". Belt-and-suspenders:
-  //   1. Esc closes
-  //   2. Backdrop click closes (wired on overlay below)
-  //   3. Title input auto-focuses so the user immediately sees the modal is live
-  //   4. Body scroll locked while open — prevents background scrolling under
-  //      the overlay which can read as "screen frozen"
-  //   5. Portal-rendered to <body> so no ancestor stacking-context can hide it
   useEffect(() => {
     setPortalNode(document.body);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Microtask so the input exists in the DOM by the time we focus it
     requestAnimationFrame(() => titleInputRef.current?.focus());
     return () => {
       document.removeEventListener("keydown", onKey);
@@ -721,7 +699,7 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
     try {
       await apiPost("/api/tasks", {
         title, description: description || null, category: newCat || category || null,
-        owner_id: ownerId, deadline, quarter_id: quarters[0]?.id || null,
+        owner_id: ownerId, deadline, quarter_id: quarterIdLocal || null,
         iteration_id: iterationId || null, status: "not_started",
       });
       onCreated();
@@ -743,7 +721,6 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
         className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Visible close button — belt-and-suspenders for "I can't dismiss this" */}
         <button
           onClick={onClose}
           aria-label="Close"
@@ -751,7 +728,7 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
         >
           <HiX className="w-5 h-5" />
         </button>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white pr-8">Create Task</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white pr-8">Create task</h2>
         {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{error}</p>}
         <div><label className="text-xs text-gray-500 mb-1 block">Title *</label>
           <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" /></div>
@@ -772,13 +749,18 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
               {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
             </select></div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div><label className="text-xs text-gray-500 mb-1 block">Deadline *</label>
             <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
-              className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" /></div>
+              className="w-full px-3 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all" /></div>
+          <div><label className="text-xs text-gray-500 mb-1 block">Quarter</label>
+            <select value={quarterIdLocal} onChange={(e) => { setQuarterIdLocal(e.target.value); setIterationId(""); }}
+              className="w-full px-3 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+              {quarters.map((q) => <option key={q.id} value={q.id}>{q.name}</option>)}
+            </select></div>
           <div><label className="text-xs text-gray-500 mb-1 block">Iteration</label>
             <select value={iterationId} onChange={(e) => setIterationId(e.target.value)}
-              className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
+              className="w-full px-3 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all">
               <option value="">None</option>
               {iterations.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
             </select></div>
@@ -786,15 +768,13 @@ function CreateTaskModal({ users, quarters, categories, onClose, onCreated }: {
         <div className="flex gap-3 justify-end pt-2">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">Cancel</button>
           <button onClick={handleCreate} disabled={saving || !title || !ownerId || !deadline}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:brightness-110 disabled:opacity-50 text-white text-sm rounded-xl shadow-md transition-all active:scale-[0.97]">
-            {saving ? "Creating..." : "Create Task"}
+            className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:brightness-110 disabled:opacity-50 text-sm rounded-xl shadow-md transition-all active:scale-[0.97]">
+            {saving ? "Creating..." : "Create task"}
           </button>
         </div>
       </div>
     </div>
   );
 
-  // Portal to <body> so no ancestor (sidebar, header, parent transforms, etc.)
-  // can hide or capture clicks for this modal.
   return createPortal(modalContent, portalNode);
 }
