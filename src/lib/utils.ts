@@ -7,11 +7,6 @@ export function formatDate(d: string): string {
   return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/** Format a timestamp to "Apr 6, 2:30 PM" style */
-export function formatTime(d: string): string {
-  return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
 /** Calculate score (0-10) from task completion ratio */
 export function calcScore(tasks: { status: TaskStatus }[]): number {
   if (!tasks.length) return 0;

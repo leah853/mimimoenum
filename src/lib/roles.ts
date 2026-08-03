@@ -36,4 +36,3 @@ export function canAddEOD(role: AppRole): boolean { return role === "doer" || ro
 export function canGiveFeedback(role: AppRole): boolean { return role === "assessor"; }
 export function canEditFeedback(role: AppRole): boolean { return role === "assessor"; }
 export function canDeleteFeedback(role: AppRole): boolean { return role === "assessor"; }
-export function canOverrideScores(role: AppRole): boolean { return role === "assessor"; }

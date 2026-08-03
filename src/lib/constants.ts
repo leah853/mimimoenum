@@ -1,12 +1,11 @@
 // Shared constants — single source of truth for categories, owner styles, and colors.
 //
 // Structure (Q2 2026 onward):
-//   APEX:        Milestone Execution     — what we deliver (the outcome)
+//   APEX:        Milestone Execution + Branding — what we deliver + how we show up
 //   PLATFORM:    Workflows · Product & Engineering · Cybersecurity / Compliance
 //   PEOPLE:      Talent Acquisition · Training & Culture
-//   BRANDING:    Branding
-// The four "groups" (apex + 3 foundations) are how we cluster the 7 categories
-// in every grouped view (Tasks, Milestones, Owner Map, Dashboard, Gantt).
+// The three foundation groups are how we cluster the 7 categories in every
+// grouped view (Tasks, Milestones, Dashboard, Deliverables).
 
 export const FIXED_CATEGORIES = [
   "Milestone Execution",
@@ -33,12 +32,6 @@ export const FOUNDATION_LABEL: Record<FoundationGroup, string> = {
   people: "People",
 };
 
-export const FOUNDATION_TAGLINE: Record<FoundationGroup, string> = {
-  apex: "What we deliver and how we show up",
-  platform: "Workflows · Product & Engineering · Cybersecurity",
-  people: "Talent Acquisition · Training & Culture",
-};
-
 export const CATEGORY_GROUP: Record<string, FoundationGroup> = {
   "Milestone Execution":          "apex",
   "Branding":                     "apex",
@@ -48,11 +41,6 @@ export const CATEGORY_GROUP: Record<string, FoundationGroup> = {
   "Talent Acquisition":           "people",
   "Training & Culture":           "people",
 };
-
-// Helper — group → its categories in render order
-export function categoriesInGroup(group: FoundationGroup): CategoryName[] {
-  return FIXED_CATEGORIES.filter((c) => CATEGORY_GROUP[c] === group);
-}
 
 export const CAT_COLORS: Record<string, string> = {
   "Milestone Execution":          "#6366f1", // indigo (apex stays the original CS&PG color so existing data charts don't shift)
@@ -72,18 +60,6 @@ export const CAT_SHORT: Record<string, string> = {
   "Talent Acquisition":           "Talent",
   "Training & Culture":           "Training/Culture",
   "Branding":                     "Brand",
-};
-
-// One-off display alias used by Owner Map and other views that prefer
-// rep-facing language. Now identity for new names; kept for back-compat.
-export const CATEGORY_ALIAS: Record<string, string> = {
-  "Milestone Execution":          "Milestone Execution",
-  "Workflows":                    "Workflows",
-  "Product & Engineering":        "Product & Engineering",
-  "Cybersecurity / Compliance":   "Cybersecurity / Compliance",
-  "Training & Culture":           "Training & Culture",
-  "Talent Acquisition":           "Talent Acquisition",
-  "Branding":                     "Branding",
 };
 
 export const OWNER_STYLE: Record<string, { text: string; bg: string; border: string; dot: string }> = {
