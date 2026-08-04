@@ -13,6 +13,7 @@ import {
   HiOutlineDownload,
   HiOutlineTrash,
 } from "react-icons/hi";
+import MilestoneOutline from "@/components/MilestoneOutline";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type Kind = "Milestone" | "Goal" | "Sub-goal" | "Task";
@@ -205,7 +206,7 @@ function subtreePendingCount(node: TreeNode): number {
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
-export default function MilestoneTree() {
+export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine" | "outline" } = {}) {
   const { data: apiNodes, loading, refetch } = useApi<ApiNode[]>("/api/milestone-nodes");
   const { dbUser, appRole } = useAuth();
   const { toast } = useToast();
@@ -353,6 +354,8 @@ export default function MilestoneTree() {
             </div>
           )}
         </div>
+      ) : viewMode === "outline" ? (
+        <MilestoneOutline roots={roots} onOpenNode={setOpenNodeId} />
       ) : (
         roots.map((root) => (
           <PineCanvas
