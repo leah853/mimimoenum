@@ -6,7 +6,7 @@ import { useApi, apiPost, apiPatch, apiDelete, invalidateCache } from "@/lib/use
 import { useAuth } from "@/lib/auth-context";
 import { useToast, SkeletonRows } from "@/components/ui";
 import { handleApiError } from "@/lib/utils";
-import { ownStatus, STATUS_HEX, type Status } from "@/lib/treeStatus";
+import { ownStatus, displayStatus, STATUS_HEX, type Status } from "@/lib/treeStatus";
 import {
   HiX,
   HiOutlinePaperClip,
@@ -724,29 +724,37 @@ function NodeCard({
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const own = ownStatus(node);
-  const c = COLORS[own];
+  const disp = displayStatus(node);
+  const rollupBar = STATUS_HEX[disp]; // top stripe = worst-child rollup (matches outline)
   const assignee = node.assignee || node.owner?.full_name || null;
-  const hasAtt = node.attachment_count > 0;
   const isMilestone = node.kind === "Milestone";
   const isGoal = node.kind === "Goal";
-  const isTask = node.kind === "Task";
+  const isSub = node.kind === "Sub-goal";
 
-  // Kind-driven typography — Milestone reads as the anchor, Task the leaf.
-  const titleSize = isMilestone ? 14 : isGoal ? 13.5 : isTask ? 12.5 : 13;
-  const titleWeight = isMilestone ? 700 : isGoal ? 600 : 500;
+  // Kind-driven typography per mockup
+  const titleSize = isMilestone ? 12 : isGoal ? 11.5 : 10.5;
+  const titleWeight = isMilestone ? 600 : isGoal ? 600 : 500;
+  const stripeH = isMilestone ? 5 : isGoal ? 5 : 4;
+  const kindLabel = node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MILESTONE" : node.kind.toUpperCase();
 
-  // Aggregate progress badge on the Milestone card — how many descendants
-  // have some sign of progress (attachment or score). Lets you eyeball
-  // completion without expanding every branch.
-  let progressText: string | null = null;
-  if (isMilestone) {
+  // Rollup helpers mirror MilestoneOutline. Progress = touched/total across
+  // all descendants; used on milestones and goals with children.
+  let touched = 0;
+  let total = 0;
+  if (node.children.length) {
     const all: TreeNode[] = [];
     const walk = (x: TreeNode) => { x.children.forEach((c) => { all.push(c); walk(c); }); };
     walk(node);
-    const touched = all.filter((x) => x.score != null || x.attachment_count > 0).length;
-    progressText = `${touched}/${all.length}`;
+    total = all.length;
+    touched = all.filter((x) => x.score != null || x.attachment_count > 0).length;
   }
+  const progressText = total > 0 ? `${touched}/${total}` : null;
+
+  // Direct pending-review kids → the "N NEW" solid amber pill.
+  const directPendingKids = node.children.reduce(
+    (acc, k) => acc + ((k.pending_attachment_count || 0) > 0 ? 1 : 0),
+    0,
+  );
 
   // Pending-submission highlight — TWO distinct treatments:
   //   1. Direct pending (this card has unreviewed items) → SOLID amber wash,
@@ -757,29 +765,44 @@ function NodeCard({
   // you where to expand.
   const pendingRollup = subtreePendingCount(node);
   const hasPendingHere = (node.pending_attachment_count || 0) > 0;
-  const rollupOnly = !hasPendingHere && pendingRollup > 0;
 
   const cardBg = hasPendingHere
-    ? "#FFF4C5" // solid amber wash
-    : rollupOnly
-      ? "#FDFBF0" // barely-there tint
-      : isMilestone
-        ? "#FFFEF9"
-        : "#FFFFFF";
-  const borderColor = hasPendingHere
-    ? "#E9A100"
-    : rollupOnly
-      ? "#D6B84A"
-      : "#E4E1D8";
-  const borderWidth = hasPendingHere ? 2 : rollupOnly ? 1.5 : 0.5;
-  const borderStyle = rollupOnly ? "dashed" : "solid";
-  const topBar = hasPendingHere ? "#E9A100" : c.bar;
-  const topBarWidth = hasPendingHere ? 5 : 3;
+    ? "#FFF4C5" // solid amber wash — this card has direct pending review
+    : isMilestone
+      ? "#FFFEF9"
+      : "#FFFFFF";
+  const borderColor = hasPendingHere ? "#E9A100" : "#B4B2A9";
+  const borderWidth = hasPendingHere ? 1.5 : 0.5;
   const shadow = hasPendingHere
     ? "0 3px 10px rgba(233,161,0,0.32)"
     : isMilestone
       ? "0 2px 6px rgba(0,0,0,0.06)"
       : "0 1px 2px rgba(0,0,0,0.03)";
+
+  // Progress pill palette (mirrors the rollup color).
+  const progressPill =
+    disp === "green"
+      ? { bg: "#EAF3DE", fg: "#3B6D11" }
+      : disp === "yellow"
+        ? { bg: "#FFF4C5", fg: "#A87700" }
+        : disp === "red"
+          ? { bg: "#FADCDA", fg: "#A32D2D" }
+          : { bg: "#E7EFFA", fg: "#1F4E82" };
+
+  // Meta line — kind-specific rollup line under the title.
+  let metaText = "";
+  if (isMilestone) {
+    const pct = total > 0 ? Math.round((touched / total) * 100) : 0;
+    metaText = total > 0 ? `${pct}% shipped` : "no children yet";
+    if (pendingRollup > 0) metaText += ` · ${pendingRollup} need review`;
+  } else if (isGoal || isSub) {
+    const owner = assignee || "unassigned";
+    metaText = total > 0 ? `${owner} · ${touched}/${total}` : owner;
+    if (node.score != null) metaText += ` · ${node.score}`;
+  } else {
+    metaText = assignee || "unassigned";
+    if (node.score != null) metaText += ` · ${node.score}`;
+  }
 
   return (
     <div
@@ -790,177 +813,147 @@ function NodeCard({
         width: NODE_W,
         height: cardHeight,
         background: cardBg,
-        borderRadius: 12,
-        border: `${borderWidth}px ${borderStyle} ${borderColor}`,
-        borderTop: `${topBarWidth}px solid ${topBar}`,
+        borderRadius: 10,
+        border: `${borderWidth}px solid ${borderColor}`,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-start",
-        gap: 3,
-        padding: "6px 10px",
+        padding: `${stripeH + 5}px 9px 6px 9px`,
         cursor: "pointer",
         boxShadow: shadow,
         transition: "box-shadow .15s, transform .15s",
+        overflow: "hidden",
       }}
       onClick={() => onOpen(node.id)}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      {/* Top status stripe — worst-child rollup color, capped rounded top */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          right: 0,
+          height: stripeH,
+          background: hasPendingHere ? "#E9A100" : rollupBar,
+          borderTopLeftRadius: 9,
+          borderTopRightRadius: 9,
+        }}
+      />
+
+      {/* Header: kind badge + right-side pills */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
         <span
           style={{
             fontSize: 8.5,
-            fontWeight: 600,
-            letterSpacing: 0.5,
-            padding: "1px 5px",
-            borderRadius: 4,
-            background: c.pill,
-            color: c.pillText,
-            flexShrink: 0,
+            fontWeight: 700,
+            letterSpacing: 0.6,
+            color: "#5F5E5A",
             textTransform: "uppercase",
+            flexShrink: 0,
           }}
         >
-          {node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MS" : node.kind === "Goal" ? "GOAL" : "TASK"}
+          {kindLabel}
         </span>
-        {/* Pending-review rollup — this node + everything under it.
-            Direct pending (this card): solid loud pill.
-            Rollup only (children): ghost outline pill telling you where to look. */}
-        {pendingRollup > 0 && hasPendingHere && (
-          <span
-            title={`${node.pending_attachment_count} pending on this card, ${pendingRollup} total in subtree`}
-            style={{
-              fontSize: 10.5,
-              fontWeight: 800,
-              padding: "2px 8px",
-              borderRadius: 10,
-              background: "#E9A100",
-              color: "#FFFFFF",
-              boxShadow: "0 1px 3px rgba(233,161,0,0.4)",
-              marginLeft: "auto",
-              flexShrink: 0,
-              letterSpacing: 0.3,
-            }}
-          >
-            {node.pending_attachment_count} REVIEW
-          </span>
-        )}
-        {pendingRollup > 0 && !hasPendingHere && (
-          <span
-            title={
-              node.collapsed
-                ? `${pendingRollup} pending review inside this branch — click "+N" to expand`
-                : `${pendingRollup} pending review below this card`
-            }
-            style={{
-              fontSize: 9.5,
-              fontWeight: 700,
-              padding: "1px 6px",
-              borderRadius: 8,
-              background: "transparent",
-              color: "#A87700",
-              border: "1px dashed #D6B84A",
-              marginLeft: "auto",
-              flexShrink: 0,
-            }}
-          >
-            {pendingRollup} below
-          </span>
-        )}
-        {progressText && !subtreePendingCount(node) && (
-          <span
-            title="descendants with attachment or score"
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "1px 6px",
-              borderRadius: 8,
-              background: "#EEF2FA",
-              color: "#1F4E82",
-              marginLeft: "auto",
-              flexShrink: 0,
-            }}
-          >
-            {progressText}
-          </span>
-        )}
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {progressText && (
+            <span
+              title="descendants touched"
+              style={{
+                fontSize: 8.5,
+                fontWeight: 700,
+                padding: "1px 6px",
+                borderRadius: 8,
+                background: progressPill.bg,
+                color: progressPill.fg,
+                lineHeight: 1.4,
+              }}
+            >
+              {progressText}
+            </span>
+          )}
+          {directPendingKids > 0 && (
+            <span
+              title={`${directPendingKids} direct children have pending review`}
+              style={{
+                fontSize: 7.5,
+                fontWeight: 800,
+                padding: "1px 5px",
+                borderRadius: 8,
+                background: "#E9A100",
+                color: "#FFFFFF",
+                letterSpacing: 0.3,
+                lineHeight: 1.4,
+              }}
+            >
+              {directPendingKids} NEW
+            </span>
+          )}
+          {directPendingKids === 0 && pendingRollup > 0 && !hasPendingHere && (
+            <span
+              title={`${pendingRollup} pending review below this card`}
+              style={{
+                fontSize: 8,
+                fontWeight: 700,
+                padding: "1px 5px",
+                borderRadius: 8,
+                background: "transparent",
+                color: "#A87700",
+                border: "1px dashed #D6B84A",
+                lineHeight: 1.4,
+              }}
+            >
+              {pendingRollup} below
+            </span>
+          )}
+          {hasPendingHere && (
+            <span
+              title={`${node.pending_attachment_count} awaiting review on this card`}
+              style={{
+                fontSize: 8,
+                fontWeight: 800,
+                padding: "1px 5px",
+                borderRadius: 8,
+                background: "#E9A100",
+                color: "#FFFFFF",
+                letterSpacing: 0.3,
+                lineHeight: 1.4,
+              }}
+            >
+              {node.pending_attachment_count} REVIEW
+            </span>
+          )}
+        </span>
       </div>
+
+      {/* Title — single line ellipsis to keep the card tidy */}
       <div
         style={{
           fontSize: titleSize,
           fontWeight: titleWeight,
           color: "#2C2C2A",
           lineHeight: 1.28,
-          wordBreak: "break-word",
-          overflowWrap: "anywhere",
-          whiteSpace: "normal",
+          marginTop: 2,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
+        title={node.title}
       >
         {node.title}
       </div>
+
+      {/* Meta line */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
           marginTop: "auto",
-          fontSize: 10.5,
-          color: "#8A897F",
-          minWidth: 0,
+          fontSize: 9,
+          color: "#7A7972",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 3,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            minWidth: 0,
-            flex: 1,
-          }}
-        >
-          <span
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              background: assignee ? "#E7EDF3" : "#F0EEE7",
-              color: assignee ? "#185FA5" : "#A8A69C",
-              fontSize: 8,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              fontWeight: 600,
-            }}
-          >
-            {assignee ? assignee[0].toUpperCase() : "—"}
-          </span>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-            {assignee || "unassigned"}
-          </span>
-        </span>
-        {hasAtt && (
-          <span title="has attachment" style={{ color: "#8A897F", flexShrink: 0 }}>
-            📎
-          </span>
-        )}
-        {node.score != null && (
-          <span
-            style={{
-              background: c.pill,
-              color: c.pillText,
-              borderRadius: 8,
-              padding: "0 6px",
-              fontSize: 10,
-              fontWeight: 700,
-              flexShrink: 0,
-              lineHeight: "16px",
-            }}
-          >
-            {node.score}
-          </span>
-        )}
+        {metaText}
       </div>
       {hasKids && (
         <button type="button"
