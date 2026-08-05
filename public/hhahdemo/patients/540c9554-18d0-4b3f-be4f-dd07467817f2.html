@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clark, Susan · Eonexea</title>
+  <title>Doe, John · Eonexea</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
@@ -262,16 +262,16 @@
 
 <div class="flex items-start justify-between mb-4">
   <div>
-    <h1 class="text-xl font-semibold text-slate-900">Clark, Susan</h1>
+    <h1 class="text-xl font-semibold text-slate-900">Doe, John</h1>
     <p class="text-sm text-slate-500 mt-1">
-      MRN 12-34577 · DOB 1956-03-21
-       · Female
+      MRN 12-34567 · DOB 1948-03-14
+       · Male
     </p>
   </div>
   <div class="flex items-center gap-2">
-    <a href="/hhahdemo/flags/new?subject_type=patient&subject_id=029d3f71-ab77-4bc6-93fb-4eaef959cc36"
+    <a href="/hhahdemo/flags/new?subject_type=patient&subject_id=540c9554-18d0-4b3f-be4f-dd07467817f2"
        class="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-md hover:bg-slate-50">⚑ Flag</a>
-    <a href="/hhahdemo/communication/new?patient_id=029d3f71-ab77-4bc6-93fb-4eaef959cc36"
+    <a href="/hhahdemo/communication/new?patient_id=540c9554-18d0-4b3f-be4f-dd07467817f2"
        class="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-md hover:bg-slate-50">💬 Talk to Us</a>
   </div>
 </div>
@@ -281,10 +281,10 @@
   <div class="text-xs text-blue-700 uppercase tracking-wide mb-1">Care plan</div>
   
     <div class="font-medium text-slate-900">
-      🏥 Rachel Kim, NP-C
+      🏥 Dr. Sarah Smith, MD
     </div>
     
-      <div class="text-sm text-slate-700">Summit Family Clinic</div>
+      <div class="text-sm text-slate-700">Valley Medical Group</div>
     
     
       <div class="text-xs text-slate-500 mt-1">
@@ -306,31 +306,68 @@
 
 
 
-<section class="bg-white rounded-xl border border-slate-200 p-12 text-center">
-  <p class="text-sm text-slate-500">
-    No active admission. Admissions are created when a 485 is signed and synced.
-  </p>
+<section id="timeline" class="bg-white rounded-xl border border-slate-200 p-5 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold text-slate-700">
+      CURRENT ADMISSION · started 2026-07-04
+    </h2>
+    <span class="text-xs text-slate-500">
+      physician_referral
+    </span>
+  </div>
+
+  
+  <div class="flex items-center gap-2 my-4">
+    <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+    <div class="flex-1 h-0.5 bg-slate-200"></div>
+    <div class="text-xs text-slate-500">Admission</div>
+    <div class="flex-1 h-0.5 bg-slate-200"></div>
+    <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+    <div class="text-xs text-slate-500">Today</div>
+  </div>
+
+  
+  
+    
+    <div class="border border-blue-300 bg-blue-50/40 rounded-lg p-4 mb-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="font-medium text-slate-900">
+            ▼
+            Episode 1
+            <span class="text-xs font-normal text-slate-500">(current)</span>
+          </div>
+          <div class="text-sm text-slate-600 mt-0.5">
+            2026-07-04 → 2026-09-02
+          </div>
+        </div>
+        <div class="text-xs text-slate-500">
+          certified ·
+          not ready
+        </div>
+      </div>
+
+      
+        <div class="mt-3 text-xs text-slate-500 italic">
+          Order rows + episode documents will appear here once the orchestrator
+          ingests data for this episode.
+        </div>
+      
+    </div>
+  
 </section>
 
 
 
 
 <section class="bg-white rounded-xl border border-slate-200 p-5">
-  <h2 class="text-sm font-semibold text-slate-700 mb-3">PAST ADMISSIONS (2)</h2>
+  <h2 class="text-sm font-semibold text-slate-700 mb-3">PAST ADMISSIONS (1)</h2>
   <div class="space-y-2">
     
       <div class="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
         <span>
           ▷ 2025-08-05 →
-          2026-01-28
-        </span>
-        <span class="text-xs text-slate-500">past</span>
-      </div>
-    
-      <div class="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
-        <span>
-          ▷ 2024-08-05 →
-          2025-01-19
+          2025-12-24
         </span>
         <span class="text-xs text-slate-500">past</span>
       </div>

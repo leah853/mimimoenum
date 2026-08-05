@@ -13,7 +13,7 @@ import {
   HiOutlineDownload,
   HiOutlineTrash,
 } from "react-icons/hi";
-import MilestoneOutline from "@/components/MilestoneOutline";
+import MilestoneDashboard from "@/components/MilestoneDashboard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type Kind = "Milestone" | "Goal" | "Sub-goal" | "Task";
@@ -270,7 +270,7 @@ function subtreePendingCount(node: TreeNode): number {
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
-export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine" | "outline" } = {}) {
+export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine" | "dashboard" } = {}) {
   const { data: apiNodes, loading, refetch } = useApi<ApiNode[]>("/api/milestone-nodes");
   const { dbUser, appRole } = useAuth();
   const { toast } = useToast();
@@ -418,8 +418,12 @@ export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine"
             </div>
           )}
         </div>
-      ) : viewMode === "outline" ? (
-        <MilestoneOutline roots={roots} onOpenNode={setOpenNodeId} />
+      ) : viewMode === "dashboard" ? (
+        <MilestoneDashboard
+          roots={roots}
+          onOpenNode={setOpenNodeId}
+          onAddGoal={(milestoneId) => setCreateUnder({ parentId: milestoneId, kind: "Goal" })}
+        />
       ) : (
         roots.map((root) => (
           <PineCanvas

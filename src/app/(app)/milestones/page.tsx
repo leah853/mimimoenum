@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import MilestoneTree from "@/components/MilestoneTree";
 
-type ViewMode = "pine" | "outline";
+type ViewMode = "pine" | "dashboard";
 const STORAGE_KEY = "mimimoenum:tree-view";
 
 export default function MilestonesPage() {
@@ -13,7 +13,8 @@ export default function MilestonesPage() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "pine" || saved === "outline") setView(saved);
+      if (saved === "pine" || saved === "dashboard") setView(saved);
+      else if (saved === "outline") setView("pine");
     } catch {}
     setReady(true);
   }, []);
@@ -38,7 +39,7 @@ export default function MilestonesPage() {
           aria-label="Tree view mode"
           className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-0.5 text-[12px]"
         >
-          {(["pine", "outline"] as const).map((m) => (
+          {(["pine", "dashboard"] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -51,7 +52,7 @@ export default function MilestonesPage() {
                   : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
             >
-              {m === "pine" ? "Pine" : "Outline"}
+              {m === "pine" ? "Pine" : "Dashboard"}
             </button>
           ))}
         </div>
