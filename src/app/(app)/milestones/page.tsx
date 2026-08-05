@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import MilestoneTree from "@/components/MilestoneTree";
+import { useEffect, useRef, useState } from "react";
+import MilestoneTree, { type MilestoneTreeHandle } from "@/components/MilestoneTree";
 
 type ViewMode = "pine" | "dashboard";
 const STORAGE_KEY = "mimimoenum:tree-view";
@@ -9,6 +9,7 @@ const STORAGE_KEY = "mimimoenum:tree-view";
 export default function MilestonesPage() {
   const [view, setView] = useState<ViewMode>("pine");
   const [ready, setReady] = useState(false);
+  const treeRef = useRef<MilestoneTreeHandle | null>(null);
 
   useEffect(() => {
     try {
@@ -34,30 +35,68 @@ export default function MilestonesPage() {
             feedback and attachments.
           </p>
         </div>
-        <div
-          role="tablist"
-          aria-label="Tree view mode"
-          className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-0.5 text-[12px]"
-        >
-          {(["pine", "dashboard"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={view === m}
-              onClick={() => setView(m)}
-              className={`px-3 py-1 rounded-full transition-all ${
-                view === m
-                  ? "bg-white dark:bg-gray-900 text-indigo-600 shadow-sm font-semibold"
-                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-            >
-              {m === "pine" ? "Pine" : "Dashboard"}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          {view === "pine" && (
+            <div className="inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => treeRef.current?.expandAll()}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 11.5,
+                  background: "#FFFFFF",
+                  border: "0.5px solid #D6D3C7",
+                  borderRadius: 999,
+                  color: "#5F5E5A",
+                  cursor: "pointer",
+                }}
+                className="hover:bg-gray-50"
+              >
+                Expand all
+              </button>
+              <button
+                type="button"
+                onClick={() => treeRef.current?.collapseAll()}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 11.5,
+                  background: "#FFFFFF",
+                  border: "0.5px solid #D6D3C7",
+                  borderRadius: 999,
+                  color: "#5F5E5A",
+                  cursor: "pointer",
+                }}
+                className="hover:bg-gray-50"
+              >
+                Collapse all
+              </button>
+            </div>
+          )}
+          <div
+            role="tablist"
+            aria-label="Tree view mode"
+            className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-0.5 text-[12px]"
+          >
+            {(["pine", "dashboard"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={view === m}
+                onClick={() => setView(m)}
+                className={`px-3 py-1 rounded-full transition-all ${
+                  view === m
+                    ? "bg-white dark:bg-gray-900 text-indigo-600 shadow-sm font-semibold"
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
+              >
+                {m === "pine" ? "Pine" : "Dashboard"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <MilestoneTree viewMode={view} />
+      <MilestoneTree ref={treeRef} viewMode={view} />
     </div>
   );
 }

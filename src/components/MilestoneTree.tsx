@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import { useApi, apiPost, apiPatch, apiDelete, invalidateCache } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
@@ -254,12 +254,6 @@ function flatten(node: TreeNode, acc: TreeNode[]): TreeNode[] {
   return acc;
 }
 
-function subtreeCount(node: TreeNode): number {
-  let c = 0;
-  node.children.forEach((k) => { c += 1 + subtreeCount(k); });
-  return c;
-}
-
 /** Total pending-review submissions in this node + all descendants. Used to
  *  drive the "N pending" badge on cards so a collapsed branch surfaces what
  *  still needs a look. */
@@ -270,7 +264,39 @@ function subtreePendingCount(node: TreeNode): number {
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
-export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine" | "dashboard" } = {}) {
+export type MilestoneTreeHandle = {
+  expandAll: () => void;
+  collapseAll: () => void;
+};
+
+const EXPAND_KEY = "mimimoenum:pine-expanded";
+
+/** Prune the tree to only include: root Milestone + its direct Goal children +
+ *  any descendants of nodes in the expanded set. Returned nodes have
+ *  `collapsed=false` so the layout treats them uniformly. */
+function pruneForPine(root: TreeNode, expanded: Set<string>): TreeNode {
+  const walk = (n: TreeNode): TreeNode => {
+    // Root Milestone always shows its direct Goal children; deeper nodes
+    // require explicit expansion.
+    const showChildren = n.kind === "Milestone" || expanded.has(n.id);
+    const children = showChildren ? n.children.map(walk) : [];
+    return { ...n, children, collapsed: false };
+  };
+  return walk(root);
+}
+
+/** Collect IDs of every non-Milestone node in the ORIGINAL tree that has at
+ *  least one child. Used for "Expand all" and to decide which cards show a
+ *  chevron. */
+function collectExpandableIds(root: TreeNode, out: Set<string>) {
+  if (root.children.length > 0 && root.kind !== "Milestone") out.add(root.id);
+  root.children.forEach((c) => collectExpandableIds(c, out));
+}
+
+const MilestoneTree = forwardRef<MilestoneTreeHandle, { viewMode?: "pine" | "dashboard" }>(function MilestoneTree(
+  { viewMode = "pine" },
+  ref,
+) {
   const { data: apiNodes, loading, refetch } = useApi<ApiNode[]>("/api/milestone-nodes");
   const { dbUser, appRole } = useAuth();
   const { toast } = useToast();
@@ -279,7 +305,56 @@ export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine"
   const [openNodeId, setOpenNodeId] = useState<string | null>(null);
   const [createUnder, setCreateUnder] = useState<{ parentId: string | null; kind: Kind } | null>(null);
 
+  // Per-node UI expansion for the pine view. Persisted to localStorage.
+  // Default = empty set → only Milestone + Goals visible.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(EXPAND_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setExpanded(new Set(arr as string[]));
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPAND_KEY, JSON.stringify([...expanded]));
+    } catch {}
+  }, [expanded]);
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const roots = useMemo(() => buildRoots(apiNodes || []), [apiNodes]);
+
+  // Every non-Milestone node in the ORIGINAL tree that has children — the
+  // universe of "chevronable" ids and the set applied by Expand-all.
+  const expandableIds = useMemo(() => {
+    const s = new Set<string>();
+    roots.forEach((r) => collectExpandableIds(r, s));
+    return s;
+  }, [roots]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      expandAll: () => setExpanded(new Set(expandableIds)),
+      collapseAll: () => setExpanded(new Set()),
+    }),
+    [expandableIds],
+  );
+
+  // Pruned roots — what actually gets laid out.
+  const prunedRoots = useMemo(
+    () => roots.map((r) => pruneForPine(r, expanded)),
+    [roots, expanded],
+  );
   const openNode = useMemo(() => {
     if (!openNodeId) return null;
     const scan = (list: TreeNode[]): TreeNode | null => {
@@ -292,24 +367,6 @@ export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine"
     };
     return scan(roots);
   }, [openNodeId, roots]);
-
-  async function toggleCollapse(id: string) {
-    const scan = (list: TreeNode[]): TreeNode | null => {
-      for (const n of list) {
-        if (n.id === id) return n;
-        const c = scan(n.children);
-        if (c) return c;
-      }
-      return null;
-    };
-    const n = scan(roots);
-    if (!n) return;
-    try {
-      await apiPatch(`/api/milestone-nodes/${id}`, { collapsed: !n.collapsed });
-      invalidateCache("/api/milestone-nodes");
-      await refetch();
-    } catch (e) { toast(handleApiError(e), "error"); }
-  }
 
   async function updateNode(id: string, patch: Partial<ApiNode>) {
     try {
@@ -425,14 +482,17 @@ export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine"
           onAddGoal={(milestoneId) => setCreateUnder({ parentId: milestoneId, kind: "Goal" })}
         />
       ) : (
-        roots.map((root) => (
+        prunedRoots.map((root) => (
           <PineCanvas
             key={root.id}
             root={root}
+            expandableIds={expandableIds}
+            expanded={expanded}
             onOpen={setOpenNodeId}
-            onToggle={toggleCollapse}
+            onToggle={toggleExpanded}
             onAdd={(parentId) => {
-              const kind = defaultChildKind(root, parentId);
+              const originalRoot = roots.find((r) => r.id === root.id) || root;
+              const kind = defaultChildKind(originalRoot, parentId);
               setCreateUnder({ parentId, kind });
             }}
           />
@@ -473,7 +533,10 @@ export default function MilestoneTree({ viewMode = "pine" }: { viewMode?: "pine"
       )}
     </div>
   );
-}
+});
+
+MilestoneTree.displayName = "MilestoneTree";
+export default MilestoneTree;
 
 /** Titles of every ancestor down to (but not including) the target node. */
 function findPath(roots: TreeNode[], id: string): string[] {
@@ -516,11 +579,15 @@ type ZoomMode = "fit" | "actual" | number;
 
 function PineCanvas({
   root,
+  expandableIds,
+  expanded,
   onOpen,
   onToggle,
   onAdd,
 }: {
   root: TreeNode;
+  expandableIds: Set<string>;
+  expanded: Set<string>;
   onOpen: (id: string) => void;
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
@@ -550,7 +617,10 @@ function PineCanvas({
   const fitScale = (() => {
     if (containerW <= 0) return 1;
     if (canvasW > containerW) return Math.max(0.5, containerW / canvasW);
-    return Math.min(1.15, containerW / canvasW);
+    // Compact trees (e.g. the default collapsed view with just 4 cards) are
+    // allowed to upscale meaningfully so they don't sit as a tiny island in
+    // a huge white pane.
+    return Math.min(1.5, containerW / canvasW);
   })();
   const scale =
     zoomMode === "fit"
@@ -826,7 +896,8 @@ function PineCanvas({
               node={n}
               pos={positions[n.id]}
               cardHeight={heights[n.id] || NODE_H}
-              hasKids={n.children.length > 0}
+              hasKids={expandableIds.has(n.id)}
+              isExpanded={expanded.has(n.id)}
               onOpen={onOpen}
               onToggle={onToggle}
               onAdd={onAdd}
@@ -949,6 +1020,7 @@ function NodeCard({
   pos,
   cardHeight,
   hasKids,
+  isExpanded,
   onOpen,
   onToggle,
   onAdd,
@@ -957,6 +1029,7 @@ function NodeCard({
   pos: { x: number; y: number; depth: number };
   cardHeight: number;
   hasKids: boolean;
+  isExpanded: boolean;
   onOpen: (id: string) => void;
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
@@ -1194,28 +1267,31 @@ function NodeCard({
       </div>
       {hasKids && (
         <button type="button"
+          title={isExpanded ? "Collapse" : "Expand"}
           onClick={(e) => {
             e.stopPropagation();
             onToggle(node.id);
           }}
           style={{
             position: "absolute",
-            bottom: -12,
-            left: NODE_W / 2 - 11,
+            top: -11,
+            right: 8,
             width: 22,
             height: 22,
             borderRadius: "50%",
             border: "0.5px solid #D3D1C7",
             background: "#fff",
             cursor: "pointer",
-            fontSize: 12,
+            fontSize: 13,
+            fontWeight: 600,
             lineHeight: "20px",
             color: "#5F5E5A",
             padding: 0,
-            zIndex: 2,
+            zIndex: 3,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
           }}
         >
-          {node.collapsed ? `+${subtreeCount(node)}` : "–"}
+          {isExpanded ? "−" : "+"}
         </button>
       )}
       <button type="button"
