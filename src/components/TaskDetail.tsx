@@ -159,7 +159,7 @@ export default function TaskDetail() {
   }
   async function saveEdit() {
     set("saving", true); set("error", "");
-    try { await apiPatch(`/api/tasks/${id}`, ui.form); await refetch(); set("editing", false); }
+    try { await apiPatch(`/api/tasks/${id}`, ui.form); invalidateCache("/api/tasks", "/api/stats"); await refetch(); set("editing", false); }
     catch (e) { set("error", e instanceof Error ? e.message : "Save failed"); }
     set("saving", false);
   }
@@ -443,7 +443,7 @@ export default function TaskDetail() {
               <div>
                 <span className="text-xs text-gray-400 block mb-1">Owner</span>
                 {isDoer ? (
-                  <select value={task.owner_id || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { owner_id: e.target.value }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
+                  <select value={task.owner_id || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { owner_id: e.target.value }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                     className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/60 rounded-xl text-sm text-gray-900 dark:text-white">
                     <option value="">Unassigned</option>
                     {(owners || []).map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
@@ -462,7 +462,7 @@ export default function TaskDetail() {
                       const blockers = getCompletionBlockers(task as Task & { deliverables?: { id: string }[]; feedback?: { id: string }[] });
                       if (blockers.length) { set("error", `Cannot complete: ${blockers.join(". ")}`); return; }
                     }
-                    try { await apiPatch(`/api/tasks/${id}`, { status: v }); await refetch(); } catch (e2) { set("error", e2 instanceof Error ? e2.message : "Failed"); }
+                    try { await apiPatch(`/api/tasks/${id}`, { status: v }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e2) { set("error", e2 instanceof Error ? e2.message : "Failed"); }
                   }}
                     className="w-full text-sm font-semibold px-3 py-2 rounded-xl border-0 cursor-pointer"
                     style={{ backgroundColor: STATUS_COLORS[task.status] + "15", color: STATUS_COLORS[task.status] }}>
@@ -476,7 +476,7 @@ export default function TaskDetail() {
               <div>
                 <span className="text-xs text-gray-400 block mb-1">Deadline</span>
                 {isDoer ? (
-                  <input type="date" value={task.deadline || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { deadline: e.target.value }); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
+                  <input type="date" value={task.deadline || ""} onChange={async (e) => { try { await apiPatch(`/api/tasks/${id}`, { deadline: e.target.value }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); } catch (e) { toast(handleApiError(e), "error"); } }}
                     className="w-full px-3 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/60 rounded-xl text-sm text-gray-900 dark:text-white" />
                 ) : (
                   <p className="text-sm text-gray-800 dark:text-white">{task.deadline || "—"}</p>
