@@ -68,6 +68,24 @@ const H_GAP = 14;
 const V_GAP = 56;
 const TRUNK = 70;
 
+// When a Sub-goal has ≥ this many Task-only leaf children, we render them as
+// a compact vertical stack of pills directly under the Sub-goal instead of
+// fanning them out sideways. This is the single biggest layout win — a
+// Sub-goal with 5 social-channel Tasks was consuming ~900px of horizontal
+// space (forcing the whole canvas to render at ~35% Fit zoom); the pill
+// stack collapses that to a single 132px column.
+const PILL_W = 132;
+const PILL_H = 22;
+const PILL_V_GAP = 3;
+const PILL_STACK_MIN = 4;
+
+function shouldStackPills(n: TreeNode): boolean {
+  if (n.collapsed) return false;
+  const kids = n.children;
+  if (kids.length < PILL_STACK_MIN) return false;
+  return kids.every((k) => k.kind === "Task" && (!k.children || k.children.length === 0));
+}
+
 const COLORS: Record<
   Status,
   { bar: string; dot: string; text: string; pill: string; pillText: string }
@@ -131,9 +149,13 @@ function layout(root: TreeNode): {
   width: number;
   height: number;
   maxDepth: number;
+  pillIds: Set<string>;     // node IDs rendered as compact pills
+  pillParents: Set<string>; // parents whose children are pill-stacked
 } {
   const positions: Positions = {};
   const heights: Heights = {};
+  const pillIds = new Set<string>();
+  const pillParents = new Set<string>();
 
   // Pass 1: compute a display height for every node from its title.
   const walkAll = (n: TreeNode) => {
@@ -143,15 +165,36 @@ function layout(root: TreeNode): {
   walkAll(root);
 
   // Pass 2: find the tallest card at each visible depth so every row stacks
-  // cleanly without overlap.
+  // cleanly without overlap. Pill children do NOT contribute to row heights —
+  // they stack vertically underneath their parent, taking no row slot.
   const depthMaxH: number[] = [];
   const measureDepths = (n: TreeNode, depth: number) => {
     depthMaxH[depth] = Math.max(depthMaxH[depth] || 0, heights[n.id]);
-    if (!n.collapsed) n.children.forEach((c) => measureDepths(c, depth + 1));
+    if (n.collapsed) return;
+    if (shouldStackPills(n)) return; // children absorbed into parent's row
+    n.children.forEach((c) => measureDepths(c, depth + 1));
   };
   measureDepths(root, 0);
 
-  // Pre-compute y-offset per depth: y[d] = 10 + Σ (depthMaxH[i] + V_GAP) for i<d
+  // Pre-compute y-offset per depth: y[d] = 10 + Σ (depthMaxH[i] + V_GAP) for i<d.
+  // Extra V_GAP added below rows that contain pill-stacking parents comes out
+  // of the row's own height budget — we bump the depth's max height to
+  // include the tallest pill stack we'll see at that depth.
+  const depthPillOverhang: number[] = [];
+  const measurePillOverhang = (n: TreeNode, depth: number) => {
+    if (n.collapsed) return;
+    if (shouldStackPills(n)) {
+      const overhang = 14 + n.children.length * (PILL_H + PILL_V_GAP);
+      depthPillOverhang[depth] = Math.max(depthPillOverhang[depth] || 0, overhang);
+      return;
+    }
+    n.children.forEach((c) => measurePillOverhang(c, depth + 1));
+  };
+  measurePillOverhang(root, 0);
+  for (let d = 0; d < depthMaxH.length; d++) {
+    if (depthPillOverhang[d]) depthMaxH[d] += depthPillOverhang[d];
+  }
+
   const yAt: number[] = [10];
   for (let d = 0; d < depthMaxH.length; d++) {
     yAt[d + 1] = yAt[d] + depthMaxH[d] + V_GAP;
@@ -168,6 +211,27 @@ function layout(root: TreeNode): {
       positions[node.id] = { x, y: yAt[depth], depth };
       return x + NODE_W / 2;
     }
+    // Pill-stack: children take ZERO horizontal space — placed as a vertical
+    // column beneath the parent card. Parent gets a normal footprint.
+    if (shouldStackPills(node)) {
+      pillParents.add(node.id);
+      const x = cursorX;
+      cursorX += NODE_W + H_GAP;
+      positions[node.id] = { x, y: yAt[depth], depth };
+      const cx = x + NODE_W / 2;
+      const parentBottom = yAt[depth] + (heights[node.id] || NODE_H);
+      visibleKids.forEach((c, i) => {
+        pillIds.add(c.id);
+        heights[c.id] = PILL_H;
+        positions[c.id] = {
+          x: cx - PILL_W / 2,
+          y: parentBottom + 14 + i * (PILL_H + PILL_V_GAP),
+          depth: depth + 1,
+        };
+        maxDepth = Math.max(maxDepth, depth + 1);
+      });
+      return cx;
+    }
     const centers = visibleKids.map((c) => place(c, depth + 1));
     const mid = (centers[0] + centers[centers.length - 1]) / 2;
     positions[node.id] = { x: mid - NODE_W / 2, y: yAt[depth], depth };
@@ -178,10 +242,10 @@ function layout(root: TreeNode): {
   let maxX = 0;
   let maxY = 0;
   for (const [id, p] of Object.entries(positions)) {
-    maxX = Math.max(maxX, p.x + NODE_W);
+    maxX = Math.max(maxX, p.x + (pillIds.has(id) ? PILL_W : NODE_W));
     maxY = Math.max(maxY, p.y + heights[id]);
   }
-  return { positions, heights, width: maxX, height: maxY + TRUNK, maxDepth };
+  return { positions, heights, width: maxX, height: maxY + TRUNK, maxDepth, pillIds, pillParents };
 }
 
 function flatten(node: TreeNode, acc: TreeNode[]): TreeNode[] {
@@ -457,7 +521,7 @@ function PineCanvas({
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const { positions, heights, width, height } = useMemo(() => layout(root), [root]);
+  const { positions, heights, width, height, pillIds, pillParents } = useMemo(() => layout(root), [root]);
   const nodes = useMemo(() => flatten(root, []), [root]);
   const PAD = 40;
 
@@ -476,8 +540,14 @@ function PineCanvas({
 
   const canvasW = width + PAD;
   const canvasH = height + PAD;
-  const fitScale =
-    containerW > 0 && canvasW > containerW ? Math.max(0.35, containerW / canvasW) : 1;
+  // Fit-to-container: shrink if wider than viewport, gently upscale (max 1.15x)
+  // if the pill-stack collapse left the canvas narrower than the viewport, so
+  // a compact tree doesn't render as a tiny island in a huge white pane.
+  const fitScale = (() => {
+    if (containerW <= 0) return 1;
+    if (canvasW > containerW) return Math.max(0.5, containerW / canvasW);
+    return Math.min(1.15, containerW / canvasW);
+  })();
   const scale =
     zoomMode === "fit"
       ? fitScale
@@ -631,6 +701,49 @@ function PineCanvas({
               if (n.collapsed) return;
               const p = positions[n.id];
               const w1 = widthAt(p.depth);
+
+              // Pill-stack parents get a simplified vertical spine + short
+              // horizontal stubs to each pill instead of five fanned branches.
+              if (pillParents.has(n.id)) {
+                const cx = p.x + NODE_W / 2;
+                const spineTop = p.y + (heights[n.id] || NODE_H);
+                const lastPill = n.children[n.children.length - 1];
+                const lastPos = positions[lastPill.id];
+                if (lastPos) {
+                  const spineBot = lastPos.y + PILL_H / 2;
+                  const spineW = Math.max(3, w1 * 0.55);
+                  const h = spineW / 2;
+                  limbs.push(
+                    <path
+                      key={n.id + "spine"}
+                      d={`M${cx - h},${spineTop} L${cx - h * 0.7},${spineBot} L${cx + h * 0.7},${spineBot} L${cx + h},${spineTop} Z`}
+                      fill={BARK}
+                    />,
+                  );
+                  limbs.push(
+                    <circle key={n.id + "spinej"} cx={cx} cy={spineTop} r={h} fill={BARK} />,
+                  );
+                  // Horizontal twigs from spine to each pill's left edge.
+                  n.children.forEach((c) => {
+                    const cp = positions[c.id];
+                    if (!cp) return;
+                    const py = cp.y + PILL_H / 2;
+                    limbs.push(
+                      <rect
+                        key={n.id + c.id + "twig"}
+                        x={cx}
+                        y={py - 1}
+                        width={cp.x - cx}
+                        height={2}
+                        fill={BARK}
+                        opacity={0.75}
+                      />,
+                    );
+                  });
+                }
+                return;
+              }
+
               n.children.forEach((c) => {
                 const cp = positions[c.id];
                 if (!cp) return;
@@ -652,13 +765,26 @@ function PineCanvas({
               });
             });
 
-            // Foliage clusters on childless visible nodes.
+            // Foliage clusters on childless visible nodes. Skip pill nodes
+            // (they'd smear leaves across the vertical stack) — instead we
+            // draw ONE cluster below the pill-stack parent's last pill.
             nodes.forEach((n) => {
               if (n.collapsed) return;
-              if (n.children && n.children.length) return;
-              const p = positions[n.id];
-              const bx = p.x + NODE_W / 2;
-              const by = p.y + (heights[n.id] || NODE_H) + 6;
+              if (pillIds.has(n.id)) return;
+              let bx: number;
+              let by: number;
+              if (pillParents.has(n.id)) {
+                const lastPill = n.children[n.children.length - 1];
+                const lastPos = positions[lastPill.id];
+                if (!lastPos) return;
+                bx = lastPos.x + PILL_W / 2;
+                by = lastPos.y + PILL_H + 6;
+              } else {
+                if (n.children && n.children.length) return;
+                const p = positions[n.id];
+                bx = p.x + NODE_W / 2;
+                by = p.y + (heights[n.id] || NODE_H) + 6;
+              }
               const leaf = (dx: number, dy: number, r: number, rot: number, fill: string, op: number) => (
                 <ellipse
                   key={`${n.id}lf${dx}${dy}`}
@@ -682,22 +808,129 @@ function PineCanvas({
           })()}
         </svg>
 
-        {nodes.map((n) => (
-          <NodeCard
-            key={n.id}
-            node={n}
-            pos={positions[n.id]}
-            cardHeight={heights[n.id] || NODE_H}
-            hasKids={n.children.length > 0}
-            onOpen={onOpen}
-            onToggle={onToggle}
-            onAdd={onAdd}
-          />
-        ))}
+        {nodes.map((n) =>
+          pillIds.has(n.id) ? (
+            <PillCard
+              key={n.id}
+              node={n}
+              pos={positions[n.id]}
+              onOpen={onOpen}
+            />
+          ) : (
+            <NodeCard
+              key={n.id}
+              node={n}
+              pos={positions[n.id]}
+              cardHeight={heights[n.id] || NODE_H}
+              hasKids={n.children.length > 0}
+              onOpen={onOpen}
+              onToggle={onToggle}
+              onAdd={onAdd}
+            />
+          ),
+        )}
       </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Pill card ──────────────────────────────────────────────────────────────
+// Compact 132×22 pill used when a Sub-goal has ≥4 Task-only children. Shows
+// KIND label, status dot, truncated title. Click opens the NodeModal exactly
+// like a full card.
+function PillCard({
+  node,
+  pos,
+  onOpen,
+}: {
+  node: TreeNode;
+  pos: { x: number; y: number; depth: number };
+  onOpen: (id: string) => void;
+}) {
+  const disp = displayStatus(node);
+  const dotColor = STATUS_HEX[disp];
+  const hasPending = (node.pending_attachment_count || 0) > 0;
+  const bg = hasPending ? "#FFF4C5" : "#FFFFFF";
+  const border = hasPending ? "#E9A100" : "#B4B2A9";
+  return (
+    <div
+      onClick={() => onOpen(node.id)}
+      title={node.title}
+      style={{
+        position: "absolute",
+        left: pos.x,
+        top: pos.y,
+        width: PILL_W,
+        height: PILL_H,
+        background: bg,
+        border: `${hasPending ? 1 : 0.5}px solid ${border}`,
+        borderRadius: 11,
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "0 8px",
+        cursor: "pointer",
+        boxShadow: hasPending
+          ? "0 2px 6px rgba(233,161,0,0.28)"
+          : "0 1px 2px rgba(0,0,0,0.04)",
+        overflow: "hidden",
+      }}
+    >
+      <span
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: "50%",
+          background: dotColor,
+          flexShrink: 0,
+        }}
+      />
+      <span
+        style={{
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          color: "#8A897F",
+          textTransform: "uppercase",
+          flexShrink: 0,
+        }}
+      >
+        TASK
+      </span>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 500,
+          color: "#2C2C2A",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        {node.title}
+      </span>
+      {hasPending && (
+        <span
+          style={{
+            fontSize: 7.5,
+            fontWeight: 800,
+            color: "#FFFFFF",
+            background: "#E9A100",
+            padding: "1px 4px",
+            borderRadius: 6,
+            letterSpacing: 0.3,
+            flexShrink: 0,
+          }}
+        >
+          NEW
+        </span>
+      )}
     </div>
   );
 }
