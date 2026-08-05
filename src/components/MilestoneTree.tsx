@@ -57,34 +57,21 @@ type Attachment = {
   reviewed_by?: string | null;
 };
 
-// ─── Card + layout constants ────────────────────────────────────────────────
-// Reference values were NODE_W=176, NODE_H=58, H_GAP=26, V_GAP=72. Tightened
-// slightly because Milestone 1's real tree has ~34 leaf nodes at depth 6 —
-// with the reference values the canvas is ~4000px wide and spills off any
-// reasonable screen. The pine visual survives compaction fine.
-const NODE_W = 156;
-const NODE_H = 54;
-const H_GAP = 14;
-const V_GAP = 56;
-const TRUNK = 70;
+// ─── Per-depth card + spacing constants (family-tree) ──────────────────────
+// The layout is a Reingold-Tilford-style subtree-width algorithm: each parent
+// centers its children horizontally directly below it, and total width is the
+// sum of subtree widths. Cards shrink at each depth to keep the tree bounded.
+const CARD_W = [220, 180, 140, 130] as const;
+const CARD_H = [70, 60, 56, 60] as const;
+// V_GAP[d] = vertical gap between a parent at depth (d-1) and children at depth d.
+const V_GAP_D = [0, 42, 36, 28, 22] as const;
+// H_GAP[d] = horizontal gap between siblings at depth d.
+const H_GAP_D = [0, 20, 20, 14, 10] as const;
+const PAD_H = 60;
+const PAD_V = 40;
 
-// When a Sub-goal has ≥ this many Task-only leaf children, we render them as
-// a compact vertical stack of pills directly under the Sub-goal instead of
-// fanning them out sideways. This is the single biggest layout win — a
-// Sub-goal with 5 social-channel Tasks was consuming ~900px of horizontal
-// space (forcing the whole canvas to render at ~35% Fit zoom); the pill
-// stack collapses that to a single 132px column.
-const PILL_W = 132;
-const PILL_H = 22;
-const PILL_V_GAP = 3;
-const PILL_STACK_MIN = 4;
-
-function shouldStackPills(n: TreeNode): boolean {
-  if (n.collapsed) return false;
-  const kids = n.children;
-  if (kids.length < PILL_STACK_MIN) return false;
-  return kids.every((k) => k.kind === "Task" && (!k.children || k.children.length === 0));
-}
+const depthOfKind = (k: Kind): number =>
+  k === "Milestone" ? 0 : k === "Goal" ? 1 : k === "Sub-goal" ? 2 : 3;
 
 const COLORS: Record<
   Status,
@@ -129,152 +116,86 @@ function buildRoots(flat: ApiNode[]): TreeNode[] {
   return roots;
 }
 
-// ─── Layout: pine — column-per-Goal nested tree ─────────────────────────────
-// Milestone at top-center. Goals in ONE horizontal row directly under it. Each
-// Goal owns an independent vertical column: its Sub-goals stack vertically
-// directly beneath the Goal at the same x, and each expanded Sub-goal's Tasks
-// stack vertically beneath it as compact pills. Columns are horizontally
-// independent — a tall column (many expanded Sub-goals + Tasks) does NOT push
-// the adjacent Goal's column sideways.
+// ─── Layout: family tree (Reingold-Tilford subtree-width) ───────────────────
+// For every node we compute subtreeWidth bottom-up (= max of own card width
+// vs. sum of children widths + inter-sibling gaps). Then we place top-down,
+// centering each parent above the horizontal band its children occupy. This
+// yields a classic top-down family tree where children fan out horizontally
+// directly under their parent at every depth.
 type Positions = Record<string, { x: number; y: number; depth: number }>;
-type Heights = Record<string, number>;
-
-/** Estimate card height from title length. ~16 characters fit per line at
- *  typical fs 13.5 in NODE_W. Base = kind chip + assignee row + padding. */
-function estimateCardHeight(title: string): number {
-  const CHARS_PER_LINE = 16;
-  const lines = Math.max(1, Math.ceil((title || "").length / CHARS_PER_LINE));
-  const TITLE_LINE_H = 17;
-  const BASE = 34; // kind chip row (16) + assignee row (14) + vertical padding (~4)
-  return Math.max(NODE_H, BASE + TITLE_LINE_H * lines);
-}
-
-// Vertical spacing between the Milestone and the Goals row.
-const MILESTONE_GAP = 56;
-// Vertical spacing between a Goal card bottom and its first Sub-goal.
-const GOAL_TO_SUB_GAP = 22;
-// Vertical spacing between consecutive Sub-goal cards in the same column.
-const SUB_V_GAP = 14;
-// Vertical space between a Sub-goal card bottom and its first Task pill.
-const SUB_TO_TASK_GAP = 12;
-// Horizontal spacing between adjacent Goal columns.
-const GOAL_COL_GAP = 40;
-const PAD_LEFT = 20;
-const PAD_TOP = 12;
 
 function layout(root: TreeNode): {
   positions: Positions;
-  heights: Heights;
   width: number;
   height: number;
+  visibleLeaves: { id: string; x: number; yBottom: number; depth: number }[];
   maxDepth: number;
-  pillIds: Set<string>;     // node IDs rendered as compact pills (Tasks)
-  pillParents: Set<string>; // Sub-goals whose Task children are pill-stacked
-  goalColumnBottoms: Record<string, { x: number; y: number }>; // for leaf clusters
 } {
   const positions: Positions = {};
-  const heights: Heights = {};
-  const pillIds = new Set<string>();
-  const pillParents = new Set<string>();
-  const goalColumnBottoms: Record<string, { x: number; y: number }> = {};
+  const subtreeW = new Map<string, number>();
+  const visibleLeaves: { id: string; x: number; yBottom: number; depth: number }[] = [];
 
-  // Pass 1: card heights for every non-Task node.
-  const walkAll = (n: TreeNode) => {
-    heights[n.id] = estimateCardHeight(n.title);
-    n.children.forEach(walkAll);
-  };
-  walkAll(root);
-
-  const milestoneH = heights[root.id] || NODE_H;
-  const milestoneY = PAD_TOP;
-  const goalsY = milestoneY + milestoneH + MILESTONE_GAP;
-
-  // In the pruned tree, `collapsed` is always false and missing children means
-  // the node isn't expanded. We treat n.children.length as the source of truth.
-  const visibleGoals = root.children;
-
-  let cursorX = PAD_LEFT;
-  let maxColumnBottom = goalsY + milestoneH; // guard for empty tree
-
-  visibleGoals.forEach((goal) => {
-    const goalX = cursorX;
-    const goalH = heights[goal.id] || NODE_H;
-    positions[goal.id] = { x: goalX, y: goalsY, depth: 1 };
-    const goalCx = goalX + NODE_W / 2;
-
-    // Track the bottom-most descendant of this Goal's column — used to place
-    // a single leaf cluster there and for the connector spine's end point.
-    let columnBottomY = goalsY + goalH;
-    let columnBottomX = goalCx;
-
-    if (goal.children.length > 0) {
-      // Stack Sub-goals vertically directly beneath the Goal (same x).
-      let subCursorY = goalsY + goalH + GOAL_TO_SUB_GAP;
-      goal.children.forEach((sub) => {
-        const subX = goalX; // same column, aligned under Goal
-        const subH = heights[sub.id] || NODE_H;
-        positions[sub.id] = { x: subX, y: subCursorY, depth: 2 };
-        const subCx = subX + NODE_W / 2;
-        const subBottom = subCursorY + subH;
-
-        if (sub.children.length > 0) {
-          // Task pills stack vertically beneath the Sub-goal, centered.
-          pillParents.add(sub.id);
-          const firstPillY = subBottom + SUB_TO_TASK_GAP;
-          sub.children.forEach((task, ti) => {
-            pillIds.add(task.id);
-            heights[task.id] = PILL_H;
-            positions[task.id] = {
-              x: subCx - PILL_W / 2,
-              y: firstPillY + ti * (PILL_H + PILL_V_GAP),
-              depth: 3,
-            };
-          });
-          const lastTaskY =
-            firstPillY + (sub.children.length - 1) * (PILL_H + PILL_V_GAP) + PILL_H;
-          columnBottomY = Math.max(columnBottomY, lastTaskY);
-          columnBottomX = subCx;
-          subCursorY = lastTaskY + SUB_V_GAP;
-        } else {
-          columnBottomY = Math.max(columnBottomY, subBottom);
-          columnBottomX = subCx;
-          subCursorY = subBottom + SUB_V_GAP;
-        }
-      });
+  const computeWidth = (n: TreeNode, depth: number): number => {
+    const d = Math.min(depth, 3);
+    const cw = CARD_W[d];
+    if (n.children.length === 0) {
+      subtreeW.set(n.id, cw);
+      return cw;
     }
-
-    goalColumnBottoms[goal.id] = { x: columnBottomX, y: columnBottomY };
-    maxColumnBottom = Math.max(maxColumnBottom, columnBottomY);
-    cursorX += NODE_W + GOAL_COL_GAP;
-  });
-
-  // Center the Milestone above the Goals row.
-  const goalsRowRightEdge = visibleGoals.length > 0 ? cursorX - GOAL_COL_GAP : PAD_LEFT + NODE_W;
-  const goalsRowCenterX = (PAD_LEFT + goalsRowRightEdge) / 2;
-  positions[root.id] = {
-    x: goalsRowCenterX - NODE_W / 2,
-    y: milestoneY,
-    depth: 0,
+    const childD = Math.min(depth + 1, 3);
+    let sum = 0;
+    n.children.forEach((c, i) => {
+      sum += computeWidth(c, childD);
+      if (i > 0) sum += H_GAP_D[childD];
+    });
+    const w = Math.max(cw, sum);
+    subtreeW.set(n.id, w);
+    return w;
   };
+  computeWidth(root, 0);
+
+  const place = (n: TreeNode, xCenter: number, yTop: number, depth: number) => {
+    const d = Math.min(depth, 3);
+    const cw = CARD_W[d];
+    const ch = CARD_H[d];
+    positions[n.id] = { x: xCenter - cw / 2, y: yTop, depth: d };
+    if (n.children.length === 0) {
+      visibleLeaves.push({ id: n.id, x: xCenter, yBottom: yTop + ch, depth: d });
+      return;
+    }
+    const childD = Math.min(depth + 1, 3);
+    const childY = yTop + ch + V_GAP_D[childD];
+    let total = 0;
+    n.children.forEach((c, i) => {
+      total += subtreeW.get(c.id) || CARD_W[childD];
+      if (i > 0) total += H_GAP_D[childD];
+    });
+    let cursorX = xCenter - total / 2;
+    for (const c of n.children) {
+      const cw2 = subtreeW.get(c.id) || CARD_W[childD];
+      place(c, cursorX + cw2 / 2, childY, childD);
+      cursorX += cw2 + H_GAP_D[childD];
+    }
+  };
+
+  const rootW = subtreeW.get(root.id) || CARD_W[0];
+  place(root, PAD_H + rootW / 2, PAD_V, 0);
 
   // Canvas bounds
   let maxX = 0;
   let maxY = 0;
-  for (const [id, p] of Object.entries(positions)) {
-    maxX = Math.max(maxX, p.x + (pillIds.has(id) ? PILL_W : NODE_W));
-    maxY = Math.max(maxY, p.y + heights[id]);
+  for (const p of Object.values(positions)) {
+    const cw = CARD_W[p.depth];
+    const ch = CARD_H[p.depth];
+    if (p.x + cw > maxX) maxX = p.x + cw;
+    if (p.y + ch > maxY) maxY = p.y + ch;
   }
-  maxY = Math.max(maxY, maxColumnBottom);
-
   return {
     positions,
-    heights,
-    width: maxX,
-    height: maxY + 30, // small ground pad so leaf clusters have room
+    width: maxX + PAD_H,
+    height: maxY + PAD_V + 60, // room for leaf clusters at bottom
+    visibleLeaves,
     maxDepth: 3,
-    pillIds,
-    pillParents,
-    goalColumnBottoms,
   };
 }
 
@@ -622,9 +543,9 @@ function PineCanvas({
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const { positions, heights, width, height, pillIds, pillParents, goalColumnBottoms } = useMemo(() => layout(root), [root]);
+  const { positions, width, height, visibleLeaves } = useMemo(() => layout(root), [root]);
   const nodes = useMemo(() => flatten(root, []), [root]);
-  const PAD = 40;
+  const PAD = 20;
 
   const outerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(0);
@@ -641,16 +562,15 @@ function PineCanvas({
 
   const canvasW = width + PAD;
   const canvasH = height + PAD;
-  // Fit-to-container: shrink if wider than viewport, gently upscale (max 1.15x)
-  // if the pill-stack collapse left the canvas narrower than the viewport, so
-  // a compact tree doesn't render as a tiny island in a huge white pane.
+  // Fit-zoom: fit both dimensions inside viewport, capped at 1.5× so a small
+  // tree scales up nicely instead of sitting as a tiny island. Floor at 0.35×
+  // so a huge tree still fits without being unreadable — user can zoom in.
   const fitScale = (() => {
     if (containerW <= 0) return 1;
-    if (canvasW > containerW) return Math.max(0.5, containerW / canvasW);
-    // Compact trees (e.g. the default collapsed view with just 4 cards) are
-    // allowed to upscale meaningfully so they don't sit as a tiny island in
-    // a huge white pane.
-    return Math.min(1.5, containerW / canvasW);
+    const viewportH = typeof window !== "undefined" ? window.innerHeight - 220 : 800;
+    const byW = containerW / canvasW;
+    const byH = viewportH / canvasH;
+    return Math.max(0.35, Math.min(1.5, Math.min(byW, byH)));
   })();
   const scale =
     zoomMode === "fit"
@@ -778,119 +698,96 @@ function PineCanvas({
             const limbs: React.ReactNode[] = [];
             const BARK = "#8A6A4A";
             const BARK_D = "#6E5238";
-            const widthAt = (depth: number) => Math.max(3, 24 - depth * 4.5);
+            // Branch trunk widths by parent depth (thicker near root).
+            const trunkTopByDepth = [16, 12, 8, 6];
+            const trunkBotByDepth = [10, 8, 6, 4];
+            const opByDepth = [1, 1, 0.85, 0.7];
             const rootP = positions[root.id];
 
-            // Short thick trunk from Milestone bottom down to the top of the
-            // Goals row — the tapered branches take over from there.
+            // Short thick trunk from Milestone bottom down to the junction ~30px
+            // below where the branches fan out to the Goals.
             if (rootP && root.children.length > 0) {
-              const cx = rootP.x + NODE_W / 2;
-              const topY = rootP.y + (heights[root.id] || NODE_H);
+              const cx = rootP.x + CARD_W[0] / 2;
+              const topY = rootP.y + CARD_H[0];
               const firstGoal = root.children[0];
               const goalTopY = positions[firstGoal.id]?.y ?? topY;
-              const trunkBottomY = topY + Math.max(6, (goalTopY - topY) * 0.55);
-              const topH = 9;
+              const trunkBottomY = topY + Math.min(30, Math.max(6, (goalTopY - topY) * 0.4));
+              const topH = 10;
               const botH = 14;
               limbs.push(
                 <path
                   key="trunk"
-                  d={`M${cx - topH},${topY} L${cx - botH},${trunkBottomY} Q${cx},${trunkBottomY + 6} ${cx + botH},${trunkBottomY} L${cx + topH},${topY} Z`}
+                  d={`M${cx - topH},${topY} L${cx - botH},${trunkBottomY} Q${cx},${trunkBottomY + 5} ${cx + botH},${trunkBottomY} L${cx + topH},${topY} Z`}
                   fill={BARK_D}
                 />,
               );
             }
 
-            // 1) Milestone → Goals: tapered bezier branches from Milestone
-            //    bottom to each Goal top (the classic pine limb).
-            if (root.children.length > 0) {
-              const p = positions[root.id];
-              const w1 = widthAt(0);
-              root.children.forEach((c) => {
-                const cp = positions[c.id];
-                if (!cp) return;
-                const x1 = p.x + NODE_W / 2;
-                const y1 = p.y + (heights[root.id] || NODE_H);
-                const x2 = cp.x + NODE_W / 2;
-                const y2 = cp.y;
-                const w2 = widthAt(1);
-                const my = (y1 + y2) / 2;
-                const h1 = w1 / 2;
-                const h2 = w2 / 2;
-                const d =
-                  `M${x1 - h1},${y1} ` +
-                  `C${x1 - h1},${my} ${x2 - h2},${my} ${x2 - h2},${y2} ` +
-                  `L${x2 + h2},${y2} ` +
-                  `C${x2 + h2},${my} ${x1 + h1},${my} ${x1 + h1},${y1} Z`;
-                limbs.push(<path key={"mg" + c.id} d={d} fill={BARK} />);
-                limbs.push(<circle key={"mgj" + c.id} cx={x1} cy={y1} r={h1} fill={BARK} />);
-              });
-            }
-
-            // 2) Each Goal column: thin vertical spine running from Goal
-            //    bottom down through the stacked Sub-goals. Cards render on
-            //    top so the spine only shows through the gaps between cards.
-            root.children.forEach((goal) => {
-              if (goal.children.length === 0) return;
-              const gp = positions[goal.id];
-              if (!gp) return;
-              const cx = gp.x + NODE_W / 2;
-              const spineTop = gp.y + (heights[goal.id] || NODE_H);
-              const lastSub = goal.children[goal.children.length - 1];
-              const lastSubP = positions[lastSub.id];
-              if (!lastSubP) return;
-              const spineBot = lastSubP.y + (heights[lastSub.id] || NODE_H) / 2;
-              const spineW = 3;
+            // Tapered filled bezier branch from every parent's bottom-center
+            // to every child's top-center, at every depth.
+            const drawBranch = (parent: TreeNode, child: TreeNode, depth: number) => {
+              const pp = positions[parent.id];
+              const cp = positions[child.id];
+              if (!pp || !cp) return;
+              const parentCx = pp.x + CARD_W[depth] / 2;
+              const parentBot = pp.y + CARD_H[depth];
+              const childCx = cp.x + CARD_W[depth + 1] / 2;
+              const childTop = cp.y;
+              const wTop = trunkTopByDepth[depth];
+              const wBot = trunkBotByDepth[depth];
+              const hTop = wTop / 2;
+              const hBot = wBot / 2;
+              const my = (parentBot + childTop) / 2;
+              const d =
+                `M${parentCx - hTop},${parentBot} ` +
+                `C${parentCx - hTop},${my} ${childCx - hBot},${my} ${childCx - hBot},${childTop} ` +
+                `L${childCx + hBot},${childTop} ` +
+                `C${childCx + hBot},${my} ${parentCx + hTop},${my} ${parentCx + hTop},${parentBot} Z`;
               limbs.push(
-                <rect
-                  key={"gs" + goal.id}
-                  x={cx - spineW / 2}
-                  y={spineTop}
-                  width={spineW}
-                  height={Math.max(0, spineBot - spineTop)}
+                <path
+                  key={`br${depth}-${parent.id}-${child.id}`}
+                  d={d}
                   fill={BARK}
+                  opacity={opByDepth[depth]}
                 />,
               );
-            });
+              // Fillet at the parent bottom to hide the taper corner.
+              limbs.push(
+                <circle
+                  key={`jn${depth}-${parent.id}-${child.id}`}
+                  cx={parentCx}
+                  cy={parentBot}
+                  r={hTop}
+                  fill={BARK}
+                  opacity={opByDepth[depth]}
+                />,
+              );
+            };
 
-            // 3) Each Sub-goal with visible Tasks: thinner vertical spine
-            //    from Sub-goal bottom down to the last Task pill center.
-            root.children.forEach((goal) => {
-              goal.children.forEach((sub) => {
-                if (!pillParents.has(sub.id)) return;
-                const sp = positions[sub.id];
-                if (!sp) return;
-                const cx = sp.x + NODE_W / 2;
-                const spineTop = sp.y + (heights[sub.id] || NODE_H);
-                const lastTask = sub.children[sub.children.length - 1];
-                const lastTaskP = positions[lastTask.id];
-                if (!lastTaskP) return;
-                const spineBot = lastTaskP.y + PILL_H / 2;
-                const spineW = 2;
-                limbs.push(
-                  <rect
-                    key={"ss" + sub.id}
-                    x={cx - spineW / 2}
-                    y={spineTop}
-                    width={spineW}
-                    height={Math.max(0, spineBot - spineTop)}
-                    fill={BARK}
-                    opacity={0.9}
-                  />,
-                );
-              });
-            });
+            const walkBranches = (n: TreeNode, depth: number) => {
+              if (depth >= 3) return;
+              for (const c of n.children) {
+                drawBranch(n, c, depth);
+                walkBranches(c, depth + 1);
+              }
+            };
+            walkBranches(root, 0);
 
-            // 4) One leaf cluster at the bottom-most descendant of each
-            //    expanded Goal column. Collapsed Goals get a cluster right
-            //    below the Goal card itself so every branch tip is dressed.
-            root.children.forEach((goal) => {
-              const bottom = goalColumnBottoms[goal.id];
-              if (!bottom) return;
-              const bx = bottom.x;
-              const by = bottom.y + 8;
-              const leaf = (dx: number, dy: number, r: number, rot: number, fill: string, op: number) => (
+            // One 4-ellipse cluster at the bottom tip of every VISIBLE LEAF
+            // — every card that isn't currently showing children.
+            visibleLeaves.forEach((lf) => {
+              const bx = lf.x;
+              const by = lf.yBottom + 10;
+              const leaf = (
+                dx: number,
+                dy: number,
+                r: number,
+                rot: number,
+                fill: string,
+                op: number,
+              ) => (
                 <ellipse
-                  key={`lf${goal.id}${dx}${dy}`}
+                  key={`lf${lf.id}${dx}${dy}`}
                   cx={bx + dx}
                   cy={by + dy}
                   rx={r}
@@ -900,141 +797,36 @@ function PineCanvas({
                   transform={`rotate(${rot} ${bx + dx} ${by + dy})`}
                 />
               );
-              limbs.push(leaf(-18, 4, 13, -28, "#8FB98C", 0.9));
-              limbs.push(leaf(0, 9, 15, 8, "#7FAE7C", 0.9));
-              limbs.push(leaf(18, 4, 13, 30, "#9CC499", 0.9));
-              limbs.push(leaf(-8, 15, 11, -12, "#88B585", 0.85));
-              limbs.push(leaf(9, 15, 11, 18, "#93BE90", 0.85));
+              limbs.push(leaf(-14, 3, 11, -28, "#8FB98C", 0.9));
+              limbs.push(leaf(0, 8, 13, 8, "#7FAE7C", 0.9));
+              limbs.push(leaf(14, 3, 11, 30, "#9CC499", 0.9));
+              limbs.push(leaf(0, 14, 10, 0, "#88B585", 0.85));
             });
 
             return limbs;
           })()}
         </svg>
 
-        {nodes.map((n) =>
-          pillIds.has(n.id) ? (
-            <PillCard
-              key={n.id}
-              node={n}
-              pos={positions[n.id]}
-              onOpen={onOpen}
-            />
-          ) : (
+        {nodes.map((n) => {
+          const pos = positions[n.id];
+          if (!pos) return null;
+          return (
             <NodeCard
               key={n.id}
               node={n}
-              pos={positions[n.id]}
-              cardHeight={heights[n.id] || NODE_H}
+              pos={pos}
               hasKids={expandableIds.has(n.id)}
               isExpanded={expanded.has(n.id)}
               onOpen={onOpen}
               onToggle={onToggle}
               onAdd={onAdd}
             />
-          ),
-        )}
+          );
+        })}
       </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Pill card ──────────────────────────────────────────────────────────────
-// Compact 132×22 pill used when a Sub-goal has ≥4 Task-only children. Shows
-// KIND label, status dot, truncated title. Click opens the NodeModal exactly
-// like a full card.
-function PillCard({
-  node,
-  pos,
-  onOpen,
-}: {
-  node: TreeNode;
-  pos: { x: number; y: number; depth: number };
-  onOpen: (id: string) => void;
-}) {
-  const disp = displayStatus(node);
-  const dotColor = STATUS_HEX[disp];
-  const hasPending = (node.pending_attachment_count || 0) > 0;
-  const bg = hasPending ? "#FFF4C5" : "#FFFFFF";
-  const border = hasPending ? "#E9A100" : "#B4B2A9";
-  return (
-    <div
-      onClick={() => onOpen(node.id)}
-      title={node.title}
-      style={{
-        position: "absolute",
-        left: pos.x,
-        top: pos.y,
-        width: PILL_W,
-        height: PILL_H,
-        background: bg,
-        border: `${hasPending ? 1 : 0.5}px solid ${border}`,
-        borderRadius: 11,
-        boxSizing: "border-box",
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "0 8px",
-        cursor: "pointer",
-        boxShadow: hasPending
-          ? "0 2px 6px rgba(233,161,0,0.28)"
-          : "0 1px 2px rgba(0,0,0,0.04)",
-        overflow: "hidden",
-      }}
-    >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: "50%",
-          background: dotColor,
-          flexShrink: 0,
-        }}
-      />
-      <span
-        style={{
-          fontSize: 8,
-          fontWeight: 700,
-          letterSpacing: 0.4,
-          color: "#8A897F",
-          textTransform: "uppercase",
-          flexShrink: 0,
-        }}
-      >
-        TASK
-      </span>
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 500,
-          color: "#2C2C2A",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        {node.title}
-      </span>
-      {hasPending && (
-        <span
-          style={{
-            fontSize: 7.5,
-            fontWeight: 800,
-            color: "#FFFFFF",
-            background: "#E9A100",
-            padding: "1px 4px",
-            borderRadius: 6,
-            letterSpacing: 0.3,
-            flexShrink: 0,
-          }}
-        >
-          NEW
-        </span>
-      )}
     </div>
   );
 }
@@ -1047,7 +839,6 @@ function PillCard({
 function NodeCard({
   node,
   pos,
-  cardHeight,
   hasKids,
   isExpanded,
   onOpen,
@@ -1056,7 +847,6 @@ function NodeCard({
 }: {
   node: TreeNode;
   pos: { x: number; y: number; depth: number };
-  cardHeight: number;
   hasKids: boolean;
   isExpanded: boolean;
   onOpen: (id: string) => void;
@@ -1069,11 +859,14 @@ function NodeCard({
   const isMilestone = node.kind === "Milestone";
   const isGoal = node.kind === "Goal";
   const isSub = node.kind === "Sub-goal";
+  const isTask = node.kind === "Task";
 
-  // Kind-driven typography per mockup
-  const titleSize = isMilestone ? 12 : isGoal ? 11.5 : 10.5;
-  const titleWeight = isMilestone ? 600 : isGoal ? 600 : 500;
-  const stripeH = isMilestone ? 5 : isGoal ? 5 : 4;
+  // Kind-driven card size + typography (family tree — cards shrink at depth).
+  const cardW = CARD_W[pos.depth];
+  const cardHeight = CARD_H[pos.depth];
+  const titleSize = isMilestone ? 14 : isGoal ? 12 : 11;
+  const titleWeight = isMilestone ? 700 : isGoal ? 600 : isSub ? 600 : 500;
+  const stripeH = isMilestone ? 5 : isGoal ? 4 : 3;
   const kindLabel = node.kind === "Sub-goal" ? "SUB" : node.kind === "Milestone" ? "MILESTONE" : node.kind.toUpperCase();
 
   // Rollup helpers mirror MilestoneOutline. Progress = touched/total across
@@ -1149,7 +942,7 @@ function NodeCard({
         position: "absolute",
         left: pos.x,
         top: pos.y,
-        width: NODE_W,
+        width: cardW,
         height: cardHeight,
         background: cardBg,
         borderRadius: 10,
