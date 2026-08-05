@@ -130,105 +130,183 @@ function buildRoots(flat: ApiNode[]): TreeNode[] {
 // directly under their parent at every depth.
 type Positions = Record<string, { x: number; y: number; depth: number }>;
 
+// Kind ordering used to lay out bands under any parent. Even if a Goal has
+// mixed-kind direct children (some Sub-goals, some Tasks), the render groups
+// them into per-kind row-bands stacked vertically in this order — enforcing
+// Milestone → Goals → Sub-goals → Tasks → Sub-tasks layering visually.
+const KIND_ORDER: Kind[] = ["Milestone", "Goal", "Sub-goal", "Task", "Sub-task"];
+
+type BandDescriptor = {
+  kind: Kind;
+  kindD: number;
+  children: TreeNode[];
+  wrap: boolean;
+  perRow?: number;
+  rows?: number;
+  width: number;
+};
+type BandAnchor = { kindD: number; x: number; y: number };
+
+function groupChildrenByKind(
+  children: TreeNode[],
+): { kind: Kind; kindD: number; children: TreeNode[] }[] {
+  const groups = new Map<Kind, TreeNode[]>();
+  for (const c of children) {
+    const list = groups.get(c.kind) || [];
+    list.push(c);
+    groups.set(c.kind, list);
+  }
+  const result: { kind: Kind; kindD: number; children: TreeNode[] }[] = [];
+  for (const k of KIND_ORDER) {
+    const list = groups.get(k);
+    if (list && list.length > 0) {
+      result.push({ kind: k, kindD: depthOfKind(k), children: list });
+    }
+  }
+  return result;
+}
+
 function layout(root: TreeNode): {
   positions: Positions;
   width: number;
   height: number;
   visibleLeaves: { id: string; x: number; yBottom: number; depth: number }[];
+  bandAnchors: Map<string, BandAnchor[]>;
   maxDepth: number;
 } {
   const positions: Positions = {};
   const subtreeW = new Map<string, number>();
   const visibleLeaves: { id: string; x: number; yBottom: number; depth: number }[] = [];
-  // rowInfo[nodeId] = null (classic spread) or grid metadata (row-wrap layout).
-  const rowInfo = new Map<
-    string,
-    { perRow: number; rows: number; childD: number } | null
-  >();
+  // Per-parent list of bands to place under it, in kind order.
+  const bandsMap = new Map<string, BandDescriptor[]>();
+  // Per-parent list of band-top-center anchors — used to draw one connector
+  // from the parent's bottom to each band's top-of-first-row.
+  const bandAnchors = new Map<string, BandAnchor[]>();
 
   const computeWidth = (n: TreeNode, depth: number): number => {
     const d = Math.min(depth, MAX_DEPTH);
     const cw = CARD_W[d];
     if (n.children.length === 0) {
       subtreeW.set(n.id, cw);
-      rowInfo.set(n.id, null);
+      bandsMap.set(n.id, []);
       return cw;
     }
-    const childD = Math.min(depth + 1, MAX_DEPTH);
-    const N = n.children.length;
-    const maxPerRow = MAX_PER_ROW_D[childD] || 0;
-    // Visual leaf = no visible children in the pruned tree (either genuinely
-    // childless or collapsed so `pruneForPine` dropped its children).
-    const allVisualLeaves = n.children.every((c) => c.children.length === 0);
-    const canWrap = maxPerRow > 0 && N > maxPerRow && allVisualLeaves;
-
-    if (canWrap) {
-      // Leaves: computeWidth just sets subtreeW = card width; still walk them.
-      n.children.forEach((c) => computeWidth(c, childD));
-      const perRow = maxPerRow;
-      const rows = Math.ceil(N / perRow);
-      const rowWidth = perRow * CARD_W[childD] + (perRow - 1) * H_GAP_D[childD];
-      rowInfo.set(n.id, { perRow, rows, childD });
-      const w = Math.max(cw, rowWidth);
-      subtreeW.set(n.id, w);
-      return w;
+    // Split children by kind — each kind renders as its own row-band at the
+    // depth determined by KIND (not by parent-depth+1), so mixed-kind children
+    // stratify into strict Milestone → Goal → Sub-goal → Task → Sub-task
+    // horizontal layers.
+    const rawGroups = groupChildrenByKind(n.children);
+    const bands: BandDescriptor[] = [];
+    let maxBandWidth = 0;
+    for (const g of rawGroups) {
+      const kindD = Math.min(g.kindD, MAX_DEPTH);
+      const N = g.children.length;
+      const maxPerRow = MAX_PER_ROW_D[kindD] || 0;
+      const allVisualLeaves = g.children.every((c) => c.children.length === 0);
+      const canWrap = maxPerRow > 0 && N > maxPerRow && allVisualLeaves;
+      let bandWidth: number;
+      if (canWrap) {
+        // Leaves: still walk them to seed subtreeW.
+        g.children.forEach((c) => computeWidth(c, kindD));
+        const perRow = maxPerRow;
+        const rows = Math.ceil(N / perRow);
+        bandWidth = perRow * CARD_W[kindD] + (perRow - 1) * H_GAP_D[kindD];
+        bands.push({
+          kind: g.kind,
+          kindD,
+          children: g.children,
+          wrap: true,
+          perRow,
+          rows,
+          width: bandWidth,
+        });
+      } else {
+        // Classic Reingold-Tilford spread inside this band: each child
+        // contributes its own subtree-width (so an expanded child within a
+        // mixed band still spreads its descendants normally).
+        let sum = 0;
+        g.children.forEach((c, i) => {
+          sum += computeWidth(c, kindD);
+          if (i > 0) sum += H_GAP_D[kindD];
+        });
+        bandWidth = sum;
+        bands.push({
+          kind: g.kind,
+          kindD,
+          children: g.children,
+          wrap: false,
+          width: bandWidth,
+        });
+      }
+      if (bandWidth > maxBandWidth) maxBandWidth = bandWidth;
     }
-
-    rowInfo.set(n.id, null);
-    let sum = 0;
-    n.children.forEach((c, i) => {
-      sum += computeWidth(c, childD);
-      if (i > 0) sum += H_GAP_D[childD];
-    });
-    const w = Math.max(cw, sum);
+    bandsMap.set(n.id, bands);
+    const w = Math.max(cw, maxBandWidth);
     subtreeW.set(n.id, w);
     return w;
   };
   computeWidth(root, 0);
 
-  const place = (n: TreeNode, xCenter: number, yTop: number, depth: number) => {
+  const place = (n: TreeNode, xCenter: number, yTop: number, depth: number): number => {
     const d = Math.min(depth, MAX_DEPTH);
     const cw = CARD_W[d];
     const ch = CARD_H[d];
     positions[n.id] = { x: xCenter - cw / 2, y: yTop, depth: d };
-    if (n.children.length === 0) {
-      visibleLeaves.push({ id: n.id, x: xCenter, yBottom: yTop + ch, depth: d });
-      return;
+    let maxY = yTop + ch;
+    const bands = bandsMap.get(n.id) || [];
+    if (bands.length === 0) {
+      visibleLeaves.push({ id: n.id, x: xCenter, yBottom: maxY, depth: d });
+      return maxY;
     }
-    const childD = Math.min(depth + 1, MAX_DEPTH);
-    const childY = yTop + ch + V_GAP_D[childD];
-    const info = rowInfo.get(n.id);
-
-    if (info) {
-      const { perRow, rows, childD: cd } = info;
-      const N = n.children.length;
-      const childCW = CARD_W[cd];
-      const childCH = CARD_H[cd];
-      const gap = H_GAP_D[cd];
-      n.children.forEach((c, i) => {
-        const row = Math.floor(i / perRow);
-        const col = i % perRow;
-        const inRow = row === rows - 1 ? N - row * perRow : perRow;
-        const thisRowWidth = inRow * childCW + (inRow - 1) * gap;
-        const rowStart = xCenter - thisRowWidth / 2;
-        const cx = rowStart + col * (childCW + gap) + childCW / 2;
-        const cy = childY + row * (childCH + INTRA_ROW_GAP);
-        place(c, cx, cy, cd);
-      });
-      return;
+    const anchors: BandAnchor[] = [];
+    let cursorY = yTop + ch;
+    let firstBand = true;
+    for (const band of bands) {
+      const kindD = Math.min(band.kindD, MAX_DEPTH);
+      const gapAbove = firstBand
+        ? V_GAP_D[kindD] || V_GAP_D[V_GAP_D.length - 1]
+        : INTRA_ROW_GAP * 2;
+      firstBand = false;
+      const bandTopY = cursorY + gapAbove;
+      anchors.push({ kindD, x: xCenter, y: bandTopY });
+      const childCW = CARD_W[kindD];
+      const childCH = CARD_H[kindD];
+      const gap = H_GAP_D[kindD];
+      let bandBottomY = bandTopY;
+      if (band.wrap && band.perRow && band.rows) {
+        const perRow = band.perRow;
+        const rows = band.rows;
+        const N = band.children.length;
+        band.children.forEach((c, i) => {
+          const row = Math.floor(i / perRow);
+          const col = i % perRow;
+          const inRow = row === rows - 1 ? N - row * perRow : perRow;
+          const thisRowWidth = inRow * childCW + (inRow - 1) * gap;
+          const rowStart = xCenter - thisRowWidth / 2;
+          const cx = rowStart + col * (childCW + gap) + childCW / 2;
+          const cy = bandTopY + row * (childCH + INTRA_ROW_GAP);
+          const childBottom = place(c, cx, cy, kindD);
+          if (childBottom > bandBottomY) bandBottomY = childBottom;
+        });
+      } else {
+        let total = 0;
+        band.children.forEach((c, i) => {
+          total += subtreeW.get(c.id) || childCW;
+          if (i > 0) total += gap;
+        });
+        let cursorX = xCenter - total / 2;
+        for (const c of band.children) {
+          const cw2 = subtreeW.get(c.id) || childCW;
+          const childBottom = place(c, cursorX + cw2 / 2, bandTopY, kindD);
+          if (childBottom > bandBottomY) bandBottomY = childBottom;
+          cursorX += cw2 + gap;
+        }
+      }
+      cursorY = bandBottomY;
+      if (bandBottomY > maxY) maxY = bandBottomY;
     }
-
-    let total = 0;
-    n.children.forEach((c, i) => {
-      total += subtreeW.get(c.id) || CARD_W[childD];
-      if (i > 0) total += H_GAP_D[childD];
-    });
-    let cursorX = xCenter - total / 2;
-    for (const c of n.children) {
-      const cw2 = subtreeW.get(c.id) || CARD_W[childD];
-      place(c, cursorX + cw2 / 2, childY, childD);
-      cursorX += cw2 + H_GAP_D[childD];
-    }
+    bandAnchors.set(n.id, anchors);
+    return maxY;
   };
 
   const rootW = subtreeW.get(root.id) || CARD_W[0];
@@ -252,6 +330,7 @@ function layout(root: TreeNode): {
     width: maxX + PAD_H,
     height: maxY + PAD_V + 60, // room for leaf clusters at bottom
     visibleLeaves,
+    bandAnchors,
     maxDepth: MAX_DEPTH,
   };
 }
@@ -625,7 +704,7 @@ function PineCanvas({
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const { positions, width, height, visibleLeaves } = useMemo(() => layout(root), [root]);
+  const { positions, width, height, visibleLeaves, bandAnchors } = useMemo(() => layout(root), [root]);
   const nodes = useMemo(() => flatten(root, []), [root]);
   const PAD = 20;
 
@@ -805,55 +884,56 @@ function PineCanvas({
               );
             }
 
-            // Tapered filled bezier branch from every parent's bottom-center
-            // to every child's top-center, at every depth.
-            const drawBranch = (parent: TreeNode, child: TreeNode, depth: number) => {
+            // One tapered branch per KIND-BAND under each parent: from parent
+            // bottom-center to the band's top-center anchor. If a parent has
+            // two bands (e.g. Sub-goals + Tasks), you'll see two roughly
+            // parallel branches diving down to different vertical levels —
+            // that IS the layering, made explicit.
+            const drawBranchToBand = (parent: TreeNode, anchor: BandAnchor) => {
               const pp = positions[parent.id];
-              const cp = positions[child.id];
-              if (!pp || !cp) return;
-              const parentCx = pp.x + CARD_W[depth] / 2;
-              const parentBot = pp.y + CARD_H[depth];
-              const childCx = cp.x + CARD_W[depth + 1] / 2;
-              const childTop = cp.y;
-              const wTop = trunkTopByDepth[depth];
-              const wBot = trunkBotByDepth[depth];
+              if (!pp) return;
+              const pd = pp.depth;
+              const parentCx = pp.x + CARD_W[pd] / 2;
+              const parentBot = pp.y + CARD_H[pd];
+              const anchorX = anchor.x;
+              const anchorY = anchor.y;
+              const wTop = trunkTopByDepth[pd];
+              const wBot = trunkBotByDepth[Math.min(anchor.kindD, trunkBotByDepth.length - 1)];
               const hTop = wTop / 2;
               const hBot = wBot / 2;
-              const my = (parentBot + childTop) / 2;
+              const my = (parentBot + anchorY) / 2;
               const d =
                 `M${parentCx - hTop},${parentBot} ` +
-                `C${parentCx - hTop},${my} ${childCx - hBot},${my} ${childCx - hBot},${childTop} ` +
-                `L${childCx + hBot},${childTop} ` +
-                `C${childCx + hBot},${my} ${parentCx + hTop},${my} ${parentCx + hTop},${parentBot} Z`;
+                `C${parentCx - hTop},${my} ${anchorX - hBot},${my} ${anchorX - hBot},${anchorY} ` +
+                `L${anchorX + hBot},${anchorY} ` +
+                `C${anchorX + hBot},${my} ${parentCx + hTop},${my} ${parentCx + hTop},${parentBot} Z`;
               limbs.push(
                 <path
-                  key={`br${depth}-${parent.id}-${child.id}`}
+                  key={`br-${parent.id}-${anchor.kindD}`}
                   d={d}
                   fill={BARK}
-                  opacity={opByDepth[depth]}
+                  opacity={opByDepth[pd]}
                 />,
               );
               // Fillet at the parent bottom to hide the taper corner.
               limbs.push(
                 <circle
-                  key={`jn${depth}-${parent.id}-${child.id}`}
+                  key={`jn-${parent.id}-${anchor.kindD}`}
                   cx={parentCx}
                   cy={parentBot}
                   r={hTop}
                   fill={BARK}
-                  opacity={opByDepth[depth]}
+                  opacity={opByDepth[pd]}
                 />,
               );
             };
 
-            const walkBranches = (n: TreeNode, depth: number) => {
-              if (depth >= MAX_DEPTH) return;
-              for (const c of n.children) {
-                drawBranch(n, c, depth);
-                walkBranches(c, depth + 1);
-              }
+            const walkBranches = (n: TreeNode) => {
+              const anchors = bandAnchors.get(n.id) || [];
+              for (const a of anchors) drawBranchToBand(n, a);
+              for (const c of n.children) walkBranches(c);
             };
-            walkBranches(root, 0);
+            walkBranches(root);
 
             // One 4-ellipse cluster at the bottom tip of every VISIBLE LEAF
             // — every card that isn't currently showing children.
