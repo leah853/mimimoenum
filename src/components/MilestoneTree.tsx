@@ -129,7 +129,13 @@ function buildRoots(flat: ApiNode[]): TreeNode[] {
   return roots;
 }
 
-// ─── Layout: pine — milestone tip at top, fans down, trunk to base ──────────
+// ─── Layout: pine — column-per-Goal nested tree ─────────────────────────────
+// Milestone at top-center. Goals in ONE horizontal row directly under it. Each
+// Goal owns an independent vertical column: its Sub-goals stack vertically
+// directly beneath the Goal at the same x, and each expanded Sub-goal's Tasks
+// stack vertically beneath it as compact pills. Columns are horizontally
+// independent — a tall column (many expanded Sub-goals + Tasks) does NOT push
+// the adjacent Goal's column sideways.
 type Positions = Record<string, { x: number; y: number; depth: number }>;
 type Heights = Record<string, number>;
 
@@ -143,109 +149,133 @@ function estimateCardHeight(title: string): number {
   return Math.max(NODE_H, BASE + TITLE_LINE_H * lines);
 }
 
+// Vertical spacing between the Milestone and the Goals row.
+const MILESTONE_GAP = 56;
+// Vertical spacing between a Goal card bottom and its first Sub-goal.
+const GOAL_TO_SUB_GAP = 22;
+// Vertical spacing between consecutive Sub-goal cards in the same column.
+const SUB_V_GAP = 14;
+// Vertical space between a Sub-goal card bottom and its first Task pill.
+const SUB_TO_TASK_GAP = 12;
+// Horizontal spacing between adjacent Goal columns.
+const GOAL_COL_GAP = 40;
+const PAD_LEFT = 20;
+const PAD_TOP = 12;
+
 function layout(root: TreeNode): {
   positions: Positions;
   heights: Heights;
   width: number;
   height: number;
   maxDepth: number;
-  pillIds: Set<string>;     // node IDs rendered as compact pills
-  pillParents: Set<string>; // parents whose children are pill-stacked
+  pillIds: Set<string>;     // node IDs rendered as compact pills (Tasks)
+  pillParents: Set<string>; // Sub-goals whose Task children are pill-stacked
+  goalColumnBottoms: Record<string, { x: number; y: number }>; // for leaf clusters
 } {
   const positions: Positions = {};
   const heights: Heights = {};
   const pillIds = new Set<string>();
   const pillParents = new Set<string>();
+  const goalColumnBottoms: Record<string, { x: number; y: number }> = {};
 
-  // Pass 1: compute a display height for every node from its title.
+  // Pass 1: card heights for every non-Task node.
   const walkAll = (n: TreeNode) => {
     heights[n.id] = estimateCardHeight(n.title);
     n.children.forEach(walkAll);
   };
   walkAll(root);
 
-  // Pass 2: find the tallest card at each visible depth so every row stacks
-  // cleanly without overlap. Pill children do NOT contribute to row heights —
-  // they stack vertically underneath their parent, taking no row slot.
-  const depthMaxH: number[] = [];
-  const measureDepths = (n: TreeNode, depth: number) => {
-    depthMaxH[depth] = Math.max(depthMaxH[depth] || 0, heights[n.id]);
-    if (n.collapsed) return;
-    if (shouldStackPills(n)) return; // children absorbed into parent's row
-    n.children.forEach((c) => measureDepths(c, depth + 1));
-  };
-  measureDepths(root, 0);
+  const milestoneH = heights[root.id] || NODE_H;
+  const milestoneY = PAD_TOP;
+  const goalsY = milestoneY + milestoneH + MILESTONE_GAP;
 
-  // Pre-compute y-offset per depth: y[d] = 10 + Σ (depthMaxH[i] + V_GAP) for i<d.
-  // Extra V_GAP added below rows that contain pill-stacking parents comes out
-  // of the row's own height budget — we bump the depth's max height to
-  // include the tallest pill stack we'll see at that depth.
-  const depthPillOverhang: number[] = [];
-  const measurePillOverhang = (n: TreeNode, depth: number) => {
-    if (n.collapsed) return;
-    if (shouldStackPills(n)) {
-      const overhang = 14 + n.children.length * (PILL_H + PILL_V_GAP);
-      depthPillOverhang[depth] = Math.max(depthPillOverhang[depth] || 0, overhang);
-      return;
-    }
-    n.children.forEach((c) => measurePillOverhang(c, depth + 1));
-  };
-  measurePillOverhang(root, 0);
-  for (let d = 0; d < depthMaxH.length; d++) {
-    if (depthPillOverhang[d]) depthMaxH[d] += depthPillOverhang[d];
-  }
+  // In the pruned tree, `collapsed` is always false and missing children means
+  // the node isn't expanded. We treat n.children.length as the source of truth.
+  const visibleGoals = root.children;
 
-  const yAt: number[] = [10];
-  for (let d = 0; d < depthMaxH.length; d++) {
-    yAt[d + 1] = yAt[d] + depthMaxH[d] + V_GAP;
-  }
+  let cursorX = PAD_LEFT;
+  let maxColumnBottom = goalsY + milestoneH; // guard for empty tree
 
-  let cursorX = 0;
-  let maxDepth = 0;
-  const place = (node: TreeNode, depth: number): number => {
-    maxDepth = Math.max(maxDepth, depth);
-    const visibleKids = node.collapsed ? [] : node.children;
-    if (!visibleKids.length) {
-      const x = cursorX;
-      cursorX += NODE_W + H_GAP;
-      positions[node.id] = { x, y: yAt[depth], depth };
-      return x + NODE_W / 2;
-    }
-    // Pill-stack: children take ZERO horizontal space — placed as a vertical
-    // column beneath the parent card. Parent gets a normal footprint.
-    if (shouldStackPills(node)) {
-      pillParents.add(node.id);
-      const x = cursorX;
-      cursorX += NODE_W + H_GAP;
-      positions[node.id] = { x, y: yAt[depth], depth };
-      const cx = x + NODE_W / 2;
-      const parentBottom = yAt[depth] + (heights[node.id] || NODE_H);
-      visibleKids.forEach((c, i) => {
-        pillIds.add(c.id);
-        heights[c.id] = PILL_H;
-        positions[c.id] = {
-          x: cx - PILL_W / 2,
-          y: parentBottom + 14 + i * (PILL_H + PILL_V_GAP),
-          depth: depth + 1,
-        };
-        maxDepth = Math.max(maxDepth, depth + 1);
+  visibleGoals.forEach((goal) => {
+    const goalX = cursorX;
+    const goalH = heights[goal.id] || NODE_H;
+    positions[goal.id] = { x: goalX, y: goalsY, depth: 1 };
+    const goalCx = goalX + NODE_W / 2;
+
+    // Track the bottom-most descendant of this Goal's column — used to place
+    // a single leaf cluster there and for the connector spine's end point.
+    let columnBottomY = goalsY + goalH;
+    let columnBottomX = goalCx;
+
+    if (goal.children.length > 0) {
+      // Stack Sub-goals vertically directly beneath the Goal (same x).
+      let subCursorY = goalsY + goalH + GOAL_TO_SUB_GAP;
+      goal.children.forEach((sub) => {
+        const subX = goalX; // same column, aligned under Goal
+        const subH = heights[sub.id] || NODE_H;
+        positions[sub.id] = { x: subX, y: subCursorY, depth: 2 };
+        const subCx = subX + NODE_W / 2;
+        const subBottom = subCursorY + subH;
+
+        if (sub.children.length > 0) {
+          // Task pills stack vertically beneath the Sub-goal, centered.
+          pillParents.add(sub.id);
+          const firstPillY = subBottom + SUB_TO_TASK_GAP;
+          sub.children.forEach((task, ti) => {
+            pillIds.add(task.id);
+            heights[task.id] = PILL_H;
+            positions[task.id] = {
+              x: subCx - PILL_W / 2,
+              y: firstPillY + ti * (PILL_H + PILL_V_GAP),
+              depth: 3,
+            };
+          });
+          const lastTaskY =
+            firstPillY + (sub.children.length - 1) * (PILL_H + PILL_V_GAP) + PILL_H;
+          columnBottomY = Math.max(columnBottomY, lastTaskY);
+          columnBottomX = subCx;
+          subCursorY = lastTaskY + SUB_V_GAP;
+        } else {
+          columnBottomY = Math.max(columnBottomY, subBottom);
+          columnBottomX = subCx;
+          subCursorY = subBottom + SUB_V_GAP;
+        }
       });
-      return cx;
     }
-    const centers = visibleKids.map((c) => place(c, depth + 1));
-    const mid = (centers[0] + centers[centers.length - 1]) / 2;
-    positions[node.id] = { x: mid - NODE_W / 2, y: yAt[depth], depth };
-    return mid;
-  };
-  place(root, 0);
 
+    goalColumnBottoms[goal.id] = { x: columnBottomX, y: columnBottomY };
+    maxColumnBottom = Math.max(maxColumnBottom, columnBottomY);
+    cursorX += NODE_W + GOAL_COL_GAP;
+  });
+
+  // Center the Milestone above the Goals row.
+  const goalsRowRightEdge = visibleGoals.length > 0 ? cursorX - GOAL_COL_GAP : PAD_LEFT + NODE_W;
+  const goalsRowCenterX = (PAD_LEFT + goalsRowRightEdge) / 2;
+  positions[root.id] = {
+    x: goalsRowCenterX - NODE_W / 2,
+    y: milestoneY,
+    depth: 0,
+  };
+
+  // Canvas bounds
   let maxX = 0;
   let maxY = 0;
   for (const [id, p] of Object.entries(positions)) {
     maxX = Math.max(maxX, p.x + (pillIds.has(id) ? PILL_W : NODE_W));
     maxY = Math.max(maxY, p.y + heights[id]);
   }
-  return { positions, heights, width: maxX, height: maxY + TRUNK, maxDepth, pillIds, pillParents };
+  maxY = Math.max(maxY, maxColumnBottom);
+
+  return {
+    positions,
+    heights,
+    width: maxX,
+    height: maxY + 30, // small ground pad so leaf clusters have room
+    maxDepth: 3,
+    pillIds,
+    pillParents,
+    goalColumnBottoms,
+  };
 }
 
 function flatten(node: TreeNode, acc: TreeNode[]): TreeNode[] {
@@ -592,7 +622,7 @@ function PineCanvas({
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const { positions, heights, width, height, pillIds, pillParents } = useMemo(() => layout(root), [root]);
+  const { positions, heights, width, height, pillIds, pillParents, goalColumnBottoms } = useMemo(() => layout(root), [root]);
   const nodes = useMemo(() => flatten(root, []), [root]);
   const PAD = 40;
 
@@ -748,84 +778,41 @@ function PineCanvas({
             const limbs: React.ReactNode[] = [];
             const BARK = "#8A6A4A";
             const BARK_D = "#6E5238";
-            // Branches: THICK at the trunk (depth 0), sharply tapering toward
-            // the leaves. Starts at ~24 and thins to ~3 by depth 5.
             const widthAt = (depth: number) => Math.max(3, 24 - depth * 4.5);
             const rootP = positions[root.id];
 
-            // Central trunk: descends from the milestone tip to the base of
-            // the canvas, thickening as it goes.
-            if (rootP) {
+            // Short thick trunk from Milestone bottom down to the top of the
+            // Goals row — the tapered branches take over from there.
+            if (rootP && root.children.length > 0) {
               const cx = rootP.x + NODE_W / 2;
-              const topY = rootP.y + (heights[root.id] || NODE_H) / 2;
-              const baseY = height + PAD - 18;
-              const topH = widthAt(0) / 2;
-              const baseH = 22;
+              const topY = rootP.y + (heights[root.id] || NODE_H);
+              const firstGoal = root.children[0];
+              const goalTopY = positions[firstGoal.id]?.y ?? topY;
+              const trunkBottomY = topY + Math.max(6, (goalTopY - topY) * 0.55);
+              const topH = 9;
+              const botH = 14;
               limbs.push(
                 <path
                   key="trunk"
-                  d={`M${cx - topH},${topY} L${cx - baseH},${baseY} Q${cx},${baseY + 10} ${cx + baseH},${baseY} L${cx + topH},${topY} Z`}
+                  d={`M${cx - topH},${topY} L${cx - botH},${trunkBottomY} Q${cx},${trunkBottomY + 6} ${cx + botH},${trunkBottomY} L${cx + topH},${topY} Z`}
                   fill={BARK_D}
                 />,
               );
             }
 
-            // Forking tapered branches from each parent card bottom to child top.
-            nodes.forEach((n) => {
-              if (n.collapsed) return;
-              const p = positions[n.id];
-              const w1 = widthAt(p.depth);
-
-              // Pill-stack parents get a simplified vertical spine + short
-              // horizontal stubs to each pill instead of five fanned branches.
-              if (pillParents.has(n.id)) {
-                const cx = p.x + NODE_W / 2;
-                const spineTop = p.y + (heights[n.id] || NODE_H);
-                const lastPill = n.children[n.children.length - 1];
-                const lastPos = positions[lastPill.id];
-                if (lastPos) {
-                  const spineBot = lastPos.y + PILL_H / 2;
-                  const spineW = Math.max(3, w1 * 0.55);
-                  const h = spineW / 2;
-                  limbs.push(
-                    <path
-                      key={n.id + "spine"}
-                      d={`M${cx - h},${spineTop} L${cx - h * 0.7},${spineBot} L${cx + h * 0.7},${spineBot} L${cx + h},${spineTop} Z`}
-                      fill={BARK}
-                    />,
-                  );
-                  limbs.push(
-                    <circle key={n.id + "spinej"} cx={cx} cy={spineTop} r={h} fill={BARK} />,
-                  );
-                  // Horizontal twigs from spine to each pill's left edge.
-                  n.children.forEach((c) => {
-                    const cp = positions[c.id];
-                    if (!cp) return;
-                    const py = cp.y + PILL_H / 2;
-                    limbs.push(
-                      <rect
-                        key={n.id + c.id + "twig"}
-                        x={cx}
-                        y={py - 1}
-                        width={cp.x - cx}
-                        height={2}
-                        fill={BARK}
-                        opacity={0.75}
-                      />,
-                    );
-                  });
-                }
-                return;
-              }
-
-              n.children.forEach((c) => {
+            // 1) Milestone → Goals: tapered bezier branches from Milestone
+            //    bottom to each Goal top (the classic pine limb).
+            if (root.children.length > 0) {
+              const p = positions[root.id];
+              const w1 = widthAt(0);
+              root.children.forEach((c) => {
                 const cp = positions[c.id];
                 if (!cp) return;
                 const x1 = p.x + NODE_W / 2;
-                const y1 = p.y + (heights[n.id] || NODE_H);
+                const y1 = p.y + (heights[root.id] || NODE_H);
                 const x2 = cp.x + NODE_W / 2;
                 const y2 = cp.y;
-                const w2 = widthAt(cp.depth);
+                const w2 = widthAt(1);
                 const my = (y1 + y2) / 2;
                 const h1 = w1 / 2;
                 const h2 = w2 / 2;
@@ -834,34 +821,76 @@ function PineCanvas({
                   `C${x1 - h1},${my} ${x2 - h2},${my} ${x2 - h2},${y2} ` +
                   `L${x2 + h2},${y2} ` +
                   `C${x2 + h2},${my} ${x1 + h1},${my} ${x1 + h1},${y1} Z`;
-                limbs.push(<path key={n.id + c.id} d={d} fill={BARK} />);
-                limbs.push(<circle key={n.id + c.id + "j"} cx={x1} cy={y1} r={h1} fill={BARK} />);
+                limbs.push(<path key={"mg" + c.id} d={d} fill={BARK} />);
+                limbs.push(<circle key={"mgj" + c.id} cx={x1} cy={y1} r={h1} fill={BARK} />);
+              });
+            }
+
+            // 2) Each Goal column: thin vertical spine running from Goal
+            //    bottom down through the stacked Sub-goals. Cards render on
+            //    top so the spine only shows through the gaps between cards.
+            root.children.forEach((goal) => {
+              if (goal.children.length === 0) return;
+              const gp = positions[goal.id];
+              if (!gp) return;
+              const cx = gp.x + NODE_W / 2;
+              const spineTop = gp.y + (heights[goal.id] || NODE_H);
+              const lastSub = goal.children[goal.children.length - 1];
+              const lastSubP = positions[lastSub.id];
+              if (!lastSubP) return;
+              const spineBot = lastSubP.y + (heights[lastSub.id] || NODE_H) / 2;
+              const spineW = 3;
+              limbs.push(
+                <rect
+                  key={"gs" + goal.id}
+                  x={cx - spineW / 2}
+                  y={spineTop}
+                  width={spineW}
+                  height={Math.max(0, spineBot - spineTop)}
+                  fill={BARK}
+                />,
+              );
+            });
+
+            // 3) Each Sub-goal with visible Tasks: thinner vertical spine
+            //    from Sub-goal bottom down to the last Task pill center.
+            root.children.forEach((goal) => {
+              goal.children.forEach((sub) => {
+                if (!pillParents.has(sub.id)) return;
+                const sp = positions[sub.id];
+                if (!sp) return;
+                const cx = sp.x + NODE_W / 2;
+                const spineTop = sp.y + (heights[sub.id] || NODE_H);
+                const lastTask = sub.children[sub.children.length - 1];
+                const lastTaskP = positions[lastTask.id];
+                if (!lastTaskP) return;
+                const spineBot = lastTaskP.y + PILL_H / 2;
+                const spineW = 2;
+                limbs.push(
+                  <rect
+                    key={"ss" + sub.id}
+                    x={cx - spineW / 2}
+                    y={spineTop}
+                    width={spineW}
+                    height={Math.max(0, spineBot - spineTop)}
+                    fill={BARK}
+                    opacity={0.9}
+                  />,
+                );
               });
             });
 
-            // Foliage clusters on childless visible nodes. Skip pill nodes
-            // (they'd smear leaves across the vertical stack) — instead we
-            // draw ONE cluster below the pill-stack parent's last pill.
-            nodes.forEach((n) => {
-              if (n.collapsed) return;
-              if (pillIds.has(n.id)) return;
-              let bx: number;
-              let by: number;
-              if (pillParents.has(n.id)) {
-                const lastPill = n.children[n.children.length - 1];
-                const lastPos = positions[lastPill.id];
-                if (!lastPos) return;
-                bx = lastPos.x + PILL_W / 2;
-                by = lastPos.y + PILL_H + 6;
-              } else {
-                if (n.children && n.children.length) return;
-                const p = positions[n.id];
-                bx = p.x + NODE_W / 2;
-                by = p.y + (heights[n.id] || NODE_H) + 6;
-              }
+            // 4) One leaf cluster at the bottom-most descendant of each
+            //    expanded Goal column. Collapsed Goals get a cluster right
+            //    below the Goal card itself so every branch tip is dressed.
+            root.children.forEach((goal) => {
+              const bottom = goalColumnBottoms[goal.id];
+              if (!bottom) return;
+              const bx = bottom.x;
+              const by = bottom.y + 8;
               const leaf = (dx: number, dy: number, r: number, rot: number, fill: string, op: number) => (
                 <ellipse
-                  key={`${n.id}lf${dx}${dy}`}
+                  key={`lf${goal.id}${dx}${dy}`}
                   cx={bx + dx}
                   cy={by + dy}
                   rx={r}
