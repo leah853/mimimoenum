@@ -70,6 +70,11 @@ const H_GAP_D = [0, 20, 20, 14, 10, 8] as const;
 const MAX_DEPTH = 4;
 const PAD_H = 60;
 const PAD_V = 40;
+// Row-wrap thresholds by CHILD depth. When a parent has more than MAX_PER_ROW_D
+// children of the same kind AND all children are leaves, arrange them in a
+// grid of rows below the parent instead of one wide horizontal strip.
+const MAX_PER_ROW_D = [0, 0, 4, 5, 6] as const;
+const INTRA_ROW_GAP = 10;
 
 const depthOfKind = (k: Kind): number =>
   k === "Milestone" ? 0 : k === "Goal" ? 1 : k === "Sub-goal" ? 2 : k === "Task" ? 3 : 4;
@@ -135,15 +140,41 @@ function layout(root: TreeNode): {
   const positions: Positions = {};
   const subtreeW = new Map<string, number>();
   const visibleLeaves: { id: string; x: number; yBottom: number; depth: number }[] = [];
+  // rowInfo[nodeId] = null (classic spread) or grid metadata (row-wrap layout).
+  const rowInfo = new Map<
+    string,
+    { perRow: number; rows: number; childD: number } | null
+  >();
 
   const computeWidth = (n: TreeNode, depth: number): number => {
     const d = Math.min(depth, MAX_DEPTH);
     const cw = CARD_W[d];
     if (n.children.length === 0) {
       subtreeW.set(n.id, cw);
+      rowInfo.set(n.id, null);
       return cw;
     }
     const childD = Math.min(depth + 1, MAX_DEPTH);
+    const N = n.children.length;
+    const maxPerRow = MAX_PER_ROW_D[childD] || 0;
+    const kind0 = n.children[0].kind;
+    const allSameKind = n.children.every((c) => c.kind === kind0);
+    const allLeaves = n.children.every((c) => c.children.length === 0);
+    const canWrap = maxPerRow > 0 && N > maxPerRow && allSameKind && allLeaves;
+
+    if (canWrap) {
+      // Leaves: computeWidth just sets subtreeW = card width; still walk them.
+      n.children.forEach((c) => computeWidth(c, childD));
+      const perRow = maxPerRow;
+      const rows = Math.ceil(N / perRow);
+      const rowWidth = perRow * CARD_W[childD] + (perRow - 1) * H_GAP_D[childD];
+      rowInfo.set(n.id, { perRow, rows, childD });
+      const w = Math.max(cw, rowWidth);
+      subtreeW.set(n.id, w);
+      return w;
+    }
+
+    rowInfo.set(n.id, null);
     let sum = 0;
     n.children.forEach((c, i) => {
       sum += computeWidth(c, childD);
@@ -166,6 +197,27 @@ function layout(root: TreeNode): {
     }
     const childD = Math.min(depth + 1, MAX_DEPTH);
     const childY = yTop + ch + V_GAP_D[childD];
+    const info = rowInfo.get(n.id);
+
+    if (info) {
+      const { perRow, rows, childD: cd } = info;
+      const N = n.children.length;
+      const childCW = CARD_W[cd];
+      const childCH = CARD_H[cd];
+      const gap = H_GAP_D[cd];
+      n.children.forEach((c, i) => {
+        const row = Math.floor(i / perRow);
+        const col = i % perRow;
+        const inRow = row === rows - 1 ? N - row * perRow : perRow;
+        const thisRowWidth = inRow * childCW + (inRow - 1) * gap;
+        const rowStart = xCenter - thisRowWidth / 2;
+        const cx = rowStart + col * (childCW + gap) + childCW / 2;
+        const cy = childY + row * (childCH + INTRA_ROW_GAP);
+        place(c, cx, cy, cd);
+      });
+      return;
+    }
+
     let total = 0;
     n.children.forEach((c, i) => {
       total += subtreeW.get(c.id) || CARD_W[childD];
@@ -180,7 +232,11 @@ function layout(root: TreeNode): {
   };
 
   const rootW = subtreeW.get(root.id) || CARD_W[0];
-  place(root, PAD_H + rootW / 2, PAD_V, 0);
+  // Canvas width = subtree width + horizontal padding on both sides. Place the
+  // Milestone at the exact horizontal center of that canvas so its card sits
+  // directly above the centered Goals row.
+  const canvasWidth = rootW + PAD_H * 2;
+  place(root, canvasWidth / 2, PAD_V, 0);
 
   // Canvas bounds
   let maxX = 0;
@@ -219,6 +275,7 @@ function subtreePendingCount(node: TreeNode): number {
 export type MilestoneTreeHandle = {
   expandAll: () => void;
   collapseAll: () => void;
+  resetView: () => void;
 };
 
 const EXPAND_KEY = "mimimoenum:pine-expanded";
@@ -298,9 +355,32 @@ const MilestoneTree = forwardRef<MilestoneTreeHandle, { viewMode?: "pine" | "das
     () => ({
       expandAll: () => setExpanded(new Set(expandableIds)),
       collapseAll: () => setExpanded(new Set()),
+      resetView: () => {
+        try { localStorage.removeItem(EXPAND_KEY); } catch {}
+        setExpanded(new Set());
+      },
     }),
     [expandableIds],
   );
+
+  // Prune any stale IDs from the expanded set once the tree is loaded — nodes
+  // that no longer exist (deleted, migrated) should not linger and inflate the
+  // localStorage set.
+  useEffect(() => {
+    if (!apiNodes) return;
+    setExpanded((prev) => {
+      if (prev.size === 0) return prev;
+      const alive = new Set<string>();
+      for (const n of apiNodes) alive.add(n.id);
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (alive.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [apiNodes]);
 
   // Pruned roots — what actually gets laid out.
   const prunedRoots = useMemo(
@@ -572,7 +652,7 @@ function PineCanvas({
     const viewportH = typeof window !== "undefined" ? window.innerHeight - 220 : 800;
     const byW = containerW / canvasW;
     const byH = viewportH / canvasH;
-    return Math.max(0.35, Math.min(1.5, Math.min(byW, byH)));
+    return Math.max(0.4, Math.min(1.4, Math.min(byW, byH)));
   })();
   const scale =
     zoomMode === "fit"

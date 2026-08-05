@@ -70,6 +70,23 @@ export default function MilestonesPage() {
               >
                 Collapse all
               </button>
+              <button
+                type="button"
+                onClick={() => treeRef.current?.resetView()}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 11.5,
+                  background: "#FFFFFF",
+                  border: "0.5px solid #D6D3C7",
+                  borderRadius: 999,
+                  color: "#5F5E5A",
+                  cursor: "pointer",
+                }}
+                className="hover:bg-gray-50"
+                title="Clear saved expansion — show only the Milestone and its Goals"
+              >
+                Reset view
+              </button>
             </div>
           )}
           <div
