@@ -19,6 +19,7 @@
     { "source": "/hhahdemo/settings", "destination": "/hhahdemo/settings.html" },
     { "source": "/hhahdemo/admin/baa", "destination": "/hhahdemo/admin/baa.html" },
     { "source": "/hhahdemo/admin/audit", "destination": "/hhahdemo/admin/audit.html" },
+    { "source": "/hhahdemo/relationship-map", "destination": "/hhahdemo/relationship-map.html" },
     {
       "source": "/orchestrator",
       "destination": "/orchestrator.html"

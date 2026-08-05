@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Care Coordination Documents · Eonexea</title>
+  <title>Hall, Richard · Eonexea</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
@@ -64,21 +64,21 @@
         </a>
       
         <a href="/hhahdemo/patients"
-           
-           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
-                  text-slate-700 hover:bg-slate-100">
-          <span class="w-1.5 h-1.5 rounded-full
-                       bg-slate-300"
-                aria-hidden="true"></span>
-          Patients
-        </a>
-      
-        <a href="/hhahdemo/care-docs"
            aria-current="page"
            class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
                   bg-blue-50 text-blue-700 font-medium">
           <span class="w-1.5 h-1.5 rounded-full
                        bg-blue-600"
+                aria-hidden="true"></span>
+          Patients
+        </a>
+      
+        <a href="/hhahdemo/care-docs"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
                 aria-hidden="true"></span>
           Care Docs
         </a>
@@ -208,13 +208,13 @@
       
         <a href="/hhahdemo/patients"
            class="block px-3 py-2 rounded-md
-                  text-slate-700 hover:bg-slate-100">
+                  bg-blue-50 text-blue-700 font-medium">
           Patients
         </a>
       
         <a href="/hhahdemo/care-docs"
            class="block px-3 py-2 rounded-md
-                  bg-blue-50 text-blue-700 font-medium">
+                  text-slate-700 hover:bg-slate-100">
           Care Docs
         </a>
       
@@ -258,45 +258,86 @@
     <main class="flex-1 px-4 md:px-6 py-4 md:py-6 overflow-auto pb-20 md:pb-6"
           role="main" tabindex="-1">
       
-<h1 class="text-xl font-semibold text-slate-900 mb-4">Care Coordination Documents</h1>
+<a href="/hhahdemo/patients" class="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">← Back to Patients</a>
+
+<div class="flex items-start justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-semibold text-slate-900">Hall, Richard</h1>
+    <p class="text-sm text-slate-500 mt-1">
+      MRN 12-34580 · DOB 1946-11-02
+       · Male
+    </p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/hhahdemo/flags/new?subject_type=patient&subject_id=e97e908b-7497-413c-a11c-78021fdd1f11"
+       class="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-md hover:bg-slate-50">⚑ Flag</a>
+    <a href="/hhahdemo/communication/new?patient_id=e97e908b-7497-413c-a11c-78021fdd1f11"
+       class="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-md hover:bg-slate-50">💬 Talk to Us</a>
+  </div>
+</div>
+
+
+<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+  <div class="text-xs text-blue-700 uppercase tracking-wide mb-1">Care plan</div>
+  
+    <div class="font-medium text-slate-900">
+      🏥 Dr. James Patel, MD
+    </div>
+    
+      <div class="text-sm text-slate-700">Premier Health Partners</div>
+    
+    
+      <div class="text-xs text-slate-500 mt-1">
+        Attributed via 485 · updated 2026-08-05
+      </div>
+    
+  
+</div>
 
 
 <div class="border-b border-slate-200 mb-4">
   <nav class="flex gap-6 -mb-px text-sm">
-    <a href="/hhahdemo/care-docs/signature-required"
-       class="pb-2 text-slate-500 hover:text-slate-700">
-      Docs needing Phy Signatures · 43
-    </a>
-    <a href="/hhahdemo/care-docs/other"
-       class="pb-2 border-b-2 border-blue-600 text-blue-700 font-medium">
-      Other Care Coordination Docs · 0
-    </a>
+    <a href="#timeline" class="border-b-2 border-blue-600 text-blue-700 font-medium pb-2">Timeline</a>
+    <a href="#documents" class="text-slate-500 hover:text-slate-700 pb-2">Documents</a>
+    <a href="#flags" class="text-slate-500 hover:text-slate-700 pb-2">Flags</a>
+    <a href="#activity" class="text-slate-500 hover:text-slate-700 pb-2">Activity</a>
   </nav>
 </div>
 
-<p class="text-sm text-slate-500 mb-4">
-  
-    Patient records that don't require physician signature: hospital DC summaries, lab results, insurance auths, internal HHAH notes.
-  
-</p>
 
-<form method="get" class="flex items-center gap-3 mb-4">
-  <label class="flex items-center gap-2 text-sm text-slate-600">
-    <input type="checkbox" name="flagged" value="1" >
-    ⚑ Flagged only
-  </label>
-  <button type="submit" class="px-3 py-1.5 text-xs text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Apply</button>
-</form>
 
-<div class="bg-white rounded-xl border border-slate-200">
-  
-    <div class="p-12 text-center text-sm text-slate-500">
-      
-        No patient records yet — they'll appear as data syncs.
-      
-    </div>
-  
-</div>
+<section class="bg-white rounded-xl border border-slate-200 p-12 text-center">
+  <p class="text-sm text-slate-500">
+    No active admission. Admissions are created when a 485 is signed and synced.
+  </p>
+</section>
+
+
+
+
+<section class="bg-white rounded-xl border border-slate-200 p-5">
+  <h2 class="text-sm font-semibold text-slate-700 mb-3">PAST ADMISSIONS (2)</h2>
+  <div class="space-y-2">
+    
+      <div class="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
+        <span>
+          ▷ 2025-08-05 →
+          2026-01-24
+        </span>
+        <span class="text-xs text-slate-500">past</span>
+      </div>
+    
+      <div class="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
+        <span>
+          ▷ 2024-08-05 →
+          2024-10-11
+        </span>
+        <span class="text-xs text-slate-500">past</span>
+      </div>
+    
+  </div>
+</section>
+
 
     </main>
   </div>
@@ -321,14 +362,14 @@
     
       <a href="/hhahdemo/patients"
          class="flex flex-col items-center justify-center py-2 text-xs
-                text-slate-600">
+                text-blue-700 font-medium">
         <span class="text-base" aria-hidden="true">🧑‍⚕️</span>
         Patients
       </a>
     
       <a href="/hhahdemo/care-docs"
          class="flex flex-col items-center justify-center py-2 text-xs
-                text-blue-700 font-medium">
+                text-slate-600">
         <span class="text-base" aria-hidden="true">📄</span>
         Docs
       </a>

@@ -113,6 +113,16 @@
           Notifications
         </a>
       
+        <a href="/hhahdemo/relationship-map"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Relationship Map
+        </a>
+      
     </nav>
 
     <div class="px-2 py-3 border-t border-slate-200 space-y-0.5 text-sm">
@@ -226,6 +236,12 @@
           Notifications
         </a>
       
+        <a href="/hhahdemo/relationship-map"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Relationship Map
+        </a>
+      
       <hr class="my-1 border-slate-200">
       <a href="/hhahdemo/profile" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Profile</a>
       <a href="/hhahdemo/settings" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Settings</a>
@@ -275,7 +291,65 @@
 
 <div class="bg-white rounded-xl border border-slate-200">
   
-    <div class="p-12 text-center text-sm text-slate-500">No notifications.</div>
+    <div class="divide-y divide-slate-100">
+    
+      <div class="p-4 flex items-start gap-3 ">
+        <span class="w-1.5 h-1.5 mt-2 bg-slate-300 rounded-full"></span>
+        <div class="flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-medium text-slate-900">New reply from Us</div>
+              <div class="text-sm text-slate-600 mt-0.5">Re: Discharge for John Doe</div>
+              <div class="text-xs text-slate-500 mt-1">
+                unread_communications · 2026-08-05 08:43
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+    
+      <div class="p-4 flex items-start gap-3 bg-blue-50/30">
+        <span class="w-1.5 h-1.5 mt-2 bg-blue-600 rounded-full"></span>
+        <div class="flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-medium text-slate-900">Bulk upload complete</div>
+              <div class="text-sm text-slate-600 mt-0.5">5 files processed, 0 errors</div>
+              <div class="text-xs text-slate-500 mt-1">
+                sync_alerts · 2026-08-05 08:43
+              </div>
+            </div>
+            
+            <form action="/hhahdemo/notifications/7fec12f5-a026-4c32-adbb-f32c58a2c8cf/read" method="get" class="inline">
+              <button class="text-xs text-blue-600 hover:underline">Mark read</button>
+            </form>
+            
+          </div>
+        </div>
+      </div>
+    
+      <div class="p-4 flex items-start gap-3 bg-blue-50/30">
+        <span class="w-1.5 h-1.5 mt-2 bg-blue-600 rounded-full"></span>
+        <div class="flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-medium text-slate-900">HIGH flag from Us on J. Doe</div>
+              <div class="text-sm text-slate-600 mt-0.5">Missing F2F for upcoming recert</div>
+              <div class="text-xs text-slate-500 mt-1">
+                flagged_documents · 2026-08-05 08:43
+              </div>
+            </div>
+            
+            <form action="/hhahdemo/notifications/e7a42368-5492-4036-ae7c-e1358a7607fc/read" method="get" class="inline">
+              <button class="text-xs text-blue-600 hover:underline">Mark read</button>
+            </form>
+            
+          </div>
+        </div>
+      </div>
+    
+    </div>
   
 </div>
 

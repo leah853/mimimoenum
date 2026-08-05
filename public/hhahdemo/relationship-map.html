@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strategic Relationship Intelligence Map · Eonexea</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
+  <style>
+    :root {
+      --c-bg:        #f8fafc;
+      --c-panel:     #ffffff;
+      --c-border:    #e2e8f0;
+      --c-text:      #0f172a;
+      --c-text-dim:  #64748b;
+      --c-brand:     #2563eb;
+      --c-brand-2:   #1e40af;
+      --c-success:   #16a34a;
+      --c-warn:      #d97706;
+      --c-danger:    #dc2626;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: var(--c-text); background: var(--c-bg); }
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+  .min-h-screen{padding-top:32px}</style>
+  
+<style>
+  /* Visual tokens for the map. Kept here so the page is self-contained. */
+  .pg-node-fill        { fill: #2563eb; }
+  .hhah-node-fill      { fill: #059669; }
+  .node-strong-stroke  { stroke: #0f172a; stroke-width: 2.5px; }
+  .node-soft-stroke    { stroke: #ffffff; stroke-width: 2px; }
+  .node-warning-stroke { stroke: #f59e0b; stroke-width: 2.5px; stroke-dasharray: 3 2; }
+  .edge-default        { stroke: #94a3b8; }
+  .edge-opportunity    { stroke: #d97706; }
+  .edge-risk           { stroke: #dc2626; }
+  .edge-low-confidence { stroke-dasharray: 5 4; opacity: 0.7; }
+  .edge-line           { fill: none; cursor: pointer; transition: opacity .15s, stroke-width .15s; }
+  .edge-line:hover     { opacity: 1 !important; }
+  .grid-cell           { fill: #ffffff; stroke: #e2e8f0; }
+  .grid-cell-alt       { fill: #f8fafc; stroke: #e2e8f0; }
+  .no-signal-strip     { fill: #f1f5f9; stroke: #cbd5e1; stroke-dasharray: 3 3; }
+  .no-signal-label     { fill: #64748b; font-style: italic; font-size: 10px; font-weight: 500; }
+  .node-nosignal       { fill: #cbd5e1; stroke: #94a3b8; stroke-width: 2px; stroke-dasharray: 2 2; }
+  .axis-label          { fill: #64748b; font-size: 11px; font-weight: 500; }
+  .axis-title          { fill: #0f172a; font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+  .node-label          { fill: #0f172a; font-size: 10px; font-weight: 500; pointer-events: none; }
+  .node-label-dim      { fill: #64748b; font-size: 9px; pointer-events: none; }
+  .edge-label          { fill: #475569; font-size: 9px; font-weight: 600; pointer-events: none; }
+  .filter-chip-active  { background: #2563eb; color: white; border-color: #2563eb; }
+  details > summary    { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+</style>
+
+</head>
+<body class="min-h-screen"><div style="position:fixed;top:0;left:0;right:0;background:#1e40af;color:white;text-align:center;font-size:12px;padding:6px;z-index:100;font-family:system-ui">&#127916; HHAH Portal Demo &middot; click around to explore &middot; forms are read-only</div>
+  
+<div class="min-h-screen flex flex-col md:flex-row" x-data="{ mobileNavOpen: false }">
+
+  
+  <aside class="hidden md:flex w-60 bg-white border-r border-slate-200 flex-col"
+         aria-label="Primary navigation">
+    <div class="px-5 py-4 border-b border-slate-200">
+      
+      <div class="text-sm font-semibold text-slate-900 truncate">Sunrise Home Health</div>
+      <div class="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-0.5">on Eonexea</div>
+      
+    </div>
+
+    <nav class="flex-1 px-2 py-4 space-y-0.5 text-sm" aria-label="Main">
+      
+      
+        <a href="/hhahdemo/"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Home
+        </a>
+      
+        <a href="/hhahdemo/sync"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Data Sync
+        </a>
+      
+        <a href="/hhahdemo/patients"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Patients
+        </a>
+      
+        <a href="/hhahdemo/care-docs"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Care Docs
+        </a>
+      
+        <a href="/hhahdemo/flags"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Flags
+        </a>
+      
+        <a href="/hhahdemo/communication"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Talk to Us
+        </a>
+      
+        <a href="/hhahdemo/notifications"
+           
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  text-slate-700 hover:bg-slate-100">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-slate-300"
+                aria-hidden="true"></span>
+          Notifications
+        </a>
+      
+        <a href="/hhahdemo/relationship-map"
+           aria-current="page"
+           class="flex items-center gap-2 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500
+                  bg-blue-50 text-blue-700 font-medium">
+          <span class="w-1.5 h-1.5 rounded-full
+                       bg-blue-600"
+                aria-hidden="true"></span>
+          Relationship Map
+        </a>
+      
+    </nav>
+
+    <div class="px-2 py-3 border-t border-slate-200 space-y-0.5 text-sm">
+      <a href="/hhahdemo/profile" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">Profile</a>
+      <a href="/hhahdemo/settings" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">Settings</a>
+      
+      <a href="/hhahdemo/admin/baa" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">BAA</a>
+      <a href="/hhahdemo/admin/audit" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">Audit</a>
+      
+    </div>
+
+    <form action="/hhahdemo/login" method="get" method="post" class="px-2 py-3 border-t border-slate-200">
+      <button type="submit"
+              class="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        Log out
+      </button>
+    </form>
+  </aside>
+
+  
+  <div class="flex-1 flex flex-col min-w-0">
+    
+    <header class="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center gap-3 md:gap-4 sticky top-0 z-20"
+            role="banner">
+      
+      <button @click="mobileNavOpen = !mobileNavOpen"
+              class="md:hidden p-2 text-slate-500 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              aria-label="Toggle navigation menu"
+              :aria-expanded="mobileNavOpen.toString()">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      <label class="flex-1 max-w-2xl">
+        <span class="sr-only">Search</span>
+        <input type="search"
+               placeholder="Search patients, docs, orders…"
+               aria-label="Global search"
+               class="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
+      </label>
+      <div class="flex items-center gap-2 md:gap-3">
+        <a href="/hhahdemo/notifications"
+           aria-label="Notifications"
+           class="relative p-2 text-slate-500 hover:text-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+        </a>
+        
+        <div class="hidden sm:flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-100"
+             aria-label="Current user">
+          <div class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-medium"
+               aria-hidden="true">
+            H
+          </div>
+          <div class="text-xs">
+            <div class="font-medium text-slate-900">Hhah Admin</div>
+          </div>
+        </div>
+        
+      </div>
+    </header>
+
+    
+    <nav x-show="mobileNavOpen" x-cloak
+         class="md:hidden bg-white border-b border-slate-200 px-2 py-2 space-y-0.5 text-sm"
+         aria-label="Mobile navigation">
+      
+        <a href="/hhahdemo/"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Home
+        </a>
+      
+        <a href="/hhahdemo/sync"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Data Sync
+        </a>
+      
+        <a href="/hhahdemo/patients"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Patients
+        </a>
+      
+        <a href="/hhahdemo/care-docs"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Care Docs
+        </a>
+      
+        <a href="/hhahdemo/flags"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Flags
+        </a>
+      
+        <a href="/hhahdemo/communication"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Talk to Us
+        </a>
+      
+        <a href="/hhahdemo/notifications"
+           class="block px-3 py-2 rounded-md
+                  text-slate-700 hover:bg-slate-100">
+          Notifications
+        </a>
+      
+        <a href="/hhahdemo/relationship-map"
+           class="block px-3 py-2 rounded-md
+                  bg-blue-50 text-blue-700 font-medium">
+          Relationship Map
+        </a>
+      
+      <hr class="my-1 border-slate-200">
+      <a href="/hhahdemo/profile" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Profile</a>
+      <a href="/hhahdemo/settings" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Settings</a>
+      
+        <a href="/hhahdemo/admin/baa" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">BAA</a>
+        <a href="/hhahdemo/admin/audit" class="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100">Audit</a>
+      
+      <form action="/hhahdemo/login" method="get" method="post">
+        <button class="w-full text-left px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-md">Log out</button>
+      </form>
+    </nav>
+
+    
+    <main class="flex-1 px-4 md:px-6 py-4 md:py-6 overflow-auto pb-20 md:pb-6"
+          role="main" tabindex="-1">
+      
+<div x-data="relationshipMap()" x-init="init()" class="space-y-4">
+
+  
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-900">Strategic Relationship Intelligence Map</h1>
+      <p class="text-sm text-slate-500 max-w-3xl mt-1">
+        A dual-sided 4×4 map showing PG and HHAH lifecycle maturity, customer success
+        health, and shared patient connection strength.
+      </p>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-slate-500">
+      <span class="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        Live demo data
+      </span>
+      <span x-text="`Generated ${formatTime(data.generated_at)}`"></span>
+    </div>
+  </div>
+
+  
+  <div class="flex flex-wrap items-center gap-2 text-xs px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-amber-900">
+    <span class="font-semibold">PHI guardrail:</span>
+    <span>Shared patient counts shown as aggregates only — no patient identities, names, or records are displayed. No outreach or external action runs without human approval.</span>
+  </div>
+
+  
+  <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="text-sm font-semibold text-slate-900">Filters</div>
+      <button @click="resetFilters()" class="text-xs text-slate-500 hover:text-slate-900">Reset all</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+      
+      <label class="block">
+        <span class="block text-[10px] uppercase tracking-wide text-slate-500 mb-1">Market</span>
+        <select x-model="filters.market" class="w-full border border-slate-200 rounded px-2 py-1.5">
+          <option value="">All</option>
+          <template x-for="m in markets" :key="m"><option :value="m" x-text="m"></option></template>
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-[10px] uppercase tracking-wide text-slate-500 mb-1">Region</span>
+        <select x-model="filters.region" class="w-full border border-slate-200 rounded px-2 py-1.5">
+          <option value="">All</option>
+          <template x-for="r in regions" :key="r"><option :value="r" x-text="r"></option></template>
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-[10px] uppercase tracking-wide text-slate-500 mb-1">Vertical (PG)</span>
+        <select x-model="filters.vertical" class="w-full border border-slate-200 rounded px-2 py-1.5">
+          <option value="">All</option>
+          <template x-for="v in verticals" :key="v"><option :value="v" x-text="v"></option></template>
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-[10px] uppercase tracking-wide text-slate-500 mb-1">Recommended action</span>
+        <select x-model="filters.action" class="w-full border border-slate-200 rounded px-2 py-1.5">
+          <option value="">All</option>
+          <template x-for="a in data.buckets.action_types" :key="a"><option :value="a" x-text="a"></option></template>
+        </select>
+      </label>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">PG lifecycle</div>
+        <div class="flex flex-wrap gap-1">
+          <template x-for="b in data.buckets.pg_lifecycle" :key="b">
+            <button
+              @click="toggleSet(filters.pgLifecycle, b)"
+              :class="filters.pgLifecycle.includes(b) ? 'filter-chip-active' : 'bg-white text-slate-700'"
+              class="px-2 py-1 border border-slate-200 rounded-full text-[11px]" x-text="b"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">HHAH lifecycle</div>
+        <div class="flex flex-wrap gap-1">
+          <template x-for="b in data.buckets.hhah_lifecycle" :key="b">
+            <button
+              @click="toggleSet(filters.hhahLifecycle, b)"
+              :class="filters.hhahLifecycle.includes(b) ? 'filter-chip-active' : 'bg-white text-slate-700'"
+              class="px-2 py-1 border border-slate-200 rounded-full text-[11px]" x-text="b"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">PG health</div>
+        <div class="flex flex-wrap gap-1">
+          <template x-for="b in data.buckets.health" :key="b">
+            <button
+              @click="toggleSet(filters.pgHealth, b)"
+              :class="filters.pgHealth.includes(b) ? 'filter-chip-active' : 'bg-white text-slate-700'"
+              class="px-2 py-1 border border-slate-200 rounded-full text-[11px]" x-text="b"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">HHAH health</div>
+        <div class="flex flex-wrap gap-1">
+          <template x-for="b in data.buckets.health" :key="b">
+            <button
+              @click="toggleSet(filters.hhahHealth, b)"
+              :class="filters.hhahHealth.includes(b) ? 'filter-chip-active' : 'bg-white text-slate-700'"
+              class="px-2 py-1 border border-slate-200 rounded-full text-[11px]" x-text="b"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Relationship strength</div>
+        <div class="flex flex-wrap gap-1">
+          <template x-for="b in data.buckets.strength" :key="b">
+            <button
+              @click="toggleSet(filters.strength, b)"
+              :class="filters.strength.includes(b) ? 'filter-chip-active' : 'bg-white text-slate-700'"
+              class="px-2 py-1 border border-slate-200 rounded-full text-[11px]" x-text="b"></button>
+          </template>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+            <span>Min opportunity</span><span x-text="filters.minOpportunity"></span>
+          </div>
+          <input type="range" min="0" max="100" step="5" x-model.number="filters.minOpportunity" class="w-full">
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+            <span>Min risk</span><span x-text="filters.minRisk"></span>
+          </div>
+          <input type="range" min="0" max="100" step="5" x-model.number="filters.minRisk" class="w-full">
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+            <span>Min confidence</span><span x-text="filters.minConfidence + '%'"></span>
+          </div>
+          <input type="range" min="0" max="100" step="5" x-model.number="filters.minConfidence" class="w-full">
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+            <span>Max data age</span><span x-text="filters.maxAgeDays + 'd'"></span>
+          </div>
+          <input type="range" min="7" max="365" step="7" x-model.number="filters.maxAgeDays" class="w-full">
+        </div>
+      </div>
+    </div>
+
+    <div class="text-[11px] text-slate-500">
+      Showing <span class="font-semibold text-slate-900" x-text="visibleEdges.length"></span> of
+      <span x-text="data.edges.length"></span> relationships ·
+      <span class="font-semibold text-slate-900" x-text="visiblePGIds.size"></span> PGs ·
+      <span class="font-semibold text-slate-900" x-text="visibleHHAHIds.size"></span> HHAHs visible
+    </div>
+  </div>
+
+  
+  <div class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
+
+    
+    <div class="bg-white border border-slate-200 rounded-xl p-3 overflow-x-auto">
+      <svg viewBox="0 0 1200 720" class="w-full h-auto min-w-[960px]" role="img"
+           aria-label="Strategic Relationship Intelligence Map">
+
+        
+        <text x="300" y="34" text-anchor="middle" class="axis-title">Physician Groups (PGs)</text>
+        <text x="900" y="34" text-anchor="middle" class="axis-title">Home Health Agencies (HHAHs)</text>
+
+        
+        <text x="22" y="360" text-anchor="middle" class="axis-title"
+              transform="rotate(-90 22 360)">PG Lifecycle Stage →</text>
+        
+        <text x="1178" y="360" text-anchor="middle" class="axis-title"
+              transform="rotate(90 1178 360)">HHAH Lifecycle Stage →</text>
+
+        
+        
+        
+        
+        
+        <g>
+          
+          
+            
+              <rect x="80" y="80" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="190" y="80" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="300" y="80" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="410" y="80" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+          
+            
+              <rect x="80" y="220" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="190" y="220" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="300" y="220" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="410" y="220" width="110" height="140"
+                    class="grid-cell"/>
+            
+          
+            
+              <rect x="80" y="360" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="190" y="360" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="300" y="360" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="410" y="360" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+          
+          
+          <rect x="80" y="500" width="440" height="140" class="no-signal-strip"/>
+          <text x="88" y="516" class="no-signal-label">No health signal yet</text>
+
+          
+          
+            
+            
+            <text x="74" y="144" text-anchor="end" class="axis-label">
+              <tspan x="74" dy="0">Expansion</tspan>
+              <tspan x="74" dy="12"></tspan>
+            </text>
+          
+            
+            
+            <text x="74" y="284" text-anchor="end" class="axis-label">
+              <tspan x="74" dy="0">Active</tspan>
+              <tspan x="74" dy="12">Customer</tspan>
+            </text>
+          
+            
+            
+            <text x="74" y="424" text-anchor="end" class="axis-label">
+              <tspan x="74" dy="0">Sales</tspan>
+              <tspan x="74" dy="12">Pipeline</tspan>
+            </text>
+          
+            
+            
+            <text x="74" y="564" text-anchor="end" class="axis-label">
+              <tspan x="74" dy="0">Acquisition</tspan>
+              <tspan x="74" dy="12"></tspan>
+            </text>
+          
+
+          
+          
+            <text x="135" y="660" text-anchor="middle"
+                  class="axis-label">Weak</text>
+          
+            <text x="245" y="660" text-anchor="middle"
+                  class="axis-label">At Risk</text>
+          
+            <text x="355" y="660" text-anchor="middle"
+                  class="axis-label">Healthy</text>
+          
+            <text x="465" y="660" text-anchor="middle"
+                  class="axis-label">Strong</text>
+          
+          <text x="300" y="680" text-anchor="middle" class="axis-title">PG Customer Success Health →</text>
+        </g>
+
+        
+        
+        <g>
+          
+            
+              <rect x="680" y="80" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="790" y="80" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="900" y="80" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="1010" y="80" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+          
+            
+              <rect x="680" y="220" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="790" y="220" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="900" y="220" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="1010" y="220" width="110" height="140"
+                    class="grid-cell"/>
+            
+          
+            
+              <rect x="680" y="360" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="790" y="360" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+              <rect x="900" y="360" width="110" height="140"
+                    class="grid-cell"/>
+            
+              <rect x="1010" y="360" width="110" height="140"
+                    class="grid-cell-alt"/>
+            
+          
+          <rect x="680" y="500" width="440" height="140" class="no-signal-strip"/>
+          <text x="688" y="516" class="no-signal-label">No health signal yet</text>
+
+
+          
+            
+            
+            <text x="1126" y="144" text-anchor="start" class="axis-label">
+              <tspan x="1126" dy="0">Premium</tspan>
+              <tspan x="1126" dy="12"></tspan>
+            </text>
+          
+            
+            
+            <text x="1126" y="284" text-anchor="start" class="axis-label">
+              <tspan x="1126" dy="0">Contract</tspan>
+              <tspan x="1126" dy="12"></tspan>
+            </text>
+          
+            
+            
+            <text x="1126" y="424" text-anchor="start" class="axis-label">
+              <tspan x="1126" dy="0">Freemium</tspan>
+              <tspan x="1126" dy="12"></tspan>
+            </text>
+          
+            
+            
+            <text x="1126" y="564" text-anchor="start" class="axis-label">
+              <tspan x="1126" dy="0">Not</tspan>
+              <tspan x="1126" dy="12">Using</tspan>
+            </text>
+          
+
+          
+            <text x="735" y="660" text-anchor="middle"
+                  class="axis-label">Weak</text>
+          
+            <text x="845" y="660" text-anchor="middle"
+                  class="axis-label">At Risk</text>
+          
+            <text x="955" y="660" text-anchor="middle"
+                  class="axis-label">Healthy</text>
+          
+            <text x="1065" y="660" text-anchor="middle"
+                  class="axis-label">Strong</text>
+          
+          <text x="900" y="680" text-anchor="middle" class="axis-title">HHAH Customer Success Health →</text>
+        </g>
+
+        
+
+        
+        <g>
+          
+            <g>
+              <path d="M 465.0 150.0 Q 765.0 178.0 1065.0 150.0"
+                    stroke-width="6.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-01'])"
+                    x-show="visibleEdgeIds.has('e-01')"
+                    :opacity="edgeOpacity(edges['e-01'])"
+                    @click="selectEdge(edges['e-01'])"
+                    @mouseenter="hoveredEdgeId = 'e-01'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Sunrise House Calls ↔ Comfort Home Health
+68 shared patients (Strategic)
+Opp 78 · Risk 25 · Conf 92%
+Action: Monitor Only</title>
+              </path>
+              <text x="765.0" y="160.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-01') && (true)"
+                    >68 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 465.0 150.0 Q 765.0 262.0 1065.0 290.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-02'])"
+                    x-show="visibleEdgeIds.has('e-02')"
+                    :opacity="edgeOpacity(edges['e-02'])"
+                    @click="selectEdge(edges['e-02'])"
+                    @mouseenter="hoveredEdgeId = 'e-02'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Sunrise House Calls ↔ Sterling Home Care
+24 shared patients (High)
+Opp 51 · Risk 14 · Conf 88%
+Action: Expansion Opportunity</title>
+              </path>
+              <text x="765.0" y="237.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-02') && (true)"
+                    >24 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 465.0 150.0 Q 720.5 248.0 976.0 430.0"
+                    stroke-width="2.4"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-03'])"
+                    x-show="visibleEdgeIds.has('e-03')"
+                    :opacity="edgeOpacity(edges['e-03'])"
+                    @click="selectEdge(edges['e-03'])"
+                    @mouseenter="hoveredEdgeId = 'e-03'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Sunrise House Calls ↔ Guardian Home Care
+8 shared patients (Moderate)
+Opp 30 · Risk 5 · Conf 75%
+Action: Warm Introduction Opportunity</title>
+              </path>
+              <text x="720.5" y="265.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-03') && (true)"
+                    >8 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 355.0 290.0 Q 710.0 192.0 1065.0 150.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-04'])"
+                    x-show="visibleEdgeIds.has('e-04')"
+                    :opacity="edgeOpacity(edges['e-04'])"
+                    @click="selectEdge(edges['e-04'])"
+                    @mouseenter="hoveredEdgeId = 'e-04'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Dallas Mobile Physicians ↔ Comfort Home Health
+32 shared patients (High)
+Opp 59 · Risk 19 · Conf 90%
+Action: Monitor Only</title>
+              </path>
+              <text x="710.0" y="202.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-04') && (true)"
+                    >32 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 355.0 290.0 Q 655.0 276.0 955.0 290.0"
+                    stroke-width="2.4"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-05'])"
+                    x-show="visibleEdgeIds.has('e-05')"
+                    :opacity="edgeOpacity(edges['e-05'])"
+                    @click="selectEdge(edges['e-05'])"
+                    @mouseenter="hoveredEdgeId = 'e-05'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Dallas Mobile Physicians ↔ BrightPath Hospice
+19 shared patients (Moderate)
+Opp 28 · Risk 11 · Conf 85%
+Action: Monitor Only</title>
+              </path>
+              <text x="655.0" y="279.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-05') && (true)"
+                    >19 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 355.0 290.0 Q 600.0 290.0 845.0 290.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-06'])"
+                    x-show="visibleEdgeIds.has('e-06')"
+                    :opacity="edgeOpacity(edges['e-06'])"
+                    @click="selectEdge(edges['e-06'])"
+                    @mouseenter="hoveredEdgeId = 'e-06'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Dallas Mobile Physicians ↔ Evergreen Home Health
+41 shared patients (High)
+Opp 43 · Risk 47 · Conf 78%
+Action: Monitor Only</title>
+              </path>
+              <text x="600.0" y="286.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-06') && (true)"
+                    >41 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 245.0 430.0 Q 600.0 374.0 955.0 290.0"
+                    stroke-width="2.4"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-07'])"
+                    x-show="visibleEdgeIds.has('e-07')"
+                    :opacity="edgeOpacity(edges['e-07'])"
+                    @click="selectEdge(edges['e-07'])"
+                    @mouseenter="hoveredEdgeId = 'e-07'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Metro Post Acute Group ↔ BrightPath Hospice
+12 shared patients (Moderate)
+Opp 16 · Risk 7 · Conf 70%
+Action: Monitor Only</title>
+              </path>
+              <text x="600.0" y="363.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-07') && (true)"
+                    >12 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 226.66666666666666 570.0 Q 601.3333333333334 528.0 976.0 430.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-08'])"
+                    x-show="visibleEdgeIds.has('e-08')"
+                    :opacity="edgeOpacity(edges['e-08'])"
+                    @click="selectEdge(edges['e-08'])"
+                    @mouseenter="hoveredEdgeId = 'e-08'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>NorthStar Primary Care ↔ Guardian Home Care
+27 shared patients (High)
+Opp 29 · Risk 16 · Conf 65%
+Action: Relationship Development</title>
+              </path>
+              <text x="601.3333333333334" y="510.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-08') && (true)"
+                    >27 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 226.66666666666666 570.0 Q 526.6666666666666 612.0 826.6666666666666 570.0"
+                    stroke-width="2.4"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-09'])"
+                    x-show="visibleEdgeIds.has('e-09')"
+                    :opacity="edgeOpacity(edges['e-09'])"
+                    @click="selectEdge(edges['e-09'])"
+                    @mouseenter="hoveredEdgeId = 'e-09'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>NorthStar Primary Care ↔ Lakeside Home Health
+9 shared patients (Moderate)
+Opp 7 · Risk 5 · Conf 60%
+Action: Relationship Development</title>
+              </path>
+              <text x="526.6666666666666" y="587.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-09') && (true)"
+                    >9 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 376.0 430.0 Q 610.5 388.0 845.0 290.0"
+                    stroke-width="2.4"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-10'])"
+                    x-show="visibleEdgeIds.has('e-10')"
+                    :opacity="edgeOpacity(edges['e-10'])"
+                    @click="selectEdge(edges['e-10'])"
+                    @mouseenter="hoveredEdgeId = 'e-10'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Valley Home Physicians ↔ Evergreen Home Health
+14 shared patients (Moderate)
+Opp 14 · Risk 30 · Conf 55%
+Action: Monitor Only</title>
+              </path>
+              <text x="610.5" y="370.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-10') && (true)"
+                    >14 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 245.0 150.0 Q 545.0 192.0 845.0 150.0"
+                    stroke-width="6.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-11'])"
+                    x-show="visibleEdgeIds.has('e-11')"
+                    :opacity="edgeOpacity(edges['e-11'])"
+                    @click="selectEdge(edges['e-11'])"
+                    @mouseenter="hoveredEdgeId = 'e-11'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Capital Geriatric Partners ↔ Magnolia Care Network
+78 shared patients (Strategic)
+Opp 59 · Risk 69 · Conf 88%
+Action: Retention Risk</title>
+              </path>
+              <text x="545.0" y="167.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-11') && (true)"
+                    >78 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 245.0 150.0 Q 609.1666666666666 318.0 973.3333333333333 570.0"
+                    stroke-width="1.2"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-12'])"
+                    x-show="visibleEdgeIds.has('e-12')"
+                    :opacity="edgeOpacity(edges['e-12'])"
+                    @click="selectEdge(edges['e-12'])"
+                    @mouseenter="hoveredEdgeId = 'e-12'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Capital Geriatric Partners ↔ Reliance Hospice
+5 shared patients (Low)
+Opp 9 · Risk 39 · Conf 40%
+Action: Monitor Only</title>
+              </path>
+              <text x="609.1666666666666" y="335.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-12') && (hoveredEdgeId === &#39;e-12&#39;)"
+                    >5 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 373.3333333333333 570.0 Q 673.3333333333333 542.0 973.3333333333333 570.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-13'])"
+                    x-show="visibleEdgeIds.has('e-13')"
+                    :opacity="edgeOpacity(edges['e-13'])"
+                    @click="selectEdge(edges['e-13'])"
+                    @mouseenter="hoveredEdgeId = 'e-13'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Riverbend Physician Group ↔ Reliance Hospice
+22 shared patients (High)
+Opp 7 · Risk 33 · Conf 35%
+Action: Human Review Required</title>
+              </path>
+              <text x="673.3333333333333" y="552.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-13') && (true)"
+                    >22 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 465.0 290.0 Q 699.5 346.0 934.0 430.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-14'])"
+                    x-show="visibleEdgeIds.has('e-14')"
+                    :opacity="edgeOpacity(edges['e-14'])"
+                    @click="selectEdge(edges['e-14'])"
+                    @mouseenter="hoveredEdgeId = 'e-14'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Pioneer Senior Care ↔ Cedar Hills Hospice
+22 shared patients (High)
+Opp 36 · Risk 13 · Conf 80%
+Action: Warm Introduction Opportunity</title>
+              </path>
+              <text x="699.5" y="349.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-14') && (true)"
+                    >22 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 465.0 290.0 Q 765.0 290.0 1065.0 290.0"
+                    stroke-width="6.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-15'])"
+                    x-show="visibleEdgeIds.has('e-15')"
+                    :opacity="edgeOpacity(edges['e-15'])"
+                    @click="selectEdge(edges['e-15'])"
+                    @mouseenter="hoveredEdgeId = 'e-15'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Pioneer Senior Care ↔ Sterling Home Care
+51 shared patients (Strategic)
+Opp 63 · Risk 25 · Conf 92%
+Action: Expansion Opportunity</title>
+              </path>
+              <text x="765.0" y="286.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-15') && (true)"
+                    >51 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 334.0 430.0 Q 580.3333333333333 514.0 826.6666666666666 570.0"
+                    stroke-width="2.4"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-16'])"
+                    x-show="visibleEdgeIds.has('e-16')"
+                    :opacity="edgeOpacity(edges['e-16'])"
+                    @click="selectEdge(edges['e-16'])"
+                    @mouseenter="hoveredEdgeId = 'e-16'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>GreenHill Internists ↔ Lakeside Home Health
+7 shared patients (Moderate)
+Opp 12 · Risk 4 · Conf 65%
+Action: Relationship Development</title>
+              </path>
+              <text x="580.3333333333333" y="503.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-16') && (true)"
+                    >7 pts</text>
+            </g>
+          
+            <g>
+              <path d="M 245.0 430.0 Q 545.0 388.0 845.0 290.0"
+                    stroke-width="4.0"
+                    class="edge-line"
+                    :class="edgeClass(edges['e-17'])"
+                    x-show="visibleEdgeIds.has('e-17')"
+                    :opacity="edgeOpacity(edges['e-17'])"
+                    @click="selectEdge(edges['e-17'])"
+                    @mouseenter="hoveredEdgeId = 'e-17'"
+                    @mouseleave="hoveredEdgeId = null">
+                <title>Metro Post Acute Group ↔ Evergreen Home Health
+38 shared patients (High)
+Opp 38 · Risk 45 · Conf 75%
+Action: Monitor Only</title>
+              </path>
+              <text x="545.0" y="370.0"
+                    text-anchor="middle" class="edge-label"
+                    x-show="visibleEdgeIds.has('e-17') && (true)"
+                    >38 pts</text>
+            </g>
+          
+        </g>
+
+        
+        <g>
+          
+            <g class="cursor-pointer"
+               transform="translate(465.0,150.0)"
+               x-show="visiblePGIds.has('pg-01')"
+               :opacity="nodeOpacity('pg','pg-01')"
+               @click="selectPGById('pg-01')">
+              <circle r="12" class="pg-node-fill node-strong-stroke"></circle>
+              
+              <circle r="16" fill="none" stroke="#1e40af" stroke-width="1.5" opacity="0.5"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Sunrise House C…<title>Sunrise House Calls</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Dallas</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(355.0,290.0)"
+               x-show="visiblePGIds.has('pg-02')"
+               :opacity="nodeOpacity('pg','pg-02')"
+               @click="selectPGById('pg-02')">
+              <circle r="12" class="pg-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Dallas Mobile P…<title>Dallas Mobile Physicians</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Dallas</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(245.0,430.0)"
+               x-show="visiblePGIds.has('pg-03')"
+               :opacity="nodeOpacity('pg','pg-03')"
+               @click="selectPGById('pg-03')">
+              <circle r="12" class="pg-node-fill node-warning-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Metro Post Acut…<title>Metro Post Acute Group</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Houston</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(226.66666666666666,570.0)"
+               x-show="visiblePGIds.has('pg-04')"
+               :opacity="nodeOpacity('pg','pg-04')"
+               @click="selectPGById('pg-04')">
+              <circle r="12" class="node-nosignal node-nosignal"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">NorthStar Prima…<title>NorthStar Primary Care</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Phoenix</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(376.0,430.0)"
+               x-show="visiblePGIds.has('pg-05')"
+               :opacity="nodeOpacity('pg','pg-05')"
+               @click="selectPGById('pg-05')">
+              <circle r="12" class="pg-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Valley Home Phy…<title>Valley Home Physicians</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">San Diego</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(245.0,150.0)"
+               x-show="visiblePGIds.has('pg-06')"
+               :opacity="nodeOpacity('pg','pg-06')"
+               @click="selectPGById('pg-06')">
+              <circle r="12" class="pg-node-fill node-warning-stroke"></circle>
+              
+              <circle r="16" fill="none" stroke="#1e40af" stroke-width="1.5" opacity="0.5"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Capital Geriatr…<title>Capital Geriatric Partners</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Atlanta</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(373.3333333333333,570.0)"
+               x-show="visiblePGIds.has('pg-07')"
+               :opacity="nodeOpacity('pg','pg-07')"
+               @click="selectPGById('pg-07')">
+              <circle r="12" class="node-nosignal node-nosignal"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Riverbend Physi…<title>Riverbend Physician Group</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Charlotte</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(465.0,290.0)"
+               x-show="visiblePGIds.has('pg-08')"
+               :opacity="nodeOpacity('pg','pg-08')"
+               @click="selectPGById('pg-08')">
+              <circle r="12" class="pg-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Pioneer Senior …<title>Pioneer Senior Care</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Denver</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(334.0,430.0)"
+               x-show="visiblePGIds.has('pg-09')"
+               :opacity="nodeOpacity('pg','pg-09')"
+               @click="selectPGById('pg-09')">
+              <circle r="12" class="pg-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">GreenHill Inter…<title>GreenHill Internists</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Nashville</text>
+            </g>
+          
+        </g>
+
+        
+        <g>
+          
+            <g class="cursor-pointer"
+               transform="translate(1065.0,150.0)"
+               x-show="visibleHHAHIds.has('hh-01')"
+               :opacity="nodeOpacity('hhah','hh-01')"
+               @click="selectHHAHById('hh-01')">
+              <circle r="12" class="hhah-node-fill node-strong-stroke"></circle>
+              
+              <circle r="16" fill="none" stroke="#047857" stroke-width="1.5" opacity="0.5"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Comfort Home He…<title>Comfort Home Health</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Dallas</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(955.0,290.0)"
+               x-show="visibleHHAHIds.has('hh-02')"
+               :opacity="nodeOpacity('hhah','hh-02')"
+               @click="selectHHAHById('hh-02')">
+              <circle r="12" class="hhah-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">BrightPath Hosp…<title>BrightPath Hospice</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Houston</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(976.0,430.0)"
+               x-show="visibleHHAHIds.has('hh-03')"
+               :opacity="nodeOpacity('hhah','hh-03')"
+               @click="selectHHAHById('hh-03')">
+              <circle r="12" class="hhah-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Guardian Home C…<title>Guardian Home Care</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Phoenix</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(973.3333333333333,570.0)"
+               x-show="visibleHHAHIds.has('hh-04')"
+               :opacity="nodeOpacity('hhah','hh-04')"
+               @click="selectHHAHById('hh-04')">
+              <circle r="12" class="node-nosignal node-nosignal"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Reliance Hospice<title>Reliance Hospice</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Atlanta</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(845.0,290.0)"
+               x-show="visibleHHAHIds.has('hh-05')"
+               :opacity="nodeOpacity('hhah','hh-05')"
+               @click="selectHHAHById('hh-05')">
+              <circle r="12" class="hhah-node-fill node-warning-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Evergreen Home …<title>Evergreen Home Health</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">San Diego</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(845.0,150.0)"
+               x-show="visibleHHAHIds.has('hh-06')"
+               :opacity="nodeOpacity('hhah','hh-06')"
+               @click="selectHHAHById('hh-06')">
+              <circle r="12" class="hhah-node-fill node-warning-stroke"></circle>
+              
+              <circle r="16" fill="none" stroke="#047857" stroke-width="1.5" opacity="0.5"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Magnolia Care N…<title>Magnolia Care Network</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Charlotte</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(934.0,430.0)"
+               x-show="visibleHHAHIds.has('hh-07')"
+               :opacity="nodeOpacity('hhah','hh-07')"
+               @click="selectHHAHById('hh-07')">
+              <circle r="12" class="hhah-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Cedar Hills Hos…<title>Cedar Hills Hospice</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Denver</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(826.6666666666666,570.0)"
+               x-show="visibleHHAHIds.has('hh-08')"
+               :opacity="nodeOpacity('hhah','hh-08')"
+               @click="selectHHAHById('hh-08')">
+              <circle r="12" class="node-nosignal node-nosignal"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Lakeside Home H…<title>Lakeside Home Health</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Nashville</text>
+            </g>
+          
+            <g class="cursor-pointer"
+               transform="translate(1065.0,290.0)"
+               x-show="visibleHHAHIds.has('hh-09')"
+               :opacity="nodeOpacity('hhah','hh-09')"
+               @click="selectHHAHById('hh-09')">
+              <circle r="12" class="hhah-node-fill node-soft-stroke"></circle>
+              
+              <text y="26" text-anchor="middle" class="node-label">Sterling Home C…<title>Sterling Home Care</title></text>
+              <text y="37" text-anchor="middle" class="node-label-dim">Dallas</text>
+            </g>
+          
+        </g>
+      </svg>
+    </div>
+
+    
+    <div class="space-y-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 text-xs">
+        <div class="text-sm font-semibold text-slate-900 mb-3">Legend</div>
+
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <svg width="20" height="20"><circle cx="10" cy="10" r="7" class="pg-node-fill node-soft-stroke"/></svg>
+            <span class="text-slate-700">PG node</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="20" height="20"><circle cx="10" cy="10" r="7" class="hhah-node-fill node-soft-stroke"/></svg>
+            <span class="text-slate-700">HHAH node</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="20" height="20"><circle cx="10" cy="10" r="7" fill="#94a3b8" class="node-warning-stroke"/></svg>
+            <span class="text-slate-700">Weak / At-risk health (dashed)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="20" height="20">
+              <circle cx="10" cy="10" r="9" fill="none" stroke="#1e40af" stroke-width="1.5" opacity="0.6"/>
+              <circle cx="10" cy="10" r="6" class="pg-node-fill"/>
+            </svg>
+            <span class="text-slate-700">Premium / Expansion (ring)</span>
+          </div>
+        </div>
+
+        <div class="my-3 border-t border-slate-200"></div>
+
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">Line thickness = shared patients</div>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#94a3b8" stroke-width="1.2"/></svg>
+            <span>1–5 (Low)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#94a3b8" stroke-width="2.4"/></svg>
+            <span>6–20 (Moderate)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#94a3b8" stroke-width="4"/></svg>
+            <span>21–50 (High)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#94a3b8" stroke-width="6"/></svg>
+            <span>50+ (Strategic)</span>
+          </div>
+        </div>
+
+        <div class="my-3 border-t border-slate-200"></div>
+
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">Edge accents</div>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#d97706" stroke-width="3"/></svg>
+            <span>High opportunity (≥70)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#dc2626" stroke-width="3"/></svg>
+            <span>High risk (≥70)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#94a3b8" stroke-width="2.4" stroke-dasharray="5 4"/></svg>
+            <span>Low confidence (&lt;60%)</span>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="bg-white border border-slate-200 rounded-xl p-4 text-xs min-h-[180px]">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-semibold text-slate-900">Details</div>
+          <button x-show="selected"
+                  @click="clearSelection()"
+                  class="text-[11px] text-slate-500 hover:text-slate-900">Close</button>
+        </div>
+
+        <template x-if="!selected">
+          <div class="text-slate-500">
+            Click a node or relationship line to see details, evidence, and recommended actions.
+          </div>
+        </template>
+
+        
+        <template x-if="selected && selected.kind === 'pg'">
+          <div class="space-y-3">
+            <div>
+              <div class="text-[10px] uppercase tracking-wide text-slate-500">Physician Group</div>
+              <div class="text-base font-semibold text-slate-900" x-text="selected.entity.name"></div>
+              <div class="text-slate-500" x-text="`${selected.entity.market} · ${selected.entity.region} · ${selected.entity.vertical}`"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Lifecycle</div>
+                <div class="font-medium text-slate-900" x-text="selected.entity.lifecycle_bucket"></div>
+                <div class="text-[10px] text-slate-500" x-text="`raw: ${selected.entity.lifecycle_stage_raw}`"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">CS Health</div>
+                <div class="font-medium" :class="healthClass(selected.entity.cs_health_bucket)"
+                     x-text="formatHealth(selected.entity)"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Patients</div>
+                <div class="font-medium text-slate-900" x-text="selected.entity.total_patient_count.toLocaleString()"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Account value</div>
+                <div class="font-medium text-slate-900" x-text="formatMoney(selected.entity.account_value)"></div>
+              </div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Connected HHAHs (top 5 by shared)</div>
+              <div class="space-y-1">
+                <template x-for="row in topConnectionsForPG(selected.entity.id, 5)" :key="row.edge.id">
+                  <button @click="selectEdge(row.edge)"
+                          class="w-full flex items-center justify-between text-left px-2 py-1.5 bg-slate-50 hover:bg-slate-100 rounded">
+                    <div>
+                      <div class="font-medium text-slate-900" x-text="row.other.name"></div>
+                      <div class="text-[10px] text-slate-500"
+                           x-text="`${row.other.lifecycle_bucket} · ${row.other.cs_health_bucket || 'No signal'}`"></div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-semibold text-slate-900" x-text="`${row.edge.shared_patient_count} pts`"></div>
+                      <div class="text-[10px] text-slate-500" x-text="row.edge.relationship_strength"></div>
+                    </div>
+                  </button>
+                </template>
+                <div x-show="topConnectionsForPG(selected.entity.id, 5).length === 0"
+                     class="text-slate-500">No connections visible under current filters.</div>
+              </div>
+            </div>
+            <div class="text-[10px] text-slate-500">
+              Last updated <span x-text="formatTime(selected.entity.last_updated)"></span>
+              · confidence <span x-text="selected.entity.confidence_score + '%'"></span>
+            </div>
+          </div>
+        </template>
+
+        
+        <template x-if="selected && selected.kind === 'hhah'">
+          <div class="space-y-3">
+            <div>
+              <div class="text-[10px] uppercase tracking-wide text-slate-500">Home Health Agency</div>
+              <div class="text-base font-semibold text-slate-900" x-text="selected.entity.name"></div>
+              <div class="text-slate-500" x-text="`${selected.entity.market} · ${selected.entity.region}`"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Lifecycle</div>
+                <div class="font-medium text-slate-900" x-text="selected.entity.lifecycle_bucket"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">CS Health</div>
+                <div class="font-medium" :class="healthClass(selected.entity.cs_health_bucket)"
+                     x-text="formatHealth(selected.entity)"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Patients</div>
+                <div class="font-medium text-slate-900" x-text="selected.entity.total_patient_count.toLocaleString()"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Account value</div>
+                <div class="font-medium text-slate-900" x-text="formatMoney(selected.entity.account_value)"></div>
+              </div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Connected PGs (top 5)</div>
+              <div class="space-y-1">
+                <template x-for="row in topConnectionsForHHAH(selected.entity.id, 5)" :key="row.edge.id">
+                  <button @click="selectEdge(row.edge)"
+                          class="w-full flex items-center justify-between text-left px-2 py-1.5 bg-slate-50 hover:bg-slate-100 rounded">
+                    <div>
+                      <div class="font-medium text-slate-900" x-text="row.other.name"></div>
+                      <div class="text-[10px] text-slate-500"
+                           x-text="`${row.other.lifecycle_bucket} · ${row.other.cs_health_bucket || 'No signal'}`"></div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-semibold text-slate-900" x-text="`${row.edge.shared_patient_count} pts`"></div>
+                      <div class="text-[10px] text-slate-500" x-text="row.edge.relationship_strength"></div>
+                    </div>
+                  </button>
+                </template>
+                <div x-show="topConnectionsForHHAH(selected.entity.id, 5).length === 0"
+                     class="text-slate-500">No connections visible under current filters.</div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        
+        <template x-if="selected && selected.kind === 'edge'">
+          <div class="space-y-3">
+            <div>
+              <div class="text-[10px] uppercase tracking-wide text-slate-500">Relationship</div>
+              <div class="text-sm font-semibold text-slate-900">
+                <span x-text="pgById(selected.entity.pg_id).name"></span>
+                <span class="text-slate-400 mx-1">↔</span>
+                <span x-text="hhahById(selected.entity.hhah_id).name"></span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Shared patients</div>
+                <div class="font-semibold text-slate-900 text-base" x-text="selected.entity.shared_patient_count"></div>
+                <div class="text-[10px] text-slate-500" x-text="selected.entity.relationship_strength"></div>
+              </div>
+              <div class="p-2 bg-slate-50 rounded">
+                <div class="text-[10px] text-slate-500">Confidence</div>
+                <div class="font-semibold text-slate-900 text-base" x-text="selected.entity.confidence_score + '%'"></div>
+                <div class="text-[10px]" :class="freshnessClass(selected.entity.freshness_status)"
+                     x-text="freshnessLabel(selected.entity)"></div>
+              </div>
+              <div class="p-2 bg-amber-50 rounded">
+                <div class="text-[10px] text-amber-700">Opportunity</div>
+                <div class="font-semibold text-amber-900 text-base" x-text="selected.entity.opportunity_score"></div>
+              </div>
+              <div class="p-2 bg-red-50 rounded">
+                <div class="text-[10px] text-red-700">Risk</div>
+                <div class="font-semibold text-red-900 text-base" x-text="selected.entity.risk_score"></div>
+              </div>
+            </div>
+
+            <div x-show="selected.entity.recommended_action" class="p-3 bg-blue-50 border border-blue-200 rounded">
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-[10px] uppercase tracking-wide text-blue-700">Recommended action</div>
+                <span x-show="selected.entity.recommended_action.human_approval_required"
+                      class="text-[10px] font-semibold px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded">
+                  ⚠ Approval required
+                </span>
+              </div>
+              <div class="font-semibold text-slate-900 text-sm"
+                   x-text="selected.entity.recommended_action.action_type"></div>
+              <div class="text-slate-700 mt-1" x-text="selected.entity.recommended_action.reason"></div>
+              <div class="text-slate-500 mt-1.5">
+                <span class="font-medium">Next step:</span>
+                <span x-text="selected.entity.recommended_action.next_step"></span>
+              </div>
+              <div class="text-[10px] text-slate-500 mt-1.5">
+                Owner: <span class="font-medium" x-text="selected.entity.recommended_action.owner_role"></span>
+                · Priority <span class="font-medium" x-text="selected.entity.recommended_action.priority"></span>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+                Evidence (<span x-text="selected.entity.evidence_count"></span>)
+              </div>
+              <div class="space-y-1.5">
+                <template x-for="ev in selected.entity.evidence_refs" :key="ev.id">
+                  <div class="p-2 bg-slate-50 rounded">
+                    <div class="flex items-center justify-between">
+                      <div class="font-medium text-slate-900" x-text="ev.source_name"></div>
+                      <span class="text-[10px]" :class="freshnessClass(ev.freshness_status)"
+                            x-text="ev.freshness_status"></span>
+                    </div>
+                    <div class="text-slate-600" x-text="ev.claim"></div>
+                    <div class="text-[10px] text-slate-500 mt-0.5">
+                      <span x-text="ev.source_type"></span> ·
+                      <span x-text="`${ev.confidence_score}% conf`"></span> ·
+                      verified <span x-text="formatTime(ev.last_verified)"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div class="text-[10px] text-slate-500">
+              Last updated <span x-text="formatTime(selected.entity.last_updated)"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  
+  <div class="bg-white border border-slate-200 rounded-xl">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <div>
+        <div class="text-sm font-semibold text-slate-900">Recommended action queue</div>
+        <div class="text-[11px] text-slate-500">
+          Ranked by priority then opportunity/risk. No action executes without human approval.
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <label>Sort by
+          <select x-model="actionSort" class="ml-1 border border-slate-200 rounded px-2 py-1">
+            <option value="priority">Priority</option>
+            <option value="opportunity">Opportunity</option>
+            <option value="risk">Risk</option>
+            <option value="shared">Shared patients</option>
+            <option value="confidence">Confidence</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wide">
+          <tr>
+            <th class="text-left px-3 py-2 w-12">Pri</th>
+            <th class="text-left px-3 py-2">Relationship</th>
+            <th class="text-left px-3 py-2">Action</th>
+            <th class="text-left px-3 py-2">Reason</th>
+            <th class="text-left px-3 py-2">Owner</th>
+            <th class="text-right px-3 py-2">Opp</th>
+            <th class="text-right px-3 py-2">Risk</th>
+            <th class="text-right px-3 py-2">Conf</th>
+            <th class="text-left px-3 py-2">Approval</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in actionQueue" :key="row.edge.id">
+            <tr class="border-t border-slate-100 hover:bg-slate-50 cursor-pointer"
+                @click="selectEdge(row.edge); scrollToTop()">
+              <td class="px-3 py-2">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-semibold"
+                      :class="priorityBadgeClass(row.action.priority)"
+                      x-text="row.action.priority"></span>
+              </td>
+              <td class="px-3 py-2">
+                <div class="font-medium text-slate-900">
+                  <span x-text="row.pg.name"></span>
+                  <span class="text-slate-400 mx-1">↔</span>
+                  <span x-text="row.hhah.name"></span>
+                </div>
+                <div class="text-[10px] text-slate-500"
+                     x-text="`${row.edge.shared_patient_count} shared · ${row.edge.relationship_strength}`"></div>
+              </td>
+              <td class="px-3 py-2">
+                <span class="inline-block px-2 py-0.5 rounded-full font-medium text-[10px]"
+                      :class="actionBadgeClass(row.action.action_type)"
+                      x-text="row.action.action_type"></span>
+              </td>
+              <td class="px-3 py-2 text-slate-700 max-w-md" x-text="row.action.reason"></td>
+              <td class="px-3 py-2 text-slate-700" x-text="row.action.owner_role"></td>
+              <td class="px-3 py-2 text-right font-semibold text-amber-700" x-text="row.edge.opportunity_score"></td>
+              <td class="px-3 py-2 text-right font-semibold text-red-700" x-text="row.edge.risk_score"></td>
+              <td class="px-3 py-2 text-right">
+                <span x-text="row.edge.confidence_score + '%'"></span>
+                <div class="text-[10px]" :class="freshnessClass(row.edge.freshness_status)"
+                     x-text="row.edge.freshness_status"></div>
+              </td>
+              <td class="px-3 py-2">
+                <span x-show="row.action.human_approval_required"
+                      class="text-[10px] font-semibold px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded">
+                  ⚠ Required
+                </span>
+                <span x-show="!row.action.human_approval_required"
+                      class="text-[10px] text-slate-500">Auto-OK</span>
+              </td>
+            </tr>
+          </template>
+          <tr x-show="actionQueue.length === 0">
+            <td colspan="9" class="px-3 py-8 text-center text-slate-500">
+              No relationships match the current filters.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<script id="rim-payload" type="application/json">{"buckets": {"action_types": ["Warm Introduction Opportunity", "Expansion Opportunity", "Retention Risk", "Relationship Development", "Monitor Only", "Human Review Required"], "health": ["Weak", "At Risk", "Healthy", "Strong"], "hhah_lifecycle": ["Not Using", "Freemium", "Contract", "Premium"], "pg_lifecycle": ["Acquisition", "Sales Pipeline", "Active Customer", "Expansion"], "strength": ["Low", "Moderate", "High", "Strategic"]}, "edges": [{"confidence_score": 92, "evidence_count": 2, "evidence_refs": [{"claim": "68 distinct patients seen by both in last 90 days", "confidence_score": 95, "freshness_status": "fresh", "id": "ev-001", "last_verified": "2026-08-02T08:43:41.890832+00:00", "source_name": "Claims Overlap Report Q1", "source_type": "claims", "source_url_or_reference": "internal://claims/1"}, {"claim": "Co-marketing agreement on file", "confidence_score": 90, "freshness_status": "fresh", "id": "ev-002", "last_verified": "2026-07-22T08:43:41.890832+00:00", "source_name": "Salesforce \u2014 Joint Account Plan", "source_type": "crm", "source_url_or_reference": "internal://crm/2"}], "freshness_status": "fresh", "hhah_id": "hh-01", "id": "e-01", "label_x": 765.0, "label_y": 160.0, "last_updated": "2026-08-02T08:43:41.890832+00:00", "line_thickness": 6.0, "opportunity_score": 78, "path_d": "M 465.0 150.0 Q 765.0 178.0 1065.0 150.0", "pg_id": "pg-01", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "Strategic", "risk_score": 25, "shared_patient_count": 68}, {"confidence_score": 88, "evidence_count": 1, "evidence_refs": [{"claim": "24 patients shared across post-acute episodes", "confidence_score": 88, "freshness_status": "fresh", "id": "ev-003", "last_verified": "2026-07-28T08:43:41.890832+00:00", "source_name": "Claims Overlap Report Q1", "source_type": "claims", "source_url_or_reference": "internal://claims/3"}], "freshness_status": "fresh", "hhah_id": "hh-09", "id": "e-02", "label_x": 765.0, "label_y": 237.0, "last_updated": "2026-07-28T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 51, "path_d": "M 465.0 150.0 Q 765.0 262.0 1065.0 290.0", "pg_id": "pg-01", "recommended_action": {"action_type": "Expansion Opportunity", "human_approval_required": true, "next_step": "Bundle expansion offer; align on joint metrics.", "owner_role": "Account Executive", "priority": 2, "reason": "24 shared patients suggest co-sell upside into contract HHAH."}, "relationship_strength": "High", "risk_score": 14, "shared_patient_count": 24}, {"confidence_score": 75, "evidence_count": 1, "evidence_refs": [{"claim": "8 patients shared, Phoenix market", "confidence_score": 75, "freshness_status": "fresh", "id": "ev-004", "last_verified": "2026-07-18T08:43:41.890832+00:00", "source_name": "Cross-market overlap scan", "source_type": "claims", "source_url_or_reference": "internal://claims/4"}], "freshness_status": "fresh", "hhah_id": "hh-03", "id": "e-03", "label_x": 720.5, "label_y": 265.0, "last_updated": "2026-07-18T08:43:41.890832+00:00", "line_thickness": 2.4, "opportunity_score": 30, "path_d": "M 465.0 150.0 Q 720.5 248.0 976.0 430.0", "pg_id": "pg-01", "recommended_action": {"action_type": "Warm Introduction Opportunity", "human_approval_required": true, "next_step": "Request warm intro from PG sponsor; brief HHAH AE first.", "owner_role": "Account Executive", "priority": 2, "reason": "Mature, healthy PG shares 8 patients with a freemium HHAH."}, "relationship_strength": "Moderate", "risk_score": 5, "shared_patient_count": 8}, {"confidence_score": 90, "evidence_count": 1, "evidence_refs": [{"claim": "32 shared patients in Dallas market", "confidence_score": 92, "freshness_status": "fresh", "id": "ev-005", "last_verified": "2026-07-30T08:43:41.890832+00:00", "source_name": "Claims Overlap Report Q1", "source_type": "claims", "source_url_or_reference": "internal://claims/5"}], "freshness_status": "fresh", "hhah_id": "hh-01", "id": "e-04", "label_x": 710.0, "label_y": 202.0, "last_updated": "2026-07-30T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 59, "path_d": "M 355.0 290.0 Q 710.0 192.0 1065.0 150.0", "pg_id": "pg-02", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "High", "risk_score": 19, "shared_patient_count": 32}, {"confidence_score": 85, "evidence_count": 1, "evidence_refs": [{"claim": "19 shared patients", "confidence_score": 85, "freshness_status": "fresh", "id": "ev-006", "last_verified": "2026-07-27T08:43:41.890832+00:00", "source_name": "Houston market scan", "source_type": "claims", "source_url_or_reference": "internal://claims/6"}], "freshness_status": "fresh", "hhah_id": "hh-02", "id": "e-05", "label_x": 655.0, "label_y": 279.0, "last_updated": "2026-07-27T08:43:41.890832+00:00", "line_thickness": 2.4, "opportunity_score": 28, "path_d": "M 355.0 290.0 Q 655.0 276.0 955.0 290.0", "pg_id": "pg-02", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "Moderate", "risk_score": 11, "shared_patient_count": 19}, {"confidence_score": 78, "evidence_count": 2, "evidence_refs": [{"claim": "41 shared patients", "confidence_score": 82, "freshness_status": "fresh", "id": "ev-007", "last_verified": "2026-07-29T08:43:41.890832+00:00", "source_name": "Claims Overlap Report Q1", "source_type": "claims", "source_url_or_reference": "internal://claims/7"}, {"claim": "Referral volume from HHAH-05 down 28% QoQ", "confidence_score": 74, "freshness_status": "fresh", "id": "ev-008", "last_verified": "2026-07-25T08:43:41.890832+00:00", "source_name": "EHR utilization decline alert", "source_type": "ehr", "source_url_or_reference": "internal://ehr/8"}], "freshness_status": "fresh", "hhah_id": "hh-05", "id": "e-06", "label_x": 600.0, "label_y": 286.0, "last_updated": "2026-07-29T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 43, "path_d": "M 355.0 290.0 Q 600.0 290.0 845.0 290.0", "pg_id": "pg-02", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "High", "risk_score": 47, "shared_patient_count": 41}, {"confidence_score": 70, "evidence_count": 1, "evidence_refs": [{"claim": "Joint pitch deck circulating", "confidence_score": 70, "freshness_status": "fresh", "id": "ev-009", "last_verified": "2026-07-22T08:43:41.890832+00:00", "source_name": "Salesforce activity log", "source_type": "crm", "source_url_or_reference": "internal://crm/9"}], "freshness_status": "fresh", "hhah_id": "hh-02", "id": "e-07", "label_x": 600.0, "label_y": 363.0, "last_updated": "2026-07-22T08:43:41.890832+00:00", "line_thickness": 2.4, "opportunity_score": 16, "path_d": "M 245.0 430.0 Q 600.0 374.0 955.0 290.0", "pg_id": "pg-03", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "Moderate", "risk_score": 7, "shared_patient_count": 12}, {"confidence_score": 65, "evidence_count": 2, "evidence_refs": [{"claim": "27 shared patients", "confidence_score": 70, "freshness_status": "fresh", "id": "ev-010", "last_verified": "2026-07-14T08:43:41.890832+00:00", "source_name": "Phoenix metro overlap", "source_type": "claims", "source_url_or_reference": "internal://claims/10"}, {"claim": "Champion identified at PG-04", "confidence_score": 55, "freshness_status": "fresh", "id": "ev-011", "last_verified": "2026-07-06T08:43:41.890832+00:00", "source_name": "AE notes", "source_type": "manual", "source_url_or_reference": "internal://manual/11"}], "freshness_status": "fresh", "hhah_id": "hh-03", "id": "e-08", "label_x": 601.3333333333334, "label_y": 510.0, "last_updated": "2026-07-14T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 29, "path_d": "M 226.66666666666666 570.0 Q 601.3333333333334 528.0 976.0 430.0", "pg_id": "pg-04", "recommended_action": {"action_type": "Relationship Development", "human_approval_required": false, "next_step": "Add to nurture sequence; revisit in 30 days.", "owner_role": "SDR / Partnerships", "priority": 3, "reason": "Both sides early but already sharing patients \u2014 nurture both."}, "relationship_strength": "High", "risk_score": 16, "shared_patient_count": 27}, {"confidence_score": 60, "evidence_count": 1, "evidence_refs": [{"claim": "9 shared patients", "confidence_score": 60, "freshness_status": "fresh", "id": "ev-012", "last_verified": "2026-07-08T08:43:41.890832+00:00", "source_name": "Nashville scan", "source_type": "claims", "source_url_or_reference": "internal://claims/12"}], "freshness_status": "fresh", "hhah_id": "hh-08", "id": "e-09", "label_x": 526.6666666666666, "label_y": 587.0, "last_updated": "2026-07-08T08:43:41.890832+00:00", "line_thickness": 2.4, "opportunity_score": 7, "path_d": "M 226.66666666666666 570.0 Q 526.6666666666666 612.0 826.6666666666666 570.0", "pg_id": "pg-04", "recommended_action": {"action_type": "Relationship Development", "human_approval_required": false, "next_step": "Add to nurture sequence; revisit in 30 days.", "owner_role": "SDR / Partnerships", "priority": 3, "reason": "Both sides early but already sharing patients \u2014 nurture both."}, "relationship_strength": "Moderate", "risk_score": 5, "shared_patient_count": 9}, {"confidence_score": 55, "evidence_count": 1, "evidence_refs": [{"claim": "14 shared patients", "confidence_score": 55, "freshness_status": "fresh", "id": "ev-013", "last_verified": "2026-07-25T08:43:41.890832+00:00", "source_name": "San Diego overlap", "source_type": "claims", "source_url_or_reference": "internal://claims/13"}], "freshness_status": "fresh", "hhah_id": "hh-05", "id": "e-10", "label_x": 610.5, "label_y": 370.0, "last_updated": "2026-07-25T08:43:41.890832+00:00", "line_thickness": 2.4, "opportunity_score": 14, "path_d": "M 376.0 430.0 Q 610.5 388.0 845.0 290.0", "pg_id": "pg-05", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "Moderate", "risk_score": 30, "shared_patient_count": 14}, {"confidence_score": 88, "evidence_count": 2, "evidence_refs": [{"claim": "78 shared patients, high-acuity", "confidence_score": 92, "freshness_status": "fresh", "id": "ev-014", "last_verified": "2026-07-31T08:43:41.890832+00:00", "source_name": "Charlotte high-value cohort", "source_type": "claims", "source_url_or_reference": "internal://claims/14"}, {"claim": "Both accounts flagged red in Mar QBR", "confidence_score": 88, "freshness_status": "fresh", "id": "ev-015", "last_verified": "2026-07-27T08:43:41.890832+00:00", "source_name": "CS escalation log", "source_type": "crm", "source_url_or_reference": "internal://crm/15"}], "freshness_status": "fresh", "hhah_id": "hh-06", "id": "e-11", "label_x": 545.0, "label_y": 167.0, "last_updated": "2026-07-31T08:43:41.890832+00:00", "line_thickness": 6.0, "opportunity_score": 59, "path_d": "M 245.0 150.0 Q 545.0 192.0 845.0 150.0", "pg_id": "pg-06", "recommended_action": {"action_type": "Retention Risk", "human_approval_required": true, "next_step": "Schedule joint QBR with both accounts within 14 days.", "owner_role": "Customer Success", "priority": 1, "reason": "78 shared patients with weakening health on a monetised account."}, "relationship_strength": "Strategic", "risk_score": 69, "shared_patient_count": 78}, {"confidence_score": 40, "evidence_count": 1, "evidence_refs": [{"claim": "5 shared patients \u2014 needs verification", "confidence_score": 40, "freshness_status": "stale", "id": "ev-016", "last_verified": "2026-05-02T08:43:41.890832+00:00", "source_name": "Atlanta scan (preliminary)", "source_type": "claims", "source_url_or_reference": "internal://claims/16"}], "freshness_status": "stale", "hhah_id": "hh-04", "id": "e-12", "label_x": 609.1666666666666, "label_y": 335.0, "last_updated": "2026-05-02T08:43:41.890832+00:00", "line_thickness": 1.2, "opportunity_score": 9, "path_d": "M 245.0 150.0 Q 609.1666666666666 318.0 973.3333333333333 570.0", "pg_id": "pg-06", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "Low", "risk_score": 39, "shared_patient_count": 5}, {"confidence_score": 35, "evidence_count": 2, "evidence_refs": [{"claim": "22 shared patients (Q3 last year)", "confidence_score": 42, "freshness_status": "stale", "id": "ev-017", "last_verified": "2026-02-26T08:43:41.890832+00:00", "source_name": "Old quarterly export", "source_type": "claims", "source_url_or_reference": "internal://claims/17"}, {"claim": "AE flagged figures as inconsistent with CRM", "confidence_score": 30, "freshness_status": "conflicting", "id": "ev-018", "last_verified": "2026-03-18T08:43:41.890832+00:00", "source_name": "Conflicting AE note", "source_type": "crm", "source_url_or_reference": "internal://crm/18"}], "freshness_status": "conflicting", "hhah_id": "hh-04", "id": "e-13", "label_x": 673.3333333333333, "label_y": 552.0, "last_updated": "2026-03-18T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 7, "path_d": "M 373.3333333333333 570.0 Q 673.3333333333333 542.0 973.3333333333333 570.0", "pg_id": "pg-07", "recommended_action": {"action_type": "Human Review Required", "human_approval_required": true, "next_step": "Verify evidence sources, then re-score.", "owner_role": "Strategy Lead", "priority": 1, "reason": "Material overlap but conflicting evidence, low confidence (35%), stale data (140d)."}, "relationship_strength": "High", "risk_score": 33, "shared_patient_count": 22}, {"confidence_score": 80, "evidence_count": 1, "evidence_refs": [{"claim": "22 shared patients", "confidence_score": 80, "freshness_status": "fresh", "id": "ev-019", "last_verified": "2026-07-24T08:43:41.890832+00:00", "source_name": "Denver metro overlap", "source_type": "claims", "source_url_or_reference": "internal://claims/19"}], "freshness_status": "fresh", "hhah_id": "hh-07", "id": "e-14", "label_x": 699.5, "label_y": 349.0, "last_updated": "2026-07-24T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 36, "path_d": "M 465.0 290.0 Q 699.5 346.0 934.0 430.0", "pg_id": "pg-08", "recommended_action": {"action_type": "Warm Introduction Opportunity", "human_approval_required": true, "next_step": "Request warm intro from PG sponsor; brief HHAH AE first.", "owner_role": "Account Executive", "priority": 2, "reason": "Mature, healthy PG shares 22 patients with a freemium HHAH."}, "relationship_strength": "High", "risk_score": 13, "shared_patient_count": 22}, {"confidence_score": 92, "evidence_count": 1, "evidence_refs": [{"claim": "51 shared patients sustained over 2 quarters", "confidence_score": 94, "freshness_status": "fresh", "id": "ev-020", "last_verified": "2026-07-31T08:43:41.890832+00:00", "source_name": "Dallas cross-org overlap", "source_type": "claims", "source_url_or_reference": "internal://claims/20"}], "freshness_status": "fresh", "hhah_id": "hh-09", "id": "e-15", "label_x": 765.0, "label_y": 286.0, "last_updated": "2026-07-31T08:43:41.890832+00:00", "line_thickness": 6.0, "opportunity_score": 63, "path_d": "M 465.0 290.0 Q 765.0 290.0 1065.0 290.0", "pg_id": "pg-08", "recommended_action": {"action_type": "Expansion Opportunity", "human_approval_required": true, "next_step": "Bundle expansion offer; align on joint metrics.", "owner_role": "Account Executive", "priority": 2, "reason": "51 shared patients suggest co-sell upside into contract HHAH."}, "relationship_strength": "Strategic", "risk_score": 25, "shared_patient_count": 51}, {"confidence_score": 65, "evidence_count": 1, "evidence_refs": [{"claim": "7 shared patients", "confidence_score": 65, "freshness_status": "fresh", "id": "ev-021", "last_verified": "2026-07-17T08:43:41.890832+00:00", "source_name": "Nashville first-pass", "source_type": "claims", "source_url_or_reference": "internal://claims/21"}], "freshness_status": "fresh", "hhah_id": "hh-08", "id": "e-16", "label_x": 580.3333333333333, "label_y": 503.0, "last_updated": "2026-07-17T08:43:41.890832+00:00", "line_thickness": 2.4, "opportunity_score": 12, "path_d": "M 334.0 430.0 Q 580.3333333333333 514.0 826.6666666666666 570.0", "pg_id": "pg-09", "recommended_action": {"action_type": "Relationship Development", "human_approval_required": false, "next_step": "Add to nurture sequence; revisit in 30 days.", "owner_role": "SDR / Partnerships", "priority": 3, "reason": "Both sides early but already sharing patients \u2014 nurture both."}, "relationship_strength": "Moderate", "risk_score": 4, "shared_patient_count": 7}, {"confidence_score": 75, "evidence_count": 2, "evidence_refs": [{"claim": "38 shared patients", "confidence_score": 78, "freshness_status": "fresh", "id": "ev-022", "last_verified": "2026-07-22T08:43:41.890832+00:00", "source_name": "Cross-market scan", "source_type": "claims", "source_url_or_reference": "internal://claims/22"}, {"claim": "Referral pattern weakening", "confidence_score": 72, "freshness_status": "fresh", "id": "ev-023", "last_verified": "2026-07-20T08:43:41.890832+00:00", "source_name": "Utilization decline", "source_type": "ehr", "source_url_or_reference": "internal://ehr/23"}], "freshness_status": "fresh", "hhah_id": "hh-05", "id": "e-17", "label_x": 545.0, "label_y": 370.0, "last_updated": "2026-07-22T08:43:41.890832+00:00", "line_thickness": 4.0, "opportunity_score": 38, "path_d": "M 245.0 430.0 Q 545.0 388.0 845.0 290.0", "pg_id": "pg-03", "recommended_action": {"action_type": "Monitor Only", "human_approval_required": false, "next_step": "Re-evaluate on next data refresh.", "owner_role": "Ops Analyst", "priority": 4, "reason": "Signal too weak for action \u2014 track for change."}, "relationship_strength": "High", "risk_score": 45, "shared_patient_count": 38}], "generated_at": "2026-08-05T10:04:08.367408+00:00", "hhahs": [{"account_value": 1400000, "confidence_score": 90, "cs_health_bucket": "Strong", "cs_health_score_raw": 86, "cx": 1065.0, "cy": 150.0, "health_x": 3, "id": "hh-01", "last_updated": "2026-08-01T08:43:41.890832+00:00", "lifecycle_bucket": "Premium", "lifecycle_stage_raw": "Premium", "lifecycle_y": 3, "market": "Dallas", "name": "Comfort Home Health", "region": "South", "status": "active", "total_patient_count": 5100}, {"account_value": 420000, "confidence_score": 84, "cs_health_bucket": "Healthy", "cs_health_score_raw": 72, "cx": 955.0, "cy": 290.0, "health_x": 2, "id": "hh-02", "last_updated": "2026-07-27T08:43:41.890832+00:00", "lifecycle_bucket": "Contract", "lifecycle_stage_raw": "Contract", "lifecycle_y": 2, "market": "Houston", "name": "BrightPath Hospice", "region": "South", "status": "active", "total_patient_count": 2300}, {"account_value": 0, "confidence_score": 70, "cs_health_bucket": "Healthy", "cs_health_score_raw": 68, "cx": 976.0, "cy": 430.0, "health_x": 2, "id": "hh-03", "last_updated": "2026-07-21T08:43:41.890832+00:00", "lifecycle_bucket": "Freemium", "lifecycle_stage_raw": "Freemium", "lifecycle_y": 1, "market": "Phoenix", "name": "Guardian Home Care", "region": "West", "status": "active", "total_patient_count": 1900}, {"account_value": 0, "confidence_score": 40, "cs_health_bucket": null, "cs_health_score_raw": null, "cx": 973.3333333333333, "cy": 570.0, "health_x": null, "id": "hh-04", "last_updated": "2026-02-26T08:43:41.890832+00:00", "lifecycle_bucket": "Not Using", "lifecycle_stage_raw": "Not Using", "lifecycle_y": 0, "market": "Atlanta", "name": "Reliance Hospice", "region": "Southeast", "status": "inactive", "total_patient_count": 600}, {"account_value": 380000, "confidence_score": 82, "cs_health_bucket": "At Risk", "cs_health_score_raw": 48, "cx": 845.0, "cy": 290.0, "health_x": 1, "id": "hh-05", "last_updated": "2026-07-29T08:43:41.890832+00:00", "lifecycle_bucket": "Contract", "lifecycle_stage_raw": "Contract", "lifecycle_y": 2, "market": "San Diego", "name": "Evergreen Home Health", "region": "West", "status": "active", "total_patient_count": 2700}, {"account_value": 1120000, "confidence_score": 88, "cs_health_bucket": "At Risk", "cs_health_score_raw": 41, "cx": 845.0, "cy": 150.0, "health_x": 1, "id": "hh-06", "last_updated": "2026-07-31T08:43:41.890832+00:00", "lifecycle_bucket": "Premium", "lifecycle_stage_raw": "Premium", "lifecycle_y": 3, "market": "Charlotte", "name": "Magnolia Care Network", "region": "Southeast", "status": "active", "total_patient_count": 4400}, {"account_value": 0, "confidence_score": 76, "cs_health_bucket": "Healthy", "cs_health_score_raw": 75, "cx": 934.0, "cy": 430.0, "health_x": 2, "id": "hh-07", "last_updated": "2026-07-24T08:43:41.890832+00:00", "lifecycle_bucket": "Freemium", "lifecycle_stage_raw": "Freemium", "lifecycle_y": 1, "market": "Denver", "name": "Cedar Hills Hospice", "region": "Mountain", "status": "active", "total_patient_count": 1400}, {"account_value": 0, "confidence_score": 62, "cs_health_bucket": null, "cs_health_score_raw": null, "cx": 826.6666666666666, "cy": 570.0, "health_x": null, "id": "hh-08", "last_updated": "2026-07-08T08:43:41.890832+00:00", "lifecycle_bucket": "Not Using", "lifecycle_stage_raw": "Not Using", "lifecycle_y": 0, "market": "Nashville", "name": "Lakeside Home Health", "region": "Southeast", "status": "prospect", "total_patient_count": 1300}, {"account_value": 510000, "confidence_score": 89, "cs_health_bucket": "Strong", "cs_health_score_raw": 84, "cx": 1065.0, "cy": 290.0, "health_x": 3, "id": "hh-09", "last_updated": "2026-07-30T08:43:41.890832+00:00", "lifecycle_bucket": "Contract", "lifecycle_stage_raw": "Contract", "lifecycle_y": 2, "market": "Dallas", "name": "Sterling Home Care", "region": "South", "status": "active", "total_patient_count": 3100}], "pgs": [{"account_value": 1250000, "confidence_score": 92, "cs_health_bucket": "Strong", "cs_health_score_raw": 88, "cx": 465.0, "cy": 150.0, "health_x": 3, "id": "pg-01", "last_updated": "2026-08-02T08:43:41.890832+00:00", "lifecycle_bucket": "Expansion", "lifecycle_stage_raw": "Premium", "lifecycle_y": 3, "market": "Dallas", "name": "Sunrise House Calls", "region": "South", "status": "active", "total_patient_count": 4200, "vertical": "House Calls"}, {"account_value": 480000, "confidence_score": 90, "cs_health_bucket": "Healthy", "cs_health_score_raw": 74, "cx": 355.0, "cy": 290.0, "health_x": 2, "id": "pg-02", "last_updated": "2026-07-28T08:43:41.890832+00:00", "lifecycle_bucket": "Active Customer", "lifecycle_stage_raw": "On Platform", "lifecycle_y": 2, "market": "Dallas", "name": "Dallas Mobile Physicians", "region": "South", "status": "active", "total_patient_count": 2900, "vertical": "Mobile"}, {"account_value": 0, "confidence_score": 78, "cs_health_bucket": "At Risk", "cs_health_score_raw": 52, "cx": 245.0, "cy": 430.0, "health_x": 1, "id": "pg-03", "last_updated": "2026-07-22T08:43:41.890832+00:00", "lifecycle_bucket": "Sales Pipeline", "lifecycle_stage_raw": "BOFU", "lifecycle_y": 1, "market": "Houston", "name": "Metro Post Acute Group", "region": "South", "status": "prospect", "total_patient_count": 1800, "vertical": "Post-Acute"}, {"account_value": 0, "confidence_score": 65, "cs_health_bucket": null, "cs_health_score_raw": null, "cx": 226.66666666666666, "cy": 570.0, "health_x": null, "id": "pg-04", "last_updated": "2026-07-14T08:43:41.890832+00:00", "lifecycle_bucket": "Acquisition", "lifecycle_stage_raw": "Outreach", "lifecycle_y": 0, "market": "Phoenix", "name": "NorthStar Primary Care", "region": "West", "status": "prospect", "total_patient_count": 1100, "vertical": "Primary Care"}, {"account_value": 0, "confidence_score": 72, "cs_health_bucket": "Healthy", "cs_health_score_raw": 71, "cx": 376.0, "cy": 430.0, "health_x": 2, "id": "pg-05", "last_updated": "2026-07-25T08:43:41.890832+00:00", "lifecycle_bucket": "Sales Pipeline", "lifecycle_stage_raw": "MOFU", "lifecycle_y": 1, "market": "San Diego", "name": "Valley Home Physicians", "region": "West", "status": "prospect", "total_patient_count": 1600, "vertical": "House Calls"}, {"account_value": 980000, "confidence_score": 86, "cs_health_bucket": "At Risk", "cs_health_score_raw": 44, "cx": 245.0, "cy": 150.0, "health_x": 1, "id": "pg-06", "last_updated": "2026-07-30T08:43:41.890832+00:00", "lifecycle_bucket": "Expansion", "lifecycle_stage_raw": "Premium", "lifecycle_y": 3, "market": "Atlanta", "name": "Capital Geriatric Partners", "region": "Southeast", "status": "active", "total_patient_count": 3700, "vertical": "Geriatrics"}, {"account_value": 0, "confidence_score": 38, "cs_health_bucket": null, "cs_health_score_raw": null, "cx": 373.3333333333333, "cy": 570.0, "health_x": null, "id": "pg-07", "last_updated": "2026-03-18T08:43:41.890832+00:00", "lifecycle_bucket": "Acquisition", "lifecycle_stage_raw": "Enriched", "lifecycle_y": 0, "market": "Charlotte", "name": "Riverbend Physician Group", "region": "Southeast", "status": "prospect", "total_patient_count": 700, "vertical": "Primary Care"}, {"account_value": 360000, "confidence_score": 91, "cs_health_bucket": "Strong", "cs_health_score_raw": 83, "cx": 465.0, "cy": 290.0, "health_x": 3, "id": "pg-08", "last_updated": "2026-07-31T08:43:41.890832+00:00", "lifecycle_bucket": "Active Customer", "lifecycle_stage_raw": "On Platform", "lifecycle_y": 2, "market": "Denver", "name": "Pioneer Senior Care", "region": "Mountain", "status": "active", "total_patient_count": 2200, "vertical": "Geriatrics"}, {"account_value": 0, "confidence_score": 60, "cs_health_bucket": "Healthy", "cs_health_score_raw": 70, "cx": 334.0, "cy": 430.0, "health_x": 2, "id": "pg-09", "last_updated": "2026-07-17T08:43:41.890832+00:00", "lifecycle_bucket": "Sales Pipeline", "lifecycle_stage_raw": "TOFU", "lifecycle_y": 1, "market": "Nashville", "name": "GreenHill Internists", "region": "Southeast", "status": "prospect", "total_patient_count": 540, "vertical": "Primary Care"}]}</script>
+<script>
+  function relationshipMap() {
+    return {
+      data: { pgs: [], hhahs: [], edges: [], buckets: {}, generated_at: "" },
+      filters: {
+        market: "",
+        region: "",
+        vertical: "",
+        action: "",
+        pgLifecycle: [],
+        hhahLifecycle: [],
+        pgHealth: [],
+        hhahHealth: [],
+        strength: [],
+        minOpportunity: 0,
+        minRisk: 0,
+        minConfidence: 0,
+        maxAgeDays: 365,
+      },
+      pgLifecycleLabels: ["Acquisition", "Sales Pipeline", "Active Customer", "Expansion"],
+      hhahLifecycleLabels: ["Not Using", "Freemium", "Contract", "Premium"],
+      healthLabels: ["Weak", "At Risk", "Healthy", "Strong"],
+      selected: null,           // { kind: 'pg'|'hhah'|'edge', entity }
+      hoveredEdgeId: null,
+      actionSort: "priority",
+
+      init() {
+        this.data = JSON.parse(document.getElementById("rim-payload").textContent);
+        // Build lookup so SVG `@click` strings can resolve an edge by id
+        // without re-finding it in the array each time.
+        this.edges = Object.fromEntries(this.data.edges.map(e => [e.id, e]));
+      },
+      edges: {},
+
+      // ── derived selectors ─────────────────────────────────────────
+      get markets() {
+        return [...new Set([
+          ...this.data.pgs.map(p => p.market),
+          ...this.data.hhahs.map(h => h.market),
+        ])].sort();
+      },
+      get regions() {
+        return [...new Set([
+          ...this.data.pgs.map(p => p.region),
+          ...this.data.hhahs.map(h => h.region),
+        ])].sort();
+      },
+      get verticals() {
+        return [...new Set(this.data.pgs.map(p => p.vertical))].sort();
+      },
+
+      ageDays(iso) {
+        if (!iso) return 9999;
+        const d = new Date(iso);
+        return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+      },
+
+      pgPassesFilters(pg) {
+        const f = this.filters;
+        if (f.market && pg.market !== f.market) return false;
+        if (f.region && pg.region !== f.region) return false;
+        if (f.vertical && pg.vertical !== f.vertical) return false;
+        if (f.pgLifecycle.length && !f.pgLifecycle.includes(pg.lifecycle_bucket)) return false;
+        if (f.pgHealth.length && !f.pgHealth.includes(pg.cs_health_bucket)) return false;
+        return true;
+      },
+      hhahPassesFilters(hhah) {
+        const f = this.filters;
+        if (f.market && hhah.market !== f.market) return false;
+        if (f.region && hhah.region !== f.region) return false;
+        if (f.hhahLifecycle.length && !f.hhahLifecycle.includes(hhah.lifecycle_bucket)) return false;
+        if (f.hhahHealth.length && !f.hhahHealth.includes(hhah.cs_health_bucket)) return false;
+        return true;
+      },
+      edgePassesFilters(edge, pg, hhah) {
+        const f = this.filters;
+        if (!this.pgPassesFilters(pg)) return false;
+        if (!this.hhahPassesFilters(hhah)) return false;
+        if (f.strength.length && !f.strength.includes(edge.relationship_strength)) return false;
+        if (edge.opportunity_score < f.minOpportunity) return false;
+        if (edge.risk_score < f.minRisk) return false;
+        if (edge.confidence_score < f.minConfidence) return false;
+        if (this.ageDays(edge.last_updated) > f.maxAgeDays) return false;
+        if (f.action && edge.recommended_action && edge.recommended_action.action_type !== f.action) return false;
+        return true;
+      },
+
+      get visibleEdges() {
+        return this.data.edges.filter(e => {
+          const pg = this.pgById(e.pg_id);
+          const hhah = this.hhahById(e.hhah_id);
+          return pg && hhah && this.edgePassesFilters(e, pg, hhah);
+        });
+      },
+      get visibleEdgeIds() {
+        return new Set(this.visibleEdges.map(e => e.id));
+      },
+      get visiblePGIds() {
+        const ids = new Set();
+        // Always include PGs that pass filters and have at least one visible edge,
+        // OR if no PG-side filter is active and no edges match, still show PGs that
+        // pass the PG-side filters so the grid never goes mysteriously empty.
+        const edges = this.visibleEdges;
+        if (edges.length) {
+          edges.forEach(e => ids.add(e.pg_id));
+        } else {
+          this.data.pgs.filter(p => this.pgPassesFilters(p)).forEach(p => ids.add(p.id));
+        }
+        return ids;
+      },
+      get visibleHHAHIds() {
+        const ids = new Set();
+        const edges = this.visibleEdges;
+        if (edges.length) {
+          edges.forEach(e => ids.add(e.hhah_id));
+        } else {
+          this.data.hhahs.filter(h => this.hhahPassesFilters(h)).forEach(h => ids.add(h.id));
+        }
+        return ids;
+      },
+
+      // Node positions and edge paths are baked into the server-rendered
+      // SVG (see relationship_intel.build_payload); Alpine only toggles
+      // visibility, opacity, and click handlers from here.
+
+      edgeClass(edge) {
+        if (!edge) return '';
+        const isHighRisk = edge.risk_score >= 70;
+        const isHighOpp  = edge.opportunity_score >= 70;
+        const isLowConf  = edge.confidence_score < 60 || edge.freshness_status !== 'fresh';
+        const cls = [];
+        if (isHighRisk) cls.push('edge-risk');
+        else if (isHighOpp) cls.push('edge-opportunity');
+        else cls.push('edge-default');
+        if (isLowConf) cls.push('edge-low-confidence');
+        if (this.selected && this.selected.kind === 'edge' && this.selected.entity.id === edge.id) {
+          cls.push('drop-shadow');
+        }
+        return cls.join(' ');
+      },
+      edgeOpacity(edge) {
+        if (!edge) return 0.85;
+        if (!this.selected) return 0.85;
+        if (this.selected.kind === 'edge') {
+          return this.selected.entity.id === edge.id ? 1 : 0.18;
+        }
+        if (this.selected.kind === 'pg') {
+          return edge.pg_id === this.selected.entity.id ? 1 : 0.18;
+        }
+        if (this.selected.kind === 'hhah') {
+          return edge.hhah_id === this.selected.entity.id ? 1 : 0.18;
+        }
+        return 0.85;
+      },
+      nodeOpacity(side, id) {
+        if (!this.selected) return 1;
+        if (this.selected.kind === side && this.selected.entity.id === id) return 1;
+        // Highlight nodes that participate in the selected edge.
+        if (this.selected.kind === 'edge') {
+          const e = this.selected.entity;
+          if (side === 'pg'   && e.pg_id   === id) return 1;
+          if (side === 'hhah' && e.hhah_id === id) return 1;
+          return 0.35;
+        }
+        if (this.selected.kind === 'pg' || this.selected.kind === 'hhah') {
+          // Highlight nodes connected to the selected entity via a visible edge.
+          for (const e of this.visibleEdges) {
+            if (this.selected.kind === 'pg' && e.pg_id === this.selected.entity.id) {
+              if (side === 'hhah' && e.hhah_id === id) return 1;
+            }
+            if (this.selected.kind === 'hhah' && e.hhah_id === this.selected.entity.id) {
+              if (side === 'pg' && e.pg_id === id) return 1;
+            }
+          }
+          return 0.35;
+        }
+        return 1;
+      },
+      edgeTooltip(edge) {
+        const pg = this.pgById(edge.pg_id).name;
+        const hhah = this.hhahById(edge.hhah_id).name;
+        const act = edge.recommended_action ? edge.recommended_action.action_type : '—';
+        const parts = [
+          `${pg}  ↔  ${hhah}`,
+          `${edge.shared_patient_count} shared patients (${edge.relationship_strength})`,
+          `Opportunity ${edge.opportunity_score} · Risk ${edge.risk_score} · Confidence ${edge.confidence_score}%`,
+          `Action: ${act}`,
+          `Data: ${edge.freshness_status} · updated ${this.formatTime(edge.last_updated)}`,
+        ];
+        return parts.join('\n');
+      },
+
+      // ── selection ─────────────────────────────────────────────────
+      selectPG(pg)         { this.selected = { kind: 'pg',   entity: pg };   },
+      selectHHAH(hhah)     { this.selected = { kind: 'hhah', entity: hhah }; },
+      selectEdge(edge)     { this.selected = { kind: 'edge', entity: edge }; },
+      selectPGById(id)     { const e = this.pgById(id);   if (e) this.selectPG(e); },
+      selectHHAHById(id)   { const e = this.hhahById(id); if (e) this.selectHHAH(e); },
+      clearSelection()     { this.selected = null; },
+
+      pgById(id)   { return this.data.pgs.find(p => p.id === id); },
+      hhahById(id) { return this.data.hhahs.find(h => h.id === id); },
+
+      topConnectionsForPG(pgId, limit) {
+        return this.visibleEdges
+          .filter(e => e.pg_id === pgId)
+          .sort((a, b) => b.shared_patient_count - a.shared_patient_count)
+          .slice(0, limit)
+          .map(e => ({ edge: e, other: this.hhahById(e.hhah_id) }));
+      },
+      topConnectionsForHHAH(hhahId, limit) {
+        return this.visibleEdges
+          .filter(e => e.hhah_id === hhahId)
+          .sort((a, b) => b.shared_patient_count - a.shared_patient_count)
+          .slice(0, limit)
+          .map(e => ({ edge: e, other: this.pgById(e.pg_id) }));
+      },
+
+      // ── action queue ──────────────────────────────────────────────
+      get actionQueue() {
+        const rows = this.visibleEdges
+          .filter(e => e.recommended_action)
+          .map(e => ({
+            edge: e,
+            action: e.recommended_action,
+            pg: this.pgById(e.pg_id),
+            hhah: this.hhahById(e.hhah_id),
+          }));
+        const cmp = {
+          priority:    (a, b) => a.action.priority - b.action.priority
+                               || b.edge.opportunity_score - a.edge.opportunity_score,
+          opportunity: (a, b) => b.edge.opportunity_score - a.edge.opportunity_score,
+          risk:        (a, b) => b.edge.risk_score - a.edge.risk_score,
+          shared:      (a, b) => b.edge.shared_patient_count - a.edge.shared_patient_count,
+          confidence:  (a, b) => b.edge.confidence_score - a.edge.confidence_score,
+        }[this.actionSort];
+        return rows.sort(cmp);
+      },
+
+      // ── filter helpers ────────────────────────────────────────────
+      toggleSet(arr, value) {
+        const i = arr.indexOf(value);
+        if (i === -1) arr.push(value); else arr.splice(i, 1);
+      },
+      resetFilters() {
+        this.filters = {
+          market: "", region: "", vertical: "", action: "",
+          pgLifecycle: [], hhahLifecycle: [], pgHealth: [], hhahHealth: [], strength: [],
+          minOpportunity: 0, minRisk: 0, minConfidence: 0, maxAgeDays: 365,
+        };
+      },
+
+      // ── visual helpers ────────────────────────────────────────────
+      nodeStrokeClass(entity, side) {
+        const isPremium = (side === 'pg' && entity.lifecycle_bucket === 'Expansion')
+                       || (side === 'hhah' && entity.lifecycle_bucket === 'Premium');
+        const isWeak = entity.cs_health_bucket === 'Weak' || entity.cs_health_bucket === 'At Risk';
+        if (isWeak) return 'node-warning-stroke';
+        if (isPremium) return 'node-strong-stroke';
+        return 'node-soft-stroke';
+      },
+      healthClass(bucket) {
+        if (!bucket) return 'text-slate-500 italic';
+        return ({
+          'Weak':    'text-red-700',
+          'At Risk': 'text-amber-700',
+          'Healthy': 'text-emerald-700',
+          'Strong':  'text-emerald-800',
+        })[bucket] || 'text-slate-900';
+      },
+      formatHealth(entity) {
+        // Not-Using accounts (and anyone with no recorded score) have no
+        // health signal. Don't render a fake one.
+        if (entity.cs_health_bucket === null || entity.cs_health_bucket === undefined) {
+          return 'N/A — no usage signal yet';
+        }
+        const raw = entity.cs_health_score_raw;
+        return raw == null
+          ? entity.cs_health_bucket
+          : `${entity.cs_health_bucket} (${raw})`;
+      },
+      freshnessClass(status) {
+        return ({
+          'fresh':       'text-emerald-700',
+          'stale':       'text-amber-700',
+          'conflicting': 'text-red-700',
+        })[status] || 'text-slate-500';
+      },
+      freshnessLabel(edge) {
+        if (edge.freshness_status === 'conflicting') return 'Conflict detected — human review required';
+        if (edge.freshness_status === 'stale') return 'Data stale';
+        if (edge.confidence_score < 55) return 'Needs verification';
+        return 'Fresh';
+      },
+      actionBadgeClass(type) {
+        return ({
+          'Warm Introduction Opportunity': 'bg-blue-100 text-blue-800',
+          'Expansion Opportunity':         'bg-amber-100 text-amber-800',
+          'Retention Risk':                'bg-red-100 text-red-800',
+          'Relationship Development':      'bg-emerald-100 text-emerald-800',
+          'Monitor Only':                  'bg-slate-100 text-slate-700',
+          'Human Review Required':         'bg-violet-100 text-violet-800',
+        })[type] || 'bg-slate-100 text-slate-700';
+      },
+      priorityBadgeClass(p) {
+        if (p === 1) return 'bg-red-100 text-red-800';
+        if (p === 2) return 'bg-amber-100 text-amber-800';
+        if (p === 3) return 'bg-blue-100 text-blue-800';
+        return 'bg-slate-100 text-slate-700';
+      },
+
+      // ── formatting ────────────────────────────────────────────────
+      truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; },
+      formatMoney(v) {
+        if (!v) return '—';
+        if (v >= 1_000_000) return '$' + (v / 1_000_000).toFixed(1) + 'M';
+        if (v >= 1_000) return '$' + (v / 1_000).toFixed(0) + 'k';
+        return '$' + v;
+      },
+      formatTime(iso) {
+        if (!iso) return '—';
+        const d = this.ageDays(iso);
+        if (d === 0) return 'today';
+        if (d === 1) return 'yesterday';
+        if (d < 30) return `${d}d ago`;
+        if (d < 365) return `${Math.round(d / 30)}mo ago`;
+        return `${Math.round(d / 365)}y ago`;
+      },
+      scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); },
+    };
+  }
+</script>
+
+    </main>
+  </div>
+
+  
+  <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 grid grid-cols-5"
+       aria-label="Bottom navigation">
+    
+      <a href="/hhahdemo/"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">🏠</span>
+        Home
+      </a>
+    
+      <a href="/hhahdemo/sync"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">📥</span>
+        Sync
+      </a>
+    
+      <a href="/hhahdemo/patients"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">🧑‍⚕️</span>
+        Patients
+      </a>
+    
+      <a href="/hhahdemo/care-docs"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">📄</span>
+        Docs
+      </a>
+    
+      <a href="/hhahdemo/flags"
+         class="flex flex-col items-center justify-center py-2 text-xs
+                text-slate-600">
+        <span class="text-base" aria-hidden="true">⚑</span>
+        Flags
+      </a>
+    
+  </nav>
+</div>
+
+<style>[x-cloak]{display:none!important}</style>
+
+</body>
+</html>
