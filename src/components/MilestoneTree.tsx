@@ -157,10 +157,10 @@ function layout(root: TreeNode): {
     const childD = Math.min(depth + 1, MAX_DEPTH);
     const N = n.children.length;
     const maxPerRow = MAX_PER_ROW_D[childD] || 0;
-    const kind0 = n.children[0].kind;
-    const allSameKind = n.children.every((c) => c.kind === kind0);
-    const allLeaves = n.children.every((c) => c.children.length === 0);
-    const canWrap = maxPerRow > 0 && N > maxPerRow && allSameKind && allLeaves;
+    // Visual leaf = no visible children in the pruned tree (either genuinely
+    // childless or collapsed so `pruneForPine` dropped its children).
+    const allVisualLeaves = n.children.every((c) => c.children.length === 0);
+    const canWrap = maxPerRow > 0 && N > maxPerRow && allVisualLeaves;
 
     if (canWrap) {
       // Leaves: computeWidth just sets subtreeW = card width; still walk them.
