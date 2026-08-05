@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { resolveWeekId } from "./task-week";
 
 export interface ParseLog {
   type: "info" | "warning" | "error";
@@ -253,6 +254,13 @@ export async function parseAndIngest(
       }
     }
 
+    const iterationIdForRow = iterationMap.get(iterKey) || null;
+    // week_id is NOT NULL in the DB — if the CSV didn't map a week for this
+    // row, resolve one from the deadline within the parent iteration.
+    let weekIdForRow = weekMap.get(weekKey) || null;
+    if (!weekIdForRow && iterationIdForRow) {
+      weekIdForRow = await resolveWeekId(supabase, iterationIdForRow, deadline);
+    }
     const { data, error } = await supabase.from("tasks").insert({
       title: row.task_name,
       description: row.description || null,
@@ -260,8 +268,8 @@ export async function parseAndIngest(
       owner_id: ownerId,
       deadline,
       quarter_id: quarterId || null,
-      iteration_id: iterationMap.get(iterKey) || null,
-      week_id: weekMap.get(weekKey) || null,
+      iteration_id: iterationIdForRow,
+      week_id: weekIdForRow,
       status: "not_started",
       start_date: deadline, // default
       end_date: deadline,

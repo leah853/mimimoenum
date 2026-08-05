@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, validate } from "@/lib/api-helpers";
 import { isDoerOrAdmin, getCallerRole } from "@/lib/api-auth";
+import { resolveWeekId } from "@/lib/task-week";
 
 export async function GET(request: NextRequest) {
   const role = getCallerRole(request);
@@ -49,6 +50,13 @@ export async function POST(request: NextRequest) {
 
   const missing = validate(body, ["title", "owner_id", "deadline"]);
   if (missing) return err(missing);
+
+  // Every task lives inside a week. If the caller provided an iteration but no
+  // explicit week, resolve one from the deadline (see resolveWeekId for rules).
+  if (body.iteration_id && !body.week_id) {
+    const resolved = await resolveWeekId(sb, body.iteration_id, body.deadline);
+    if (resolved) body.week_id = resolved;
+  }
 
   const { data, error } = await sb.from("tasks").insert(body).select().single();
   if (error) return err(error.message, 400);

@@ -48,7 +48,9 @@ export interface Task {
   end_date?: string;
   quarter_id?: string;
   iteration_id?: string;
-  week_id?: string;
+  // Every task must belong to a week within its iteration; the API auto-assigns
+  // week_id from the deadline if the caller doesn't set it explicitly.
+  week_id: string;
   progress: number;
   created_at: string;
   updated_at: string;

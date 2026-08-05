@@ -148,26 +148,8 @@ export default function DashboardPage() {
             })}
           </div>
 
-          {/* Selected iteration goals */}
-          {selectedIter && (() => {
-            const iter = iterations.find((i) => i.id === selectedIter);
-            if (!iter) return null;
-            const iterTasks = all.filter((t) => t.iteration_id === selectedIter && !t.week_id);
-            if (iterTasks.length === 0) return null;
-            return (
-              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
-                <h3 className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-2">{iter.name} — Goals / Outcomes</h3>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                  {iterTasks.map((t) => (
-                    <div key={t.id} className="flex items-start gap-2 py-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[t.status] }} />
-                      <Link href={`/tasks/${t.id}`} className="text-[11px] text-gray-600 dark:text-gray-400 hover:text-indigo-500 transition-colors leading-relaxed">{t.title}</Link>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
+          {/* Iteration-level "goals" (week_id = null) no longer exist — every
+              task now belongs to a week within its iteration. */}
         </Card>
       )}
 

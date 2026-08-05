@@ -174,8 +174,8 @@ function TasksInner() {
     if (!iteration) return;
     const today = todayISO();
     const weeks = iteration.weeks || [];
-    if (weeks.length === 0) { setActiveWeekTab("goals"); return; }
-    const valid = new Set<string>(["goals", ...weeks.map((w) => w.id)]);
+    if (weeks.length === 0) { setActiveWeekTab(""); return; }
+    const valid = new Set<string>(weeks.map((w) => w.id));
     if (activeWeekTab && valid.has(activeWeekTab)) return;
     const current = weeks.find((w) => w.start_date <= today && today <= w.end_date);
     setActiveWeekTab((current || weeks[0]).id);
@@ -245,30 +245,18 @@ function TasksInner() {
     };
   }, [all, iterId]);
 
-  // Bucket the visible tasks into groups: week rows + "no week" iteration goals.
+  // Bucket the visible tasks into groups: one row per week.
   const grouped = useMemo(() => {
     const buckets: {
       key: string;
-      kind: "iter_goals" | "week";
+      kind: "week";
       label: string;
       subLabel: string;
       week?: WeekOption;
-      status: "past" | "current" | "future" | "loose";
+      status: "past" | "current" | "future";
       tasks: FullTask[];
     }[] = [];
     const today = todayISO();
-
-    const noWeek = visible.filter((t) => !t.week_id);
-    if (noWeek.length) {
-      buckets.push({
-        key: "iter-goals",
-        kind: "iter_goals",
-        label: "Iteration goals",
-        subLabel: "no specific week",
-        status: "loose",
-        tasks: noWeek,
-      });
-    }
     const weeks = (iteration?.weeks || []).slice().sort((a, b) => a.week_number - b.week_number);
     for (const w of weeks) {
       const inWeek = visible.filter((t) => t.week_id === w.id);
@@ -630,7 +618,6 @@ function TasksInner() {
       {/* ── Week-grouped feed ───────────────────────────────────────── */}
       <div className="space-y-4">
         {grouped.map((g) => {
-          if (g.tasks.length === 0 && g.kind === "iter_goals") return null;
           const showShipped = showShippedByWeek.has(g.key);
           const shipped = g.tasks.filter((t) => t.status === "completed");
           const activeTasks = g.tasks.filter((t) => t.status !== "completed");
@@ -652,7 +639,7 @@ function TasksInner() {
                 <span className={`text-[10.5px] ${g.status === "current" ? "text-gray-500 dark:text-gray-400" : "text-gray-400 dark:text-gray-500"}`}>
                   {g.subLabel}
                 </span>
-                {g.status === "current" && g.kind === "week" && (
+                {g.status === "current" && (
                   <span className="text-[9.5px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">this week</span>
                 )}
                 {shipped.length > 0 && (
@@ -750,12 +737,6 @@ function BoardLayout({
 
   // Counts per week (uses `visible` so tab counts reflect the current filters).
   const weekTabs: { key: string; label: string; sub: string; count: number; isCurrent: boolean; isPast: boolean; isFuture: boolean; shipped: number }[] = [];
-  const goalsTasks = visible.filter((t) => !t.week_id);
-  weekTabs.push({
-    key: "goals", label: "Iter goals",
-    sub: goalsTasks.length ? `${goalsTasks.length} · no week` : "no week",
-    count: goalsTasks.length, isCurrent: false, isPast: false, isFuture: false, shipped: 0,
-  });
   for (const w of weeks) {
     const wTasks = visible.filter((t) => t.week_id === w.id);
     const shipped = wTasks.filter((t) => t.status === "completed").length;
@@ -773,7 +754,7 @@ function BoardLayout({
   }
 
   // Tasks in the currently-selected week tab, further split by status.
-  const inActiveTab = visible.filter((t) => activeWeekTab === "goals" ? !t.week_id : t.week_id === activeWeekTab);
+  const inActiveTab = visible.filter((t) => t.week_id === activeWeekTab);
   const byStatus: Record<TaskStatus, FullTask[]> = {
     not_started: [], in_progress: [], under_review: [], completed: [], blocked: [],
   };

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, safeJson } from "@/lib/api-helpers";
 import { getCallerRole, getCallerId } from "@/lib/api-auth";
+import { resolveWeekId } from "@/lib/task-week";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -50,29 +51,41 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await safeJson(request);
   if (!body) return err("Invalid JSON", 400);
 
-  // Bug 5 fix: if the deadline moved into a different iteration window, the
-  // task's iteration_id (and week_id) should auto-reassign — otherwise the
-  // task sticks in the wrong iteration tab. We only touch these if the
-  // caller didn't explicitly set them in the same PATCH.
-  if (body.deadline && typeof body.deadline === "string") {
-    if (body.iteration_id === undefined) {
-      const { data: iter } = await sb
-        .from("iterations")
-        .select("id")
-        .lte("start_date", body.deadline)
-        .gte("end_date", body.deadline)
-        .maybeSingle();
-      // Only overwrite if we found a match — otherwise leave whatever's there.
-      if (iter?.id) body.iteration_id = iter.id;
+  // If the deadline moved into a different iteration window, auto-reassign
+  // iteration_id (unless caller set it explicitly). Week is then derived from
+  // (iteration, deadline) via resolveWeekId — the invariant is that every task
+  // lives inside one of its iteration's weeks.
+  if (body.deadline && typeof body.deadline === "string" && body.iteration_id === undefined) {
+    const { data: iter } = await sb
+      .from("iterations")
+      .select("id")
+      .lte("start_date", body.deadline)
+      .gte("end_date", body.deadline)
+      .maybeSingle();
+    if (iter?.id) body.iteration_id = iter.id;
+  }
+
+  // Recompute week_id when the caller changed iteration or deadline (and did
+  // NOT pass week_id explicitly). If iteration_id itself is changing, the old
+  // week_id belongs to a different iteration and MUST be replaced — pull the
+  // effective deadline (from the patch or the existing row) to resolve.
+  const iterChanging = body.iteration_id !== undefined;
+  const deadlineChanging = body.deadline !== undefined;
+  if (body.week_id === undefined && (iterChanging || deadlineChanging)) {
+    let effectiveIter: string | null | undefined = body.iteration_id;
+    let effectiveDeadline: string | null | undefined = body.deadline;
+    if (effectiveIter === undefined || effectiveDeadline === undefined) {
+      const { data: existing } = await sb
+        .from("tasks")
+        .select("iteration_id, deadline")
+        .eq("id", id)
+        .single();
+      if (effectiveIter === undefined) effectiveIter = existing?.iteration_id ?? null;
+      if (effectiveDeadline === undefined) effectiveDeadline = existing?.deadline ?? null;
     }
-    if (body.week_id === undefined) {
-      const { data: week } = await sb
-        .from("weeks")
-        .select("id")
-        .lte("start_date", body.deadline)
-        .gte("end_date", body.deadline)
-        .maybeSingle();
-      if (week?.id) body.week_id = week.id;
+    if (effectiveIter) {
+      const resolved = await resolveWeekId(sb, effectiveIter, effectiveDeadline);
+      if (resolved) body.week_id = resolved;
     }
   }
 
