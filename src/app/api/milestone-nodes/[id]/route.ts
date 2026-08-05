@@ -4,7 +4,7 @@ import { ok, err, safeJson } from "@/lib/api-helpers";
 import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
 const EDITABLE_FIELDS = ["title", "kind", "assignee", "score", "parent_id", "sort_order", "collapsed"] as const;
-const KINDS = ["Milestone", "Goal", "Sub-goal", "Task"] as const;
+const KINDS = ["Milestone", "Goal", "Sub-goal", "Task", "Sub-task"] as const;
 
 async function canWrite(request: NextRequest, sb: ReturnType<typeof createServiceClient>, nodeId: string) {
   const role = getCallerRole(request);

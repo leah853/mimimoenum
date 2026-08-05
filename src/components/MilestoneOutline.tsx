@@ -15,6 +15,7 @@ const KIND_LABEL: Record<Kind, string> = {
   Goal: "GOAL",
   "Sub-goal": "SUB",
   Task: "TASK",
+  "Sub-task": "SUB-TASK",
 };
 
 const KIND_INDENT: Record<Kind, number> = {
@@ -22,6 +23,7 @@ const KIND_INDENT: Record<Kind, number> = {
   Goal: 22,
   "Sub-goal": 46,
   Task: 70,
+  "Sub-task": 94,
 };
 
 const STATUS_LABEL: Record<Status, string> = {

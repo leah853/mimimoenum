@@ -16,7 +16,7 @@ import {
 import MilestoneDashboard from "@/components/MilestoneDashboard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-export type Kind = "Milestone" | "Goal" | "Sub-goal" | "Task";
+export type Kind = "Milestone" | "Goal" | "Sub-goal" | "Task" | "Sub-task";
 
 export type ApiNode = {
   id: string;
@@ -61,17 +61,18 @@ type Attachment = {
 // The layout is a Reingold-Tilford-style subtree-width algorithm: each parent
 // centers its children horizontally directly below it, and total width is the
 // sum of subtree widths. Cards shrink at each depth to keep the tree bounded.
-const CARD_W = [220, 180, 140, 130] as const;
-const CARD_H = [70, 60, 56, 60] as const;
+const CARD_W = [220, 180, 140, 130, 100] as const;
+const CARD_H = [70, 60, 56, 60, 32] as const;
 // V_GAP[d] = vertical gap between a parent at depth (d-1) and children at depth d.
-const V_GAP_D = [0, 42, 36, 28, 22] as const;
+const V_GAP_D = [0, 42, 36, 28, 22, 18] as const;
 // H_GAP[d] = horizontal gap between siblings at depth d.
-const H_GAP_D = [0, 20, 20, 14, 10] as const;
+const H_GAP_D = [0, 20, 20, 14, 10, 8] as const;
+const MAX_DEPTH = 4;
 const PAD_H = 60;
 const PAD_V = 40;
 
 const depthOfKind = (k: Kind): number =>
-  k === "Milestone" ? 0 : k === "Goal" ? 1 : k === "Sub-goal" ? 2 : 3;
+  k === "Milestone" ? 0 : k === "Goal" ? 1 : k === "Sub-goal" ? 2 : k === "Task" ? 3 : 4;
 
 const COLORS: Record<
   Status,
@@ -87,7 +88,7 @@ const COLORS: Record<
   green: { bar: "#639922", dot: "#639922", text: "#3B6D11", pill: "#EAF3DE", pillText: "#3B6D11" },
 };
 
-const KINDS: Kind[] = ["Milestone", "Goal", "Sub-goal", "Task"];
+const KINDS: Kind[] = ["Milestone", "Goal", "Sub-goal", "Task", "Sub-task"];
 
 // ─── Tree assembly from flat rows ────────────────────────────────────────────
 function byOrder(a: ApiNode, b: ApiNode) {
@@ -136,13 +137,13 @@ function layout(root: TreeNode): {
   const visibleLeaves: { id: string; x: number; yBottom: number; depth: number }[] = [];
 
   const computeWidth = (n: TreeNode, depth: number): number => {
-    const d = Math.min(depth, 3);
+    const d = Math.min(depth, MAX_DEPTH);
     const cw = CARD_W[d];
     if (n.children.length === 0) {
       subtreeW.set(n.id, cw);
       return cw;
     }
-    const childD = Math.min(depth + 1, 3);
+    const childD = Math.min(depth + 1, MAX_DEPTH);
     let sum = 0;
     n.children.forEach((c, i) => {
       sum += computeWidth(c, childD);
@@ -155,7 +156,7 @@ function layout(root: TreeNode): {
   computeWidth(root, 0);
 
   const place = (n: TreeNode, xCenter: number, yTop: number, depth: number) => {
-    const d = Math.min(depth, 3);
+    const d = Math.min(depth, MAX_DEPTH);
     const cw = CARD_W[d];
     const ch = CARD_H[d];
     positions[n.id] = { x: xCenter - cw / 2, y: yTop, depth: d };
@@ -163,7 +164,7 @@ function layout(root: TreeNode): {
       visibleLeaves.push({ id: n.id, x: xCenter, yBottom: yTop + ch, depth: d });
       return;
     }
-    const childD = Math.min(depth + 1, 3);
+    const childD = Math.min(depth + 1, MAX_DEPTH);
     const childY = yTop + ch + V_GAP_D[childD];
     let total = 0;
     n.children.forEach((c, i) => {
@@ -195,7 +196,7 @@ function layout(root: TreeNode): {
     width: maxX + PAD_H,
     height: maxY + PAD_V + 60, // room for leaf clusters at bottom
     visibleLeaves,
-    maxDepth: 3,
+    maxDepth: MAX_DEPTH,
   };
 }
 
@@ -520,7 +521,8 @@ function defaultChildKind(root: TreeNode, parentId: string | null): Kind {
   if (!parent) return "Goal";
   if (parent.kind === "Milestone") return "Goal";
   if (parent.kind === "Goal") return "Sub-goal";
-  return "Task";
+  if (parent.kind === "Sub-goal") return "Task";
+  return "Sub-task";
 }
 
 // ─── The pine canvas: ambient backdrop + trunk/limbs/leaves + node cards ────
@@ -699,9 +701,9 @@ function PineCanvas({
             const BARK = "#8A6A4A";
             const BARK_D = "#6E5238";
             // Branch trunk widths by parent depth (thicker near root).
-            const trunkTopByDepth = [16, 12, 8, 6];
-            const trunkBotByDepth = [10, 8, 6, 4];
-            const opByDepth = [1, 1, 0.85, 0.7];
+            const trunkTopByDepth = [16, 12, 8, 6, 4];
+            const trunkBotByDepth = [10, 8, 6, 4, 3];
+            const opByDepth = [1, 1, 0.85, 0.7, 0.6];
             const rootP = positions[root.id];
 
             // Short thick trunk from Milestone bottom down to the junction ~30px
@@ -765,7 +767,7 @@ function PineCanvas({
             };
 
             const walkBranches = (n: TreeNode, depth: number) => {
-              if (depth >= 3) return;
+              if (depth >= MAX_DEPTH) return;
               for (const c of n.children) {
                 drawBranch(n, c, depth);
                 walkBranches(c, depth + 1);
@@ -860,6 +862,75 @@ function NodeCard({
   const isGoal = node.kind === "Goal";
   const isSub = node.kind === "Sub-goal";
   const isTask = node.kind === "Task";
+  const isSubtask = node.kind === "Sub-task";
+
+  // Sub-tasks render as compact leaf chips — no status stripe, no chevron
+  // (they cannot have children), and the "+ add child" affordance is hidden.
+  if (isSubtask) {
+    const own = ownStatus(node);
+    const dot = STATUS_HEX[own];
+    const stateMark =
+      own === "green" ? "✓" : own === "grey" ? "–" : own === "black" ? "●" : "WIP";
+    const stateColor = own === "green" ? "#3B6D11" : own === "grey" ? "#9A988E" : STATUS_HEX[own];
+    return (
+      <div
+        style={{
+          position: "absolute",
+          left: pos.x,
+          top: pos.y,
+          width: CARD_W[pos.depth],
+          height: CARD_H[pos.depth],
+          background: "#FFFFFF",
+          borderRadius: 999,
+          border: "0.5px solid #B4B2A9",
+          boxSizing: "border-box",
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          padding: "0 8px",
+          cursor: "pointer",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          overflow: "hidden",
+        }}
+        onClick={() => onOpen(node.id)}
+        title={node.title}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: dot,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            color: "#2C2C2A",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {node.title}
+        </span>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            color: stateColor,
+            flexShrink: 0,
+          }}
+        >
+          {stateMark}
+        </span>
+      </div>
+    );
+  }
 
   // Kind-driven card size + typography (family tree — cards shrink at depth).
   const cardW = CARD_W[pos.depth];
@@ -1186,6 +1257,8 @@ export function NodeModal({
   const [textBody, setTextBody] = useState("");
   const [expandedText, setExpandedText] = useState<Set<string>>(new Set());
   const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1303,6 +1376,28 @@ export function NodeModal({
       if (!url) throw new Error("Could not generate download link");
       window.open(url, "_blank");
     } catch (e) { toast(handleApiError(e), "error"); }
+  }
+
+  async function addSubtask() {
+    const t = newSubtaskTitle.trim();
+    if (!t) return;
+    setAddingSubtask(true);
+    try {
+      await apiPost("/api/milestone-nodes", {
+        parent_id: node.id,
+        kind: "Sub-task",
+        title: t,
+        sort_order: node.children.length,
+      });
+      setNewSubtaskTitle("");
+      invalidateCache("/api/milestone-nodes");
+      await onRefetchTree();
+      toast("Sub-task added", "success");
+    } catch (e) {
+      toast(handleApiError(e), "error");
+    } finally {
+      setAddingSubtask(false);
+    }
   }
 
   async function deleteAttachment(attId: string) {
@@ -1715,6 +1810,66 @@ export function NodeModal({
               </ul>
             )}
           </div>
+
+          {/* Sub-tasks — only shown when this node is a Task. Sub-tasks are
+              leaves (Task → Sub-task), so this is the only place they get
+              created from the modal. */}
+          {node.kind === "Task" && (
+            <div>
+              <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
+                Sub-tasks ({node.children.length})
+              </p>
+              {node.children.length === 0 ? (
+                <p className="text-xs text-gray-400 italic mb-2">No sub-tasks yet.</p>
+              ) : (
+                <ul className="space-y-1 mb-2">
+                  {node.children.map((c) => {
+                    const st = ownStatus(c);
+                    return (
+                      <li
+                        key={c.id}
+                        className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer text-xs"
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: STATUS_HEX[st],
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{c.title}</span>
+                        {c.score != null && (
+                          <span className="text-[10px] text-gray-500 flex-shrink-0">{c.score}/10</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {isDoer && (
+                <div className="flex gap-2">
+                  <input
+                    value={newSubtaskTitle}
+                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && newSubtaskTitle.trim()) addSubtask(); }}
+                    placeholder="New sub-task…"
+                    disabled={addingSubtask}
+                    className="flex-1 px-3 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={addSubtask}
+                    disabled={!newSubtaskTitle.trim() || addingSubtask}
+                    className="px-3 py-1.5 text-xs bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white rounded-lg transition-all"
+                  >
+                    + Add sub-task
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Feedback */}
           <div>

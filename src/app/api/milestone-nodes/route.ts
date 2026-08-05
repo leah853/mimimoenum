@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, safeJson, validate } from "@/lib/api-helpers";
 import { getCallerRole, getCallerId } from "@/lib/api-auth";
 
-const KINDS = ["Milestone", "Goal", "Sub-goal", "Task"] as const;
+const KINDS = ["Milestone", "Goal", "Sub-goal", "Task", "Sub-task"] as const;
 
 export async function GET(request: NextRequest) {
   const role = getCallerRole(request);
