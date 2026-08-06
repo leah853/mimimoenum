@@ -201,13 +201,20 @@ export default function TaskDetail() {
           uploaded_by: dbUser?.id,
         });
       }
-      dispatch({ type: "RESET_UPLOAD" }); invalidateCache("/api/tasks", "/api/stats"); await refetch(); toast("File uploaded", "success");
+      dispatch({ type: "RESET_UPLOAD" });
+      invalidateCache("/api/tasks", "/api/stats", "/api/tasks/deliverables", "/api/milestone-nodes/deliverables");
+      await refetch();
+      toast("File uploaded", "success");
     } catch (e) { set("error", e instanceof Error ? e.message : "Upload failed"); }
     set("uploading", false);
   }
   async function deleteDeliverable(delId: string) {
     if (!confirm("Delete this file?")) return;
-    try { await apiDelete(`/api/deliverables/${delId}`); await refetch(); } catch (e) { toast(handleApiError(e), "error"); }
+    try {
+      await apiDelete(`/api/deliverables/${delId}`);
+      invalidateCache("/api/tasks", "/api/stats", "/api/tasks/deliverables", "/api/milestone-nodes/deliverables");
+      await refetch();
+    } catch (e) { toast(handleApiError(e), "error"); }
   }
   async function submitFeedback() {
     if (!dbUser) { toast("Session not ready — please refresh", "error"); return; }

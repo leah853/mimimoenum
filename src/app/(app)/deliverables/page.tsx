@@ -14,11 +14,12 @@ import {
   HiOutlineDownload,
   HiOutlineExternalLink,
 } from "react-icons/hi";
+import { useRouter } from "next/navigation";
 import { NodeModal, type ApiNode, type TreeNode } from "@/components/MilestoneTree";
 
 type Item = {
   attachment_id: string;
-  node_id: string;
+  node_id: string | null;
   node_title: string;
   node_score: number | null;
   goal_id: string | null;
@@ -32,6 +33,11 @@ type Item = {
   uploaded_at: string;
   reviewed: boolean;
   reviewed_at: string | null;
+  // Task-side additions (present only when source === "task")
+  source?: "milestone" | "task";
+  task_id?: string;
+  owner_name?: string | null;
+  task_title?: string;
 };
 
 type GoalMeta = { id: string; title: string; label: string; icon: string; bar: string; pill: string; pillText: string };
@@ -107,7 +113,10 @@ function humanBytes(n?: number | null) {
 const MIN_MONTH = "2026-06";
 
 export default function DeliverablesPage() {
+  const router = useRouter();
   const { data, loading, refetch } = useApi<{ items: Item[] }>("/api/milestone-nodes/deliverables");
+  const { data: taskData, loading: taskLoading } =
+    useApi<{ items: Item[] }>("/api/tasks/deliverables");
   const { data: allNodes } = useApi<ApiNode[]>("/api/milestone-nodes");
   const { dbUser, appRole } = useAuth();
   const { toast } = useToast();
@@ -116,7 +125,13 @@ export default function DeliverablesPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set()); // "<goal_id>|<month>"
   const [openNodeId, setOpenNodeId] = useState<string | null>(null);
 
-  const items = data?.items || [];
+  // Milestone-tree items keep source undefined (treated as "milestone"). Task
+  // deliverables carry source: "task" so the click handler routes to /tasks/[id].
+  const items = useMemo<Item[]>(() => {
+    const a = data?.items || [];
+    const b = taskData?.items || [];
+    return [...a, ...b];
+  }, [data, taskData]);
 
   // Group items by goal card → month key.
   const byCard = useMemo(() => {
@@ -211,6 +226,14 @@ export default function DeliverablesPage() {
 
   async function download(item: Item) {
     try {
+      // Task deliverables store a direct public URL on the row itself — no
+      // signed-url round-trip needed. Milestone attachments live in a
+      // permission-gated bucket and go through the attachments endpoint.
+      if (item.source === "task") {
+        if (!item.link_url) throw new Error("File URL missing");
+        window.open(item.link_url, "_blank");
+        return;
+      }
       const res = await fetch(`/api/milestone-nodes/attachments/${item.attachment_id}/url`);
       const j = await res.json();
       if (!j.url) throw new Error("Could not generate download link");
@@ -240,9 +263,9 @@ export default function DeliverablesPage() {
         )}
       </div>
 
-      {loading && <SkeletonRows count={4} />}
+      {(loading || taskLoading) && <SkeletonRows count={4} />}
 
-      {!loading && (
+      {!(loading || taskLoading) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {byCard.map(({ meta, months, total, pending }) => {
             const sortedMonths = Array.from(months.keys()).sort();
@@ -291,7 +314,13 @@ export default function DeliverablesPage() {
                                 <li key={it.attachment_id}>
                                   <button
                                     type="button"
-                                    onClick={() => setOpenNodeId(it.node_id)}
+                                    onClick={() => {
+                                      if (it.source === "task" && it.task_id) {
+                                        router.push(`/tasks/${it.task_id}`);
+                                      } else if (it.node_id) {
+                                        setOpenNodeId(it.node_id);
+                                      }
+                                    }}
                                     className="w-full text-left"
                                   >
                                     <div className="flex items-baseline gap-1.5 text-[10.5px] group">
