@@ -7,7 +7,7 @@ import { useTheme } from "@/lib/theme-context";
 import { useApi } from "@/lib/use-api";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import {
-  HiOutlineViewGrid, HiOutlineClipboardList,
+  HiOutlineClipboardList,
   HiOutlineDocumentText, HiOutlineUpload, HiOutlineLogout,
   HiOutlineTable, HiOutlineSun, HiOutlineMoon, HiOutlineAnnotation,
   HiOutlineVideoCamera, HiOutlinePaperClip,
@@ -32,7 +32,6 @@ export default function Sidebar() {
   const eodNeedsReview = stats?.eodNeedsReview || 0;
 
   const NAV_ITEMS = [
-    { href: "/dashboard", label: "Dashboard", icon: HiOutlineViewGrid, badge: 0 },
     { href: "/milestones", label: "Milestones", icon: HiOutlineTable, badge: 0 },
     { href: "/deliverables", label: "Deliverables", icon: HiOutlinePaperClip, badge: 0 },
     { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList, badge: 0 },
