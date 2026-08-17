@@ -11,6 +11,7 @@ export const ALLOWED_USERS: BasicUser[] = [
   { email: "leah@eonexea.com", password: "Eonexea@2026!", full_name: "Leah", role: "admin" },
   { email: "chloe@eonexea.com", password: "Eonexea@2026!", full_name: "Chloe", role: "eonexea" },
   { email: "nate@eonexea.com", password: "Eonexea@2026!", full_name: "Nate", role: "eonexea" },
+  { email: "peopleo@eonexea.com", password: "Eonexea@2026!", full_name: "Peopleo", role: "eonexea" },
   // Assessor / Rep accounts (@mimimomentum.com)
   { email: "rep@mimimomentum.com", password: "Momentum@2026!", full_name: "Rep 1", role: "mimimomentum" },
   { email: "rep2@mimimomentum.com", password: "Momentum@2026!", full_name: "Rep 2", role: "mimimomentum" },
