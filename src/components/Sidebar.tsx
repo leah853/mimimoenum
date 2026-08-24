@@ -10,7 +10,7 @@ import {
   HiOutlineClipboardList,
   HiOutlineDocumentText, HiOutlineUpload, HiOutlineLogout,
   HiOutlineTable, HiOutlineSun, HiOutlineMoon, HiOutlineAnnotation,
-  HiOutlineVideoCamera, HiOutlinePaperClip,
+  HiOutlineVideoCamera, HiOutlinePaperClip, HiOutlineCalendar,
 } from "react-icons/hi";
 
 type Stats = { feedbackCount: number; unacknowledged: number; awaitingReview: number; eodNeedsReview: number; newMessages: number };
@@ -32,6 +32,7 @@ export default function Sidebar() {
   const eodNeedsReview = stats?.eodNeedsReview || 0;
 
   const NAV_ITEMS = [
+    { href: "/planner", label: "Planner", icon: HiOutlineCalendar, badge: 0 },
     { href: "/milestones", label: "Milestones", icon: HiOutlineTable, badge: 0 },
     { href: "/deliverables", label: "Deliverables", icon: HiOutlinePaperClip, badge: 0 },
     { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList, badge: 0 },
