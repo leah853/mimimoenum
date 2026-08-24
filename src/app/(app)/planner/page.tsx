@@ -24,6 +24,11 @@ type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; messag
 
 const SAVE_DEBOUNCE_MS = 900;
 
+/** A card lives either in a week cell or in an iteration's goal list. */
+type Selection =
+  | { kind: "cell"; cell: string; itemId: string }
+  | { kind: "goal"; quarterKey: string; iterationKey: string; itemId: string };
+
 function statusText(readOnly: boolean, kind: "idle" | "saving" | "saved") {
   if (readOnly) return "Read-only";
   if (kind === "saving") return "Saving…";
@@ -38,7 +43,7 @@ export default function PlannerPage() {
   const readOnly = !canEditTasks(appRole);
 
   const [board, setBoard] = useState<PlannerBoard | null>(null);
-  const [selected, setSelected] = useState<{ cell: string; itemId: string } | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [persisted, setPersisted] = useState(true);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
@@ -98,21 +103,59 @@ export default function PlannerPage() {
     [flush, readOnly]
   );
 
-  const selectedItem: PlannerItem | null =
-    board && selected ? board.cells[selected.cell]?.find((i) => i.id === selected.itemId) ?? null : null;
+  /** Find the iteration a goal selection points at. */
+  function findIteration(sel: Extract<Selection, { kind: "goal" }>) {
+    const quarter = board?.quarters.find((q) => q.key === sel.quarterKey);
+    return { quarter, iteration: quarter?.iterations.find((it) => it.key === sel.iterationKey) };
+  }
 
-  /** Human trail shown at the top of the drawer: "Branding · Q3 2026 I3 W1". */
-  function describe(cell: string) {
+  let selectedItem: PlannerItem | null = null;
+  if (board && selected) {
+    if (selected.kind === "cell") {
+      selectedItem = board.cells[selected.cell]?.find((i) => i.id === selected.itemId) ?? null;
+    } else {
+      selectedItem = findIteration(selected).iteration?.goals.find((g) => g.id === selected.itemId) ?? null;
+    }
+  }
+
+  /** Human trail at the top of the drawer, e.g. "Branding · Q3 2026 I3 W1". */
+  function describe(sel: Selection) {
     if (!board) return "";
-    const [rowKey, colKey] = cell.split("|");
+    if (sel.kind === "goal") {
+      const { quarter, iteration } = findIteration(sel);
+      return ["Goal", [quarter?.label, iteration?.label].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+    }
+    const [rowKey, colKey] = sel.cell.split("|");
     const row = board.rows.find((r) => r.key === rowKey);
     const col = flattenColumns(board).find((c) => c.key === colKey);
     const where = col ? `${col.quarter.label} ${col.iteration.label} ${col.week.label}` : "";
     return [row?.label || "Untitled row", where].filter(Boolean).join(" · ");
   }
 
+  /** Replace the goal list of one iteration. */
+  function withGoals(sel: Extract<Selection, { kind: "goal" }>, goals: PlannerItem[]) {
+    if (!board) return board!;
+    return {
+      ...board,
+      quarters: board.quarters.map((q) =>
+        q.key !== sel.quarterKey
+          ? q
+          : {
+              ...q,
+              iterations: q.iterations.map((it) => (it.key === sel.iterationKey ? { ...it, goals } : it)),
+            }
+      ),
+    };
+  }
+
   function updateItem(next: PlannerItem) {
     if (!board || !selected) return;
+    if (selected.kind === "goal") {
+      const { iteration } = findIteration(selected);
+      if (!iteration) return;
+      handleChange(withGoals(selected, iteration.goals.map((g) => (g.id === next.id ? next : g))));
+      return;
+    }
     const list = board.cells[selected.cell] ?? [];
     handleChange({
       ...board,
@@ -122,6 +165,13 @@ export default function PlannerPage() {
 
   function deleteItem() {
     if (!board || !selected) return;
+    if (selected.kind === "goal") {
+      const { iteration } = findIteration(selected);
+      if (!iteration) return;
+      handleChange(withGoals(selected, iteration.goals.filter((g) => g.id !== selected.itemId)));
+      setSelected(null);
+      return;
+    }
     const list = (board.cells[selected.cell] ?? []).filter((i) => i.id !== selected.itemId);
     const cells = { ...board.cells };
     // Keep the document sparse — an emptied cell is removed, not stored as [].
@@ -183,7 +233,10 @@ export default function PlannerPage() {
         <PlannerGrid
           board={board}
           onChange={handleChange}
-          onSelect={(cell, itemId) => setSelected({ cell, itemId })}
+          onSelect={(cell, itemId) => setSelected({ kind: "cell", cell, itemId })}
+          onSelectGoal={(quarterKey, iterationKey, itemId) =>
+            setSelected({ kind: "goal", quarterKey, iterationKey, itemId })
+          }
           readOnly={readOnly}
         />
       )}
@@ -191,7 +244,7 @@ export default function PlannerPage() {
       {selectedItem && selected && (
         <PlannerItemPanel
           item={selectedItem}
-          context={describe(selected.cell)}
+          context={describe(selected)}
           readOnly={readOnly}
           onChange={updateItem}
           onDelete={deleteItem}

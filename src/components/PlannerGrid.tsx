@@ -157,12 +157,15 @@ export default function PlannerGrid({
   board,
   onChange,
   onSelect,
+  onSelectGoal,
   readOnly = false,
 }: {
   board: PlannerBoard;
   onChange: (next: PlannerBoard) => void;
-  /** Opens the detail drawer for a card. */
+  /** Opens the detail drawer for a week-cell card. */
   onSelect: (cell: string, itemId: string) => void;
+  /** Opens the detail drawer for an iteration goal. */
+  onSelectGoal: (quarterKey: string, iterationKey: string, itemId: string) => void;
   readOnly?: boolean;
 }) {
   const columns = useMemo(() => flattenColumns(board), [board]);
@@ -204,8 +207,27 @@ export default function PlannerGrid({
     onChange({ ...board, rows: board.rows.map((r) => (r.key === rowKey ? { ...r, label } : r)) });
   }
 
-  function setQuarterField(qKey: string, field: "label" | "goal", value: string) {
-    onChange({ ...board, quarters: board.quarters.map((q) => (q.key === qKey ? { ...q, [field]: value } : q)) });
+  function setQuarterLabel(qKey: string, label: string) {
+    onChange({ ...board, quarters: board.quarters.map((q) => (q.key === qKey ? { ...q, label } : q)) });
+  }
+
+  /** Append a blank goal to an iteration and return its id so it can be opened. */
+  function addGoal(qKey: string, itKey: string) {
+    const goal = newItem();
+    onChange({
+      ...board,
+      quarters: board.quarters.map((q) =>
+        q.key !== qKey
+          ? q
+          : {
+              ...q,
+              iterations: q.iterations.map((it) =>
+                it.key === itKey ? { ...it, goals: [...it.goals, goal] } : it
+              ),
+            }
+      ),
+    });
+    return goal.id;
   }
 
   function setIterationLabel(qKey: string, itKey: string, label: string) {
@@ -294,7 +316,7 @@ export default function PlannerGrid({
                       placeholder="Quarter"
                       className="text-white"
                       inputClassName="text-gray-900 dark:text-white font-semibold"
-                      onCommit={(v) => setQuarterField(q.key, "label", v)}
+                      onCommit={(v) => setQuarterLabel(q.key, v)}
                     />
                   </div>
                 );
@@ -330,31 +352,54 @@ export default function PlannerGrid({
               )}
             </Row>
 
+            {/* Goals belong to an iteration, and each iteration can hold
+                several — same card shape as the week cells, so they open in
+                the same detail drawer. */}
             <Row
               cols={cols}
               minHeight={40}
               railClass="bg-white dark:bg-gray-900"
               rail={<span className="text-sm font-semibold text-gray-900 dark:text-white px-1">Goals</span>}
             >
-              {board.quarters.map((q) => {
-                const span = quarterSpans.get(q.key);
-                if (!span) return null;
-                return (
-                  <div
-                    key={q.key}
-                    className="m-1 rounded-md flex items-center bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-semibold"
-                    style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
-                  >
-                    <EditableText
-                      readOnly={readOnly}
-                      value={q.goal}
-                      align="center"
-                      placeholder="Add a goal"
-                      onCommit={(v) => setQuarterField(q.key, "goal", v)}
-                    />
-                  </div>
-                );
-              })}
+              {board.quarters.flatMap((q) =>
+                q.iterations.map((it) => {
+                  const span = iterationSpans.get(`${q.key}:${it.key}`);
+                  if (!span) return null;
+                  return (
+                    <div
+                      key={`${q.key}:${it.key}`}
+                      className="group/goal m-1 rounded-md flex flex-col gap-1 p-1 bg-indigo-50/70 dark:bg-indigo-500/10"
+                      style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
+                    >
+                      {it.goals.map((goal) => (
+                        <ItemCard
+                          key={goal.id}
+                          item={goal}
+                          onOpen={() => onSelectGoal(q.key, it.key, goal.id)}
+                        />
+                      ))}
+
+                      {readOnly
+                        ? it.goals.length === 0 && (
+                            <span className="text-[11px] text-indigo-300 dark:text-indigo-400/50 px-1.5 text-center">
+                              No goals
+                            </span>
+                          )
+                        : (
+                          <button
+                            type="button"
+                            onClick={() => onSelectGoal(q.key, it.key, addGoal(q.key, it.key))}
+                            className={`text-[11px] px-1.5 py-1 rounded-md text-indigo-400 hover:text-indigo-700 hover:bg-white/60 dark:hover:bg-white/10 transition-colors ${
+                              it.goals.length ? "opacity-0 group-hover/goal:opacity-100" : ""
+                            }`}
+                          >
+                            {it.goals.length ? "+ Add goal" : "+ Add a goal"}
+                          </button>
+                        )}
+                    </div>
+                  );
+                })
+              )}
             </Row>
 
             <Row

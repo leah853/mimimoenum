@@ -27,13 +27,13 @@ export interface PlannerIteration {
   key: string;
   label: string;
   weeks: PlannerWeek[];
+  /** Goals for this iteration. Same card shape as week-cell items. */
+  goals: PlannerItem[];
 }
 
 export interface PlannerQuarter {
   key: string;
   label: string;
-  /** The Goals band that spans this quarter. */
-  goal: string;
   iterations: PlannerIteration[];
 }
 
@@ -99,7 +99,30 @@ export function normalizeBoard(board: PlannerBoard): PlannerBoard {
       cells[key] = [{ id: `legacy-${key}`, title: value, status: "not_started" }];
     }
   }
-  return { ...board, cells };
+  const quarters = (board.quarters ?? []).map((q) => {
+    // Goals used to be a single string on the quarter. Move one onto the
+    // quarter's first iteration rather than dropping the text.
+    const legacy = (q as unknown as { goal?: string }).goal;
+    const carried: PlannerItem[] =
+      typeof legacy === "string" && legacy.trim()
+        ? [{ id: `legacy-goal-${q.key}`, title: legacy, status: "not_started" }]
+        : [];
+
+    const iterations = (q.iterations ?? []).map((it, index) => ({
+      ...it,
+      goals: Array.isArray(it.goals)
+        ? it.goals.filter((g) => g && typeof g.title === "string")
+        : index === 0
+          ? carried
+          : [],
+    }));
+
+    const { goal: _legacy, ...rest } = q as PlannerQuarter & { goal?: string };
+    void _legacy;
+    return { ...rest, iterations };
+  });
+
+  return { ...board, quarters, cells };
 }
 
 function weeks(count = 3): PlannerWeek[] {
@@ -107,7 +130,7 @@ function weeks(count = 3): PlannerWeek[] {
 }
 
 function iterations(numbers: number[]): PlannerIteration[] {
-  return numbers.map((n) => ({ key: `i${n}`, label: `I${n}`, weeks: weeks() }));
+  return numbers.map((n) => ({ key: `i${n}`, label: `I${n}`, weeks: weeks(), goals: [] }));
 }
 
 /**
@@ -118,10 +141,10 @@ function iterations(numbers: number[]): PlannerIteration[] {
 export function defaultBoard(): PlannerBoard {
   return {
     quarters: [
-      { key: "q3-2026", label: "Q3 2026", goal: "Complete Prep & Execute", iterations: iterations([3, 4]) },
-      { key: "q4-2026", label: "Q4 2026", goal: "", iterations: iterations([1, 2, 3, 4]) },
-      { key: "q1-2027", label: "Q1 2027", goal: "", iterations: iterations([1, 2, 3, 4]) },
-      { key: "q2-2027", label: "Q2 2027", goal: "", iterations: iterations([1, 2, 3, 4]) },
+      { key: "q3-2026", label: "Q3 2026", iterations: iterations([3, 4]) },
+      { key: "q4-2026", label: "Q4 2026", iterations: iterations([1, 2, 3, 4]) },
+      { key: "q1-2027", label: "Q1 2027", iterations: iterations([1, 2, 3, 4]) },
+      { key: "q2-2027", label: "Q2 2027", iterations: iterations([1, 2, 3, 4]) },
     ],
     rows: [
       { key: "prerequisites", label: "Prerequisites", kind: "row", strong: true },
