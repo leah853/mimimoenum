@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import PlannerGrid from "@/components/PlannerGrid";
 import PlannerItemPanel from "@/components/PlannerItemPanel";
 import { useAuth } from "@/lib/auth-context";
@@ -57,11 +57,18 @@ export default function PlannerPage() {
   // ?board=<id> selects a different planner document. The live plan is
   // "default"; anything else is a sandbox, which is how this page gets
   // exercised without writing to real data.
-  const [boardParam] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    const value = new URLSearchParams(window.location.search).get("board");
-    return value && /^[a-z0-9-]{1,60}$/i.test(value) ? value : null;
-  });
+  // Read via useSyncExternalStore rather than lazy state: the server has no
+  // query string, so hydration must start from the server's answer (null) and
+  // only then adopt the client's. A plain initializer diverges and trips a
+  // hydration mismatch.
+  const boardParam = useSyncExternalStore(
+    () => () => {},
+    () => {
+      const value = new URLSearchParams(window.location.search).get("board");
+      return value && /^[a-z0-9-]{1,60}$/i.test(value) ? value : null;
+    },
+    () => null
+  );
   const api = boardParam ? `/api/planner?board=${encodeURIComponent(boardParam)}` : "/api/planner";
 
   const [board, setBoard] = useState<PlannerBoard | null>(null);
@@ -276,8 +283,7 @@ export default function PlannerPage() {
             {/* One expression, not a literal + {" "} + conditional: adjacent
                 text nodes are merged by the server renderer but kept separate
                 on the client, which trips hydration. */}
-            {boardParam ? `Sandbox board "${boardParam}" — not the live plan. ` : ""}
-            {`I3 Q3 2026 → I4 Q2 2027. ${
+            {`${boardParam ? `Sandbox board "${boardParam}" — not the live plan. ` : ""}I3 Q3 2026 → I4 Q2 2027. ${
               readOnly
                 ? "Read-only — the planner is authored by owners."
                 : "Click any label or cell to edit; changes save automatically."
@@ -369,6 +375,7 @@ export default function PlannerPage() {
           ownerOptions={
             selected.kind === "cell" ? OWNER_CHOICES[selected.cell.split("|")[0]] : undefined
           }
+          boardParam={boardParam}
           onChange={updateItem}
           onDelete={deleteItem}
           onClose={() => setSelected(null)}

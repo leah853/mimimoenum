@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { STATUS_COLORS, STATUS_LABELS, type TaskStatus } from "@/lib/types";
 import type { PlannerItem } from "@/lib/planner-model";
+import PlannerItemSubmissions from "@/components/PlannerItemSubmissions";
 
 const STATUSES: TaskStatus[] = ["not_started", "in_progress", "under_review", "completed", "blocked"];
 
@@ -15,6 +16,7 @@ export default function PlannerItemPanel({
   context,
   readOnly,
   ownerOptions,
+  boardParam = null,
   onChange,
   onDelete,
   onClose,
@@ -25,6 +27,8 @@ export default function PlannerItemPanel({
   readOnly: boolean;
   /** When set, Owner becomes a picker limited to these names. */
   ownerOptions?: string[];
+  /** Sandbox board this card belongs to, so submissions are scoped with it. */
+  boardParam?: string | null;
   /** Partial update, merged against the live item by the parent. Sending a
    *  patch rather than a rebuilt item means two edits landing before a
    *  re-render cannot clobber each other. */
@@ -164,6 +168,12 @@ export default function PlannerItemPanel({
               placeholder="Detail, links, blockers…"
               className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 resize-none read-only:bg-gray-50 dark:read-only:bg-gray-900"
             />
+          </div>
+
+          <div className="pt-1 border-t border-gray-200/70 dark:border-gray-800/70">
+            {/* Feedback stays open to reps even when the plan is read-only to
+                them — reviewing is the whole point of their access. */}
+            <PlannerItemSubmissions itemId={item.id} boardParam={boardParam} canAttach={!readOnly} />
           </div>
         </div>
 
