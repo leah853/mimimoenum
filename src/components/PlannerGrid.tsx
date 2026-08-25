@@ -447,11 +447,9 @@ export default function PlannerGrid({
                       className="group/goal relative m-1 rounded-md p-1 pb-1 bg-indigo-50/70 dark:bg-indigo-500/10"
                       style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
                     >
-                      {/* Capped and scrollable: the Goals row is as tall as its
-                          fullest iteration, and one iteration with eight goals
-                          would otherwise push the sticky header over half the
-                          screen. */}
-                      <div className="flex flex-col gap-[3px] max-h-[86px] overflow-y-auto">
+                      {/* No cap: goals are read at a glance, so hiding some of
+                          them behind a scrollbar defeats the point of the row. */}
+                      <div className="flex flex-col gap-[3px]">
                         {it.goals.map((goal) => (
                           <ItemCard
                             key={goal.id}
