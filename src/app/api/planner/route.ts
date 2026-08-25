@@ -139,8 +139,12 @@ export async function PUT(request: NextRequest) {
     // silently discard their work.
     const base = body.baseUpdatedAt as string | undefined;
     if (base !== undefined && base !== current.updated_at) {
+      const other = current.updated_by;
+      const sameAccount = other && other === callerEmail(request);
       return err(
-        `This planner was changed by ${current.updated_by ?? "someone else"} while you had it open. Reload to pick up their changes before editing.`,
+        sameAccount
+          ? "This planner was changed in another tab or window. Reload to pick up those changes before editing here."
+          : `This planner was changed by ${other ?? "someone else"} while you had it open. Reload to pick up their changes before editing.`,
         409
       );
     }

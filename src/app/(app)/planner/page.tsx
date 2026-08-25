@@ -80,6 +80,11 @@ export default function PlannerPage() {
   const conflicted = useRef(false);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attempts = useRef(0);
+  // Saves must not overlap. Each one stamps a new version, so a second
+  // request issued while the first is still in flight would carry a version
+  // the server has already moved past and be rejected as someone else's edit.
+  const inFlight = useRef(false);
+  const queued = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,8 +107,10 @@ export default function PlannerPage() {
   }, [api]);
 
   const flush = useCallback(async () => {
+    if (inFlight.current) { queued.current = true; return; }
     const next = pending.current;
     if (!next) return;
+    inFlight.current = true;
     // Deliberately keep `pending` until the write is confirmed: a dropped
     // network or a sleeping laptop must not silently discard the edit.
     setSave({ kind: "saving" });
@@ -119,8 +126,10 @@ export default function PlannerPage() {
       // saved first, or the write would have wiped the board. Stop autosaving
       // so we cannot keep hammering over their work. Retrying cannot help.
       if (res.status === 409) {
+        // Keep `pending` — the edit is unsaved, not unwanted. Autosave stops
+        // so we cannot overwrite the other writer, and the banner explains it.
         conflicted.current = true;
-        pending.current = null;
+        queued.current = false;
         setSave({ kind: "conflict", message: json.error || "This planner changed while you had it open." });
         return;
       }
@@ -143,6 +152,13 @@ export default function PlannerPage() {
         message: e instanceof Error ? e.message : "Save failed",
         attempts: attempts.current,
       });
+    } finally {
+      inFlight.current = false;
+      // An edit made while this request was open still needs saving.
+      if (queued.current && !conflicted.current) {
+        queued.current = false;
+        void flush();
+      }
     }
   }, [api]);
 
