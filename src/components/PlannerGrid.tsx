@@ -4,12 +4,49 @@ import { useMemo, useState } from "react";
 import {
   cellKey,
   flattenColumns,
+  formatRange,
+  iterationRange,
   newItem,
+  summarize,
+  weekItems,
+  type ProgressStats,
   type PlannerBoard,
   type PlannerItem,
   type PlannerRow,
 } from "@/lib/planner-model";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
+import { STATUS_COLORS, STATUS_LABELS, type TaskStatus } from "@/lib/types";
+
+const STATUS_ORDER: TaskStatus[] = ["completed", "under_review", "in_progress", "not_started", "blocked"];
+
+/** Stacked status bar — one segment per status, sized by share of the total. */
+function StatusBar({ stats, height = 4 }: { stats: ProgressStats; height?: number }) {
+  if (!stats.total) {
+    return <div className="w-full rounded-full bg-gray-200/70 dark:bg-gray-700/50" style={{ height }} />;
+  }
+  return (
+    <div className="w-full flex rounded-full overflow-hidden" style={{ height }}>
+      {STATUS_ORDER.map((status) => {
+        const count = stats.byStatus[status];
+        if (!count) return null;
+        return (
+          <div
+            key={status}
+            style={{ width: `${(count / stats.total) * 100}%`, background: STATUS_COLORS[status] }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** Screen-reader-and-tooltip friendly summary of a ProgressStats. */
+function statsTitle(label: string, stats: ProgressStats) {
+  if (!stats.total) return `${label}: nothing planned yet`;
+  const parts = STATUS_ORDER.filter((s) => stats.byStatus[s]).map(
+    (s) => `${stats.byStatus[s]} ${STATUS_LABELS[s].toLowerCase()}`
+  );
+  return `${label}: ${stats.percent}% complete · ${stats.total} item${stats.total === 1 ? "" : "s"} — ${parts.join(", ")}`;
+}
 
 const RAIL_W = 264;
 const COL_W = 132;
@@ -170,6 +207,7 @@ export default function PlannerGrid({
 }) {
   const columns = useMemo(() => flattenColumns(board), [board]);
   const cols = columns.length;
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   /** Inclusive column span of each quarter, keyed by quarter key. */
   const quarterSpans = useMemo(() => {
@@ -333,19 +371,35 @@ export default function PlannerGrid({
                 q.iterations.map((it) => {
                   const span = iterationSpans.get(`${q.key}:${it.key}`);
                   if (!span) return null;
+                  const goalStats = summarize(it.goals);
                   return (
                     <div
                       key={`${q.key}:${it.key}`}
-                      className="m-1 rounded-md flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-semibold"
+                      title={statsTitle(`${it.label} goals`, goalStats)}
+                      className="m-1 px-2 py-1 rounded-md flex flex-col justify-center gap-0.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
                       style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
                     >
-                      <EditableText
-                        readOnly={readOnly}
-                        value={it.label}
-                        align="center"
-                        placeholder="Iteration"
-                        onCommit={(v) => setIterationLabel(q.key, it.key, v)}
-                      />
+                      <div className="flex items-baseline justify-center gap-1.5 text-xs font-semibold">
+                        <EditableText
+                          readOnly={readOnly}
+                          value={it.label}
+                          align="center"
+                          placeholder="Iteration"
+                          className="!w-auto"
+                          onCommit={(v) => setIterationLabel(q.key, it.key, v)}
+                        />
+                        <span className="text-[10px] font-normal text-gray-400 whitespace-nowrap">
+                          {iterationRange(it)}
+                        </span>
+                      </div>
+                      {goalStats.total > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <StatusBar stats={goalStats} />
+                          <span className="text-[9.5px] tabular-nums text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            {goalStats.percent}%
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -404,26 +458,48 @@ export default function PlannerGrid({
 
             <Row
               cols={cols}
-              minHeight={34}
+              minHeight={54}
               rowClass="bg-gray-50 dark:bg-gray-900"
               railClass="bg-gray-50 dark:bg-gray-900"
               rail={<span className="text-[11px] uppercase tracking-wide text-gray-400 px-1">Week</span>}
             >
-              {columns.map((c, i) => (
-                <div
-                  key={c.key}
-                  className="flex items-center justify-center border-r border-gray-100 dark:border-gray-800/60 text-xs font-semibold text-gray-500 dark:text-gray-400"
-                  style={{ gridColumn: `${i + 1} / ${i + 2}` }}
-                >
-                  <EditableText
-                    readOnly={readOnly}
-                    value={c.week.label}
-                    align="center"
-                    placeholder="W"
-                    onCommit={(v) => setWeekLabel(c.quarter.key, c.iteration.key, c.week.key, v)}
-                  />
-                </div>
-              ))}
+              {columns.map((c, i) => {
+                const stats = summarize(weekItems(board, c.key));
+                const isCurrent = c.week.start <= today && today <= c.week.end;
+                return (
+                  <div
+                    key={c.key}
+                    title={statsTitle(`${c.iteration.label} ${c.week.label}`, stats)}
+                    className={`flex flex-col justify-center gap-0.5 px-1.5 border-r border-gray-100 dark:border-gray-800/60 ${
+                      isCurrent ? "bg-indigo-50/70 dark:bg-indigo-500/10" : ""
+                    }`}
+                    style={{ gridColumn: `${i + 1} / ${i + 2}` }}
+                  >
+                    <div
+                      className={`text-xs font-semibold text-center ${
+                        isCurrent ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      <EditableText
+                        readOnly={readOnly}
+                        value={c.week.label}
+                        align="center"
+                        placeholder="W"
+                        onCommit={(v) => setWeekLabel(c.quarter.key, c.iteration.key, c.week.key, v)}
+                      />
+                    </div>
+                    <div className="text-[9.5px] text-gray-400 text-center whitespace-nowrap leading-none">
+                      {formatRange(c.week.start, c.week.end)}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <StatusBar stats={stats} height={3} />
+                      <span className="text-[9px] tabular-nums text-gray-400 w-6 text-right">
+                        {stats.total ? `${stats.percent}%` : "–"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </Row>
           </div>
 

@@ -20,19 +20,29 @@ interface BoardResponse {
   updated_by: string | null;
 }
 
-type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
+type SaveState =
+  | { kind: "idle" | "saving" | "saved" }
+  | { kind: "error"; message: string }
+  /** Someone else saved while we had the board open; local edits are unsafe. */
+  | { kind: "conflict"; message: string };
 
 const SAVE_DEBOUNCE_MS = 900;
+
+/** Rows whose Owner field is a picker rather than free text. */
+const OWNER_CHOICES: Record<string, string[]> = {
+  prerequisites: ["Leah", "Chloe"],
+};
 
 /** A card lives either in a week cell or in an iteration's goal list. */
 type Selection =
   | { kind: "cell"; cell: string; itemId: string }
   | { kind: "goal"; quarterKey: string; iterationKey: string; itemId: string };
 
-function statusText(readOnly: boolean, kind: "idle" | "saving" | "saved") {
+function statusText(readOnly: boolean, kind: SaveState["kind"]) {
   if (readOnly) return "Read-only";
   if (kind === "saving") return "Saving…";
   if (kind === "saved") return "All changes saved";
+  if (kind === "conflict") return "Not saved";
   return "";
 }
 
@@ -52,6 +62,10 @@ export default function PlannerPage() {
   // Guards against an in-flight save overwriting a newer edit: only the most
   // recent scheduled payload is ever sent.
   const pending = useRef<PlannerBoard | null>(null);
+  // The updated_at we last saw. Sent with each save so the server can reject
+  // an overwrite of someone else's newer work rather than silently discarding it.
+  const baseUpdatedAt = useRef<string | null>(null);
+  const conflicted = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +79,7 @@ export default function PlannerPage() {
         if (cancelled) return;
         setBoard(normalizeBoard(json.board ?? defaultBoard()));
         setPersisted(json.persisted);
+        baseUpdatedAt.current = json.updated_at;
       })
       .catch((e) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Unknown error");
@@ -81,10 +96,22 @@ export default function PlannerPage() {
       const res = await fetch("/api/planner", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ board: next }),
+        body: JSON.stringify({ board: next, baseUpdatedAt: baseUpdatedAt.current }),
       });
       const json = await res.json();
+
+      // 409 means the server refused rather than failed: either someone else
+      // saved first, or the write would have wiped the board. Stop autosaving
+      // so we cannot keep hammering over their work.
+      if (res.status === 409) {
+        conflicted.current = true;
+        pending.current = null;
+        setSave({ kind: "conflict", message: json.error || "This planner changed while you had it open." });
+        return;
+      }
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+
+      baseUpdatedAt.current = json.updated_at;
       setSave({ kind: "saved" });
     } catch (e) {
       setSave({ kind: "error", message: e instanceof Error ? e.message : "Save failed" });
@@ -93,7 +120,7 @@ export default function PlannerPage() {
 
   const handleChange = useCallback(
     (next: PlannerBoard) => {
-      if (readOnly) return;
+      if (readOnly || conflicted.current) return;
       setBoard(next);
       pending.current = next;
       setSave({ kind: "saving" });
@@ -148,19 +175,19 @@ export default function PlannerPage() {
     };
   }
 
-  function updateItem(next: PlannerItem) {
+  /** Merge a patch into whichever card is selected, against current state. */
+  function updateItem(patch: Partial<PlannerItem>) {
     if (!board || !selected) return;
+    const apply = (i: PlannerItem) => (i.id === selected.itemId ? { ...i, ...patch } : i);
+
     if (selected.kind === "goal") {
       const { iteration } = findIteration(selected);
       if (!iteration) return;
-      handleChange(withGoals(selected, iteration.goals.map((g) => (g.id === next.id ? next : g))));
+      handleChange(withGoals(selected, iteration.goals.map(apply)));
       return;
     }
     const list = board.cells[selected.cell] ?? [];
-    handleChange({
-      ...board,
-      cells: { ...board.cells, [selected.cell]: list.map((i) => (i.id === next.id ? next : i)) },
-    });
+    handleChange({ ...board, cells: { ...board.cells, [selected.cell]: list.map(apply) } });
   }
 
   function deleteItem() {
@@ -217,6 +244,19 @@ export default function PlannerPage() {
         </div>
       )}
 
+      {save.kind === "conflict" && (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200 flex items-center justify-between gap-4 flex-wrap">
+          <span>{save.message} Your recent edits on this screen have not been saved.</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+          >
+            Reload planner
+          </button>
+        </div>
+      )}
+
       {loadError && (
         <div className="rounded-2xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 p-6 text-sm text-red-600 dark:text-red-400">
           Could not load the planner: {loadError}
@@ -246,6 +286,9 @@ export default function PlannerPage() {
           item={selectedItem}
           context={describe(selected)}
           readOnly={readOnly}
+          ownerOptions={
+            selected.kind === "cell" ? OWNER_CHOICES[selected.cell.split("|")[0]] : undefined
+          }
           onChange={updateItem}
           onDelete={deleteItem}
           onClose={() => setSelected(null)}

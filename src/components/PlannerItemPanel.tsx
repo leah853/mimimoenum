@@ -14,6 +14,7 @@ export default function PlannerItemPanel({
   item,
   context,
   readOnly,
+  ownerOptions,
   onChange,
   onDelete,
   onClose,
@@ -22,7 +23,12 @@ export default function PlannerItemPanel({
   /** Human-readable "Row · Quarter Iteration Week" trail. */
   context: string;
   readOnly: boolean;
-  onChange: (next: PlannerItem) => void;
+  /** When set, Owner becomes a picker limited to these names. */
+  ownerOptions?: string[];
+  /** Partial update, merged against the live item by the parent. Sending a
+   *  patch rather than a rebuilt item means two edits landing before a
+   *  re-render cannot clobber each other. */
+  onChange: (patch: Partial<PlannerItem>) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -77,7 +83,7 @@ export default function PlannerItemPanel({
               rows={2}
               readOnly={readOnly}
               value={item.title}
-              onChange={(e) => onChange({ ...item, title: e.target.value })}
+              onChange={(e) => onChange({ title: e.target.value })}
               placeholder="What needs to happen?"
               className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 resize-none read-only:bg-gray-50 dark:read-only:bg-gray-900"
             />
@@ -93,7 +99,7 @@ export default function PlannerItemPanel({
                     key={s}
                     type="button"
                     disabled={readOnly}
-                    onClick={() => onChange({ ...item, status: s })}
+                    onClick={() => onChange({ status: s })}
                     className="flex items-center gap-1.5 text-[11.5px] px-2.5 py-1.5 rounded-full border transition-all disabled:cursor-default"
                     style={{
                       borderColor: active ? STATUS_COLORS[s] : "transparent",
@@ -114,15 +120,35 @@ export default function PlannerItemPanel({
             <label htmlFor="planner-item-owner" className="block text-[11px] font-semibold text-gray-500 mb-1.5">
               Owner
             </label>
-            <input
-              id="planner-item-owner"
-              type="text"
-              readOnly={readOnly}
-              value={item.owner ?? ""}
-              onChange={(e) => onChange({ ...item, owner: e.target.value })}
-              placeholder="Who owns this?"
-              className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 read-only:bg-gray-50 dark:read-only:bg-gray-900"
-            />
+            {ownerOptions ? (
+              <select
+                id="planner-item-owner"
+                disabled={readOnly}
+                value={item.owner ?? ""}
+                onChange={(e) => onChange({ owner: e.target.value })}
+                className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 disabled:bg-gray-50 dark:disabled:bg-gray-900"
+              >
+                <option value="">Unassigned</option>
+                {ownerOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+                {/* Keep any pre-existing owner selectable rather than silently
+                    clearing it when it is not one of the offered names. */}
+                {item.owner && !ownerOptions.includes(item.owner) && (
+                  <option value={item.owner}>{item.owner}</option>
+                )}
+              </select>
+            ) : (
+              <input
+                id="planner-item-owner"
+                type="text"
+                readOnly={readOnly}
+                value={item.owner ?? ""}
+                onChange={(e) => onChange({ owner: e.target.value })}
+                placeholder="Who owns this?"
+                className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 read-only:bg-gray-50 dark:read-only:bg-gray-900"
+              />
+            )}
           </div>
 
           <div>
@@ -134,7 +160,7 @@ export default function PlannerItemPanel({
               rows={6}
               readOnly={readOnly}
               value={item.note ?? ""}
-              onChange={(e) => onChange({ ...item, note: e.target.value })}
+              onChange={(e) => onChange({ note: e.target.value })}
               placeholder="Detail, links, blockers…"
               className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 resize-none read-only:bg-gray-50 dark:read-only:bg-gray-900"
             />
