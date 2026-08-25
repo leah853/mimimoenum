@@ -49,7 +49,7 @@ function statsTitle(label: string, stats: ProgressStats) {
 }
 
 const RAIL_W = 224;
-const COL_W = 132;
+const COL_W = 164;
 
 // ── Inline editor ────────────────────────────────────────────────────
 // One component for every editable surface: rail labels, band labels, week
@@ -145,13 +145,13 @@ function ItemCard({ item, onOpen }: { item: PlannerItem; onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       title={`${item.title || "Untitled"} — ${STATUS_LABELS[item.status]}${item.owner ? ` · ${item.owner}` : ""}`}
-      className="group/card w-full text-left rounded flex items-center gap-1.5 pl-1.5 pr-1 py-[3px] text-[11px] leading-[1.35] hover:ring-1 hover:ring-indigo-400/70 transition-all"
-      style={{ background: `${color}1A`, borderLeft: `2.5px solid ${color}` }}
+      className="group/card w-full text-left rounded-[3px] block pl-2 pr-1.5 py-[3px] text-[11px] leading-[1.4] hover:ring-1 hover:ring-indigo-400/70 transition-all"
+      style={{ background: `${color}12`, borderLeft: `2px solid ${color}` }}
     >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
-      {/* One line: a card's height must not be set by its longest title, or a
-          single busy week makes every other week in the row tall and empty. */}
-      <span className="truncate text-gray-700 dark:text-gray-200">
+      {/* The left bar already carries the status — a dot as well was a third
+          redundant signal on every card, and four of those in one narrow cell
+          is what made the grid read as noise. */}
+      <span className="truncate block text-gray-700 dark:text-gray-200">
         {item.title || <span className="text-gray-400">Untitled</span>}
       </span>
     </button>
@@ -449,7 +449,7 @@ export default function PlannerGrid({
                     >
                       {/* No cap: goals are read at a glance, so hiding some of
                           them behind a scrollbar defeats the point of the row. */}
-                      <div className="flex flex-col gap-[3px]">
+                      <div className="flex flex-col gap-[5px]">
                         {it.goals.map((goal) => (
                           <ItemCard
                             key={goal.id}
@@ -608,7 +608,7 @@ export default function PlannerGrid({
                   return (
                     <div
                       key={c.key}
-                      className={`group/cell relative flex flex-col gap-[3px] border-r border-gray-100 dark:border-gray-800/50 px-1 py-1 ${
+                      className={`group/cell relative flex flex-col gap-[5px] border-r border-gray-100 dark:border-gray-800/50 px-1.5 py-1.5 ${
                         i === todayCol ? "bg-indigo-50/40 dark:bg-indigo-500/[0.06]" : ""
                       }`}
                       style={{ gridColumn: `${i + 1} / ${i + 2}` }}
