@@ -48,6 +48,19 @@ function statsTitle(label: string, stats: ProgressStats) {
   return `${label}: ${stats.percent}% complete · ${stats.total} item${stats.total === 1 ? "" : "s"} — ${parts.join(", ")}`;
 }
 
+/**
+ * Each quarter gets its own hue. On a board 42 columns wide you are usually
+ * scrolled away from the Timeline band, and colour is what tells you which
+ * quarter you are looking at without scrolling back.
+ */
+const QUARTER_THEMES = [
+  { grad: "linear-gradient(135deg,#6366f1,#8b5cf6)", tint: "rgba(99,102,241,0.10)", ink: "#4f46e5", line: "rgba(99,102,241,0.35)" },
+  { grad: "linear-gradient(135deg,#0ea5e9,#06b6d4)", tint: "rgba(14,165,233,0.10)", ink: "#0284c7", line: "rgba(14,165,233,0.35)" },
+  { grad: "linear-gradient(135deg,#10b981,#14b8a6)", tint: "rgba(16,185,129,0.10)", ink: "#059669", line: "rgba(16,185,129,0.35)" },
+  { grad: "linear-gradient(135deg,#f59e0b,#f97316)", tint: "rgba(245,158,11,0.12)", ink: "#d97706", line: "rgba(245,158,11,0.40)" },
+];
+const themeFor = (i: number) => QUARTER_THEMES[i % QUARTER_THEMES.length];
+
 const RAIL_W = 224;
 const COL_W = 132;
 
@@ -145,10 +158,16 @@ function ItemCard({ item, onOpen }: { item: PlannerItem; onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       title={`${item.title || "Untitled"} — ${STATUS_LABELS[item.status]}${item.owner ? ` · ${item.owner}` : ""}`}
-      className="group/card w-full text-left rounded flex items-center gap-1.5 pl-1.5 pr-1 py-[3px] text-[11px] leading-[1.35] hover:ring-1 hover:ring-indigo-400/70 transition-all"
-      style={{ background: `${color}1A`, borderLeft: `2.5px solid ${color}` }}
+      className="group/card w-full text-left rounded-[5px] flex items-center gap-1.5 pl-2 pr-1.5 py-[3px] text-[11px] leading-[1.35] shadow-[0_1px_1px_rgba(15,23,42,0.04)] hover:shadow-[0_2px_6px_rgba(15,23,42,0.13)] hover:-translate-y-[1px] transition-all duration-150"
+      style={{
+        background: `linear-gradient(100deg, ${color}22, ${color}0D)`,
+        borderLeft: `2.5px solid ${color}`,
+      }}
     >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: color, boxShadow: `0 0 0 2px ${color}26` }}
+      />
       {/* One line: a card's height must not be set by its longest title, or a
           single busy week makes every other week in the row tall and empty. */}
       <span className="truncate text-gray-700 dark:text-gray-200">
@@ -339,14 +358,14 @@ export default function PlannerGrid({
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200/70 dark:border-gray-800/70 bg-white dark:bg-gray-900 overflow-hidden">
+    <div className="rounded-2xl border border-gray-200/60 dark:border-gray-800/60 bg-white dark:bg-gray-900 overflow-hidden shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
       <div
         className="overflow-auto max-h-[calc(100vh-180px)]"
         onScroll={(e) => setScrolled(e.currentTarget.scrollLeft > 4)}
       >
         <div style={{ minWidth: RAIL_W + cols * COL_W }}>
           {/* ── Header stack ─────────────────────────────────────── */}
-          <div className="sticky top-0 z-30 bg-white dark:bg-gray-900">
+          <div className="sticky top-0 z-30 bg-white/85 dark:bg-gray-900/85 backdrop-blur-md shadow-[0_2px_10px_-6px_rgba(15,23,42,0.28)]">
             <Row
               scrolled={scrolled}
               cols={cols}
@@ -354,14 +373,14 @@ export default function PlannerGrid({
               railClass="bg-white dark:bg-gray-900"
               rail={<span className="text-sm font-semibold text-gray-900 dark:text-white px-1">Timeline</span>}
             >
-              {board.quarters.map((q) => {
+              {board.quarters.map((q, qi) => {
                 const span = quarterSpans.get(q.key);
                 if (!span) return null;
                 return (
                   <div
                     key={q.key}
-                    className="m-1 rounded-lg flex items-center justify-center gradient-primary text-white text-sm font-semibold"
-                    style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
+                    className="m-1 rounded-xl flex items-center justify-center text-white text-[13px] font-semibold tracking-wide shadow-[0_2px_8px_rgba(15,23,42,0.16)]"
+                    style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}`, backgroundImage: themeFor(qi).grad }}
                   >
                     {/* Pin the label: a quarter spans up to twelve columns, so
                         a centred label scrolls out of sight on a wide board. */}
@@ -388,17 +407,22 @@ export default function PlannerGrid({
               railClass="bg-white dark:bg-gray-900"
               rail={<span className="text-sm font-semibold text-gray-900 dark:text-white px-1">Iteration</span>}
             >
-              {board.quarters.flatMap((q) =>
+              {board.quarters.flatMap((q, qi) =>
                 q.iterations.map((it) => {
                   const span = iterationSpans.get(`${q.key}:${it.key}`);
                   if (!span) return null;
                   const goalStats = summarize(it.goals);
+                  const theme = themeFor(qi);
                   return (
                     <div
                       key={`${q.key}:${it.key}`}
                       title={statsTitle(`${it.label} goals`, goalStats)}
-                      className="m-1 px-2 py-1 rounded-md flex flex-col justify-center gap-0.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-                      style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
+                      className="m-1 px-2 py-1 rounded-lg flex flex-col justify-center gap-0.5 text-gray-700 dark:text-gray-300 ring-1 ring-inset"
+                      style={{
+                        gridColumn: `${span[0] + 1} / ${span[1] + 2}`,
+                        background: theme.tint,
+                        ["--tw-ring-color" as string]: theme.line,
+                      }}
                     >
                       <div className="flex items-baseline justify-center gap-1.5 text-xs font-semibold">
                         <EditableText
@@ -409,7 +433,7 @@ export default function PlannerGrid({
                           className="!w-auto"
                           onCommit={(v) => setIterationLabel(q.key, it.key, v)}
                         />
-                        <span className="text-[10px] font-normal text-gray-400 whitespace-nowrap">
+                        <span className="text-[10px] font-medium tabular-nums whitespace-nowrap" style={{ color: theme.ink }}>
                           {iterationRange(it)}
                         </span>
                       </div>
@@ -503,8 +527,8 @@ export default function PlannerGrid({
                   <div
                     key={c.key}
                     title={statsTitle(`${c.iteration.label} ${c.week.label}`, stats)}
-                    className={`flex flex-col justify-center gap-0.5 px-1.5 border-r border-gray-100 dark:border-gray-800/60 ${
-                      isCurrent ? "bg-indigo-50/70 dark:bg-indigo-500/10" : ""
+                    className={`relative flex flex-col justify-center gap-0.5 px-1.5 border-r border-gray-100 dark:border-gray-800/60 ${
+                      isCurrent ? "bg-indigo-100/70 dark:bg-indigo-500/15" : ""
                     }`}
                     style={{ gridColumn: `${i + 1} / ${i + 2}` }}
                   >
@@ -521,9 +545,14 @@ export default function PlannerGrid({
                         onCommit={(v) => setWeekLabel(c.quarter.key, c.iteration.key, c.week.key, v)}
                       />
                     </div>
-                    <div className="text-[9.5px] text-gray-400 text-center whitespace-nowrap leading-none">
+                    <div className="text-[9.5px] text-gray-400 text-center whitespace-nowrap leading-none tabular-nums">
                       {formatRange(c.week.start, c.week.end)}
                     </div>
+                    {isCurrent && (
+                      <span className="absolute -top-px left-1/2 -translate-x-1/2 px-1.5 py-px rounded-b-md bg-indigo-600 text-white text-[8px] font-bold tracking-wide uppercase">
+                        Today
+                      </span>
+                    )}
                     <div className="flex items-center gap-1">
                       <StatusBar stats={stats} height={3} />
                       <span className="text-[9px] tabular-nums text-gray-400 w-6 text-right">
@@ -544,10 +573,11 @@ export default function PlannerGrid({
                 scrolled={scrolled}
                 cols={cols}
                 minHeight={30}
-                rowClass="bg-gray-100/80 dark:bg-gray-800"
-                railClass="bg-gray-100/80 dark:bg-gray-800 group"
+                rowClass="bg-gradient-to-r from-gray-100 to-gray-50/60 dark:from-gray-800 dark:to-gray-800/50"
+                railClass="bg-gradient-to-r from-gray-100 to-gray-50/60 dark:from-gray-800 dark:to-gray-800/50 group"
                 rail={
-                  <div className="flex items-center gap-1 w-full">
+                  <div className="flex items-center gap-1.5 w-full">
+                    <span className="w-1 h-3.5 rounded-full bg-gradient-to-b from-indigo-400 to-violet-500 shrink-0" />
                     <EditableText
                       readOnly={readOnly}
                       value={row.label}

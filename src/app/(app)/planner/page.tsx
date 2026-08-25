@@ -9,9 +9,12 @@ import {
   defaultBoard,
   flattenColumns,
   normalizeBoard,
+  summarize,
+  weekItems,
   type PlannerBoard,
   type PlannerItem,
 } from "@/lib/planner-model";
+import { STATUS_COLORS } from "@/lib/types";
 
 interface BoardResponse {
   board: PlannerBoard;
@@ -47,6 +50,51 @@ function statusText(readOnly: boolean, kind: SaveState["kind"]) {
   if (kind === "conflict") return "Not saved";
   if (kind === "error") return "Not saved — retrying";
   return "";
+}
+
+/** Headline numbers for the board: goals, tasks, and how this week is going. */
+function PlannerSummary({ board }: { board: PlannerBoard }) {
+  const goals = board.quarters.flatMap((q) => q.iterations.flatMap((it) => it.goals));
+  const tasks = Object.values(board.cells).flat();
+  const goalStats = summarize(goals);
+  const taskStats = summarize(tasks);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const current = flattenColumns(board).find((c) => c.week.start <= today && today <= c.week.end);
+  const weekStats = current ? summarize(weekItems(board, current.key)) : null;
+  const blocked = taskStats.byStatus.blocked + goalStats.byStatus.blocked;
+
+  const tiles = [
+    { label: "Goals", value: `${goalStats.done}/${goalStats.total}`, pct: goalStats.percent, tone: "#6366f1" },
+    { label: "Tasks", value: `${taskStats.done}/${taskStats.total}`, pct: taskStats.percent, tone: "#0ea5e9" },
+    {
+      label: current ? `This week · ${current.iteration.label} ${current.week.label}` : "This week",
+      value: weekStats?.total ? `${weekStats.done}/${weekStats.total}` : "—",
+      pct: weekStats?.percent ?? null,
+      tone: "#10b981",
+    },
+    { label: "Obstacles", value: `${blocked}`, pct: null, tone: STATUS_COLORS.blocked },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {tiles.map((t) => (
+        <div
+          key={t.label}
+          className="rounded-xl border border-gray-200/60 dark:border-gray-800/60 bg-white dark:bg-gray-900 px-3.5 py-2.5 shadow-[0_4px_14px_-10px_rgba(15,23,42,0.4)]"
+        >
+          <p className="text-[10.5px] uppercase tracking-wider text-gray-400 truncate">{t.label}</p>
+          <div className="flex items-baseline gap-1.5 mt-0.5">
+            <span className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{t.value}</span>
+            {t.pct !== null && <span className="text-[11px] font-medium tabular-nums" style={{ color: t.tone }}>{t.pct}%</span>}
+          </div>
+          <div className="mt-1.5 h-1 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${t.pct ?? 0}%`, background: t.tone }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function PlannerPage() {
@@ -279,7 +327,7 @@ export default function PlannerPage() {
     <div className="p-6 space-y-4 animate-fade-in">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Planner</h1>
+          <h1 className="text-2xl font-bold gradient-text tracking-tight">Planner</h1>
           <p className="text-xs text-gray-500 mt-1">
             {/* One expression, not a literal + {" "} + conditional: adjacent
                 text nodes are merged by the server renderer but kept separate
@@ -355,6 +403,8 @@ export default function PlannerPage() {
           Loading planner…
         </div>
       )}
+
+      {board && <PlannerSummary board={board} />}
 
       {board && (
         <PlannerGrid
