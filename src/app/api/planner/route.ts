@@ -114,6 +114,9 @@ export async function PUT(request: NextRequest) {
 
   const sb = createServiceClient();
   const id = boardId(request);
+  // Whether this write is rollback-able. Reported so the client can say when
+  // history has silently degraded rather than pretending everything is safe.
+  let versioned = true;
 
   const { data: current, error: readError } = await sb
     .from("planner_boards")
@@ -158,7 +161,8 @@ export async function PUT(request: NextRequest) {
     const { error: versionError } = await sb
       .from("planner_board_versions")
       .insert({ board_id: id, data: current.data, saved_by: current.updated_by });
-    if (versionError && !isMissingTable(versionError, "planner_board_versions")) {
+    if (versionError) {
+      versioned = false;
       console.error("planner: failed to record version", versionError.message);
     }
   }
@@ -182,5 +186,5 @@ export async function PUT(request: NextRequest) {
     await sb.from("planner_board_versions").delete().in("id", (stale as { id: number }[]).map((row) => row.id));
   }
 
-  return ok({ saved: true, updated_at: data.updated_at, updated_by: data.updated_by });
+  return ok({ saved: true, versioned, updated_at: data.updated_at, updated_by: data.updated_by });
 }
