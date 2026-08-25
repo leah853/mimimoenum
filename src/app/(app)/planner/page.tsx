@@ -29,13 +29,11 @@ type SaveState =
 
 const SAVE_DEBOUNCE_MS = 900;
 
-/** Rows whose Owner field is a picker rather than free text. */
-const OWNER_CHOICES: Record<string, string[]> = {
-  prerequisites: ["Leah", "Chloe"],
-};
-
-/** Rows whose cards carry an ops/infra support checklist. */
-const CHECKLIST_ROWS = new Set(["prerequisites"]);
+/**
+ * Names offered as Owner suggestions. Not a closed list — any name can be
+ * typed, because cards span rows these two do not necessarily own.
+ */
+const OWNER_SUGGESTIONS = ["Leah", "Chloe"];
 
 /** A card lives either in a week cell or in an iteration's goal list. */
 type Selection =
@@ -375,11 +373,11 @@ export default function PlannerPage() {
           item={selectedItem}
           context={describe(selected)}
           readOnly={readOnly}
-          ownerOptions={
-            selected.kind === "cell" ? OWNER_CHOICES[selected.cell.split("|")[0]] : undefined
-          }
+          ownerOptions={OWNER_SUGGESTIONS}
           boardParam={boardParam}
-          showChecklist={selected.kind === "cell" && CHECKLIST_ROWS.has(selected.cell.split("|")[0])}
+          // Every card carries a checklist. Gating on a row key meant the
+          // feature silently disappeared when that row was renamed or removed.
+          showChecklist={selected.kind === "cell"}
           onChange={updateItem}
           onDelete={deleteItem}
           onClose={() => setSelected(null)}

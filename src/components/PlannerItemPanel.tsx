@@ -27,7 +27,7 @@ export default function PlannerItemPanel({
   /** Human-readable "Row · Quarter Iteration Week" trail. */
   context: string;
   readOnly: boolean;
-  /** When set, Owner becomes a picker limited to these names. */
+  /** Names offered as Owner suggestions; any other name can still be typed. */
   ownerOptions?: string[];
   /** Sandbox board this card belongs to, so submissions are scoped with it. */
   boardParam?: string | null;
@@ -128,35 +128,23 @@ export default function PlannerItemPanel({
             <label htmlFor="planner-item-owner" className="block text-[11px] font-semibold text-gray-500 mb-1.5">
               Owner
             </label>
-            {ownerOptions ? (
-              <select
-                id="planner-item-owner"
-                disabled={readOnly}
-                value={item.owner ?? ""}
-                onChange={(e) => onChange({ owner: e.target.value })}
-                className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 disabled:bg-gray-50 dark:disabled:bg-gray-900"
-              >
-                <option value="">Unassigned</option>
-                {ownerOptions.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-                {/* Keep any pre-existing owner selectable rather than silently
-                    clearing it when it is not one of the offered names. */}
-                {item.owner && !ownerOptions.includes(item.owner) && (
-                  <option value={item.owner}>{item.owner}</option>
-                )}
-              </select>
-            ) : (
-              <input
-                id="planner-item-owner"
-                type="text"
-                readOnly={readOnly}
-                value={item.owner ?? ""}
-                onChange={(e) => onChange({ owner: e.target.value })}
-                placeholder="Who owns this?"
-                className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 read-only:bg-gray-50 dark:read-only:bg-gray-900"
-              />
-            )}
+            {/* A datalist, not a select: Leah and Chloe are one click away but
+                any other name can still be typed. */}
+            <input
+              id="planner-item-owner"
+              type="text"
+              list={ownerOptions?.length ? "planner-owner-suggestions" : undefined}
+              readOnly={readOnly}
+              value={item.owner ?? ""}
+              onChange={(e) => onChange({ owner: e.target.value })}
+              placeholder="Who owns this?"
+              className="w-full text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 outline-none focus:border-indigo-400 read-only:bg-gray-50 dark:read-only:bg-gray-900"
+            />
+            {ownerOptions?.length ? (
+              <datalist id="planner-owner-suggestions">
+                {ownerOptions.map((name) => <option key={name} value={name} />)}
+              </datalist>
+            ) : null}
           </div>
 
           <div>
