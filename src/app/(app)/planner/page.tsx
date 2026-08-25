@@ -34,6 +34,9 @@ const OWNER_CHOICES: Record<string, string[]> = {
   prerequisites: ["Leah", "Chloe"],
 };
 
+/** Rows whose cards carry an ops/infra support checklist. */
+const CHECKLIST_ROWS = new Set(["prerequisites"]);
+
 /** A card lives either in a week cell or in an iteration's goal list. */
 type Selection =
   | { kind: "cell"; cell: string; itemId: string }
@@ -376,6 +379,7 @@ export default function PlannerPage() {
             selected.kind === "cell" ? OWNER_CHOICES[selected.cell.split("|")[0]] : undefined
           }
           boardParam={boardParam}
+          showChecklist={selected.kind === "cell" && CHECKLIST_ROWS.has(selected.cell.split("|")[0])}
           onChange={updateItem}
           onDelete={deleteItem}
           onClose={() => setSelected(null)}

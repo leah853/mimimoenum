@@ -6,7 +6,7 @@ import { canGiveFeedback, canEditTasks } from "@/lib/roles";
 import type { Task, Feedback, Deliverable } from "@/lib/types";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
 import Link from "next/link";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, useSyncExternalStore } from "react";
 import { HiOutlineChatAlt, HiOutlinePaperClip, HiArrowRight, HiCheck, HiReply, HiEye, HiX, HiAtSymbol, HiOutlineFilm } from "react-icons/hi";
 import { useToast, Skeleton, SkeletonRows } from "@/components/ui";
 import { handleApiError, isReplyComment, isVideoUrl } from "@/lib/utils";
@@ -32,6 +32,18 @@ type WeekReport = {
   feedback?: { id: string; reviewer_id: string; rating: number; comment?: string; created_at: string; reviewer?: { id: string; full_name: string } }[];
 };
 
+type OpsChecklistItem = {
+  id: string;
+  item_id: string;
+  label: string;
+  done: boolean;
+  done_at: string | null;
+  done_by: string | null;
+  created_by: string;
+  created_at: string;
+  context: { task: string; row: string; when: string };
+};
+
 type ChatMessage = { id: string; user_id: string; message: string; mentions?: string[]; parent_id?: string; created_at: string; user?: { id: string; full_name: string; email: string } };
 type TeamUser = { id: string; full_name: string; email: string };
 
@@ -49,7 +61,7 @@ export default function FeedbackTrailPage() {
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
-  const [activeTab, setActiveTab] = useState<"task_feedback" | "week_reports" | "team_scores" | "general_chat">("task_feedback");
+  const [activeTab, setActiveTab] = useState<"task_feedback" | "week_reports" | "team_scores" | "general_chat" | "ops_checklist">("task_feedback");
   // Bug 6b: search-by-message text filter for the Task Feedback view.
   const [messageSearch, setMessageSearch] = useState("");
 
@@ -62,6 +74,55 @@ export default function FeedbackTrailPage() {
   const [chatReplyTo, setChatReplyTo] = useState<{ id: string; userName: string; preview: string } | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Ops checklist mirrors the planner's per-card support items. It is read
+  // straight from /api/planner/checklist rather than useApi so ticking one off
+  // can refresh just this list.
+  const [opsItems, setOpsItems] = useState<OpsChecklistItem[] | null>(null);
+  const [opsAvailable, setOpsAvailable] = useState(true);
+  const [opsShowDone, setOpsShowDone] = useState(true);
+
+  // ?board=<id> points the Ops Checklist at a sandbox planner, mirroring
+  // /planner. Read via useSyncExternalStore so SSR and hydration agree.
+  const opsBoard = useSyncExternalStore(
+    () => () => {},
+    () => {
+      const value = new URLSearchParams(window.location.search).get("board");
+      return value && /^[a-z0-9-]{1,60}$/i.test(value) ? value : null;
+    },
+    () => null
+  );
+  const opsQuery = opsBoard ? `?board=${encodeURIComponent(opsBoard)}` : "";
+
+  const loadOps = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/planner/checklist${opsQuery}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setOpsAvailable(json.available !== false);
+      setOpsItems(json.items ?? []);
+    } catch {
+      setOpsItems([]);
+      setOpsAvailable(false);
+    }
+  }, [opsQuery]);
+
+  useEffect(() => {
+    if (activeTab === "ops_checklist" && opsItems === null) void loadOps();
+  }, [activeTab, opsItems, loadOps]);
+
+  async function toggleOps(item: OpsChecklistItem) {
+    setOpsItems((prev) => prev?.map((i) => (i.id === item.id ? { ...i, done: !i.done } : i)) ?? prev);
+    try {
+      await fetch(`/api/planner/checklist/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ done: !item.done }),
+      });
+    } finally {
+      await loadOps();
+    }
+  }
 
   const chatMessages = chatData || [];
   const all = tasks || [];
@@ -321,7 +382,95 @@ export default function FeedbackTrailPage() {
           General Chat
           {chatMessages.length > 0 && <span className="text-[10px] text-gray-400">({chatMessages.length})</span>}
         </button>
+        <button onClick={() => setActiveTab("ops_checklist")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === "ops_checklist" ? "border-amber-500 text-amber-600 dark:text-amber-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          Ops Checklist
+          {opsItems && opsItems.length > 0 && (
+            <span className="text-[10px] text-gray-400">({opsItems.filter(i => !i.done).length} open)</span>
+          )}
+        </button>
       </div>
+
+      {activeTab === "ops_checklist" && (
+        <div className="rounded-2xl border border-gray-200/70 dark:border-gray-800/70 bg-white dark:bg-gray-900 p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Ops / infra support</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {opsBoard ? `Sandbox board "${opsBoard}". ` : ""}
+                Support items raised on planner tasks. Tick one off here or in the planner — it is the same list.
+              </p>
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+              <input type="checkbox" checked={opsShowDone} onChange={(e) => setOpsShowDone(e.target.checked)}
+                className="accent-indigo-600" />
+              Show completed
+            </label>
+          </div>
+
+          {!opsAvailable && (
+            <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/10 rounded-lg px-3 py-2">
+              Checklist storage is not set up yet — run
+              <code className="font-mono mx-1">supabase/migrations/20260825_planner_item_checklist.sql</code>.
+            </p>
+          )}
+
+          {opsItems === null ? (
+            <SkeletonRows />
+          ) : opsItems.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              No support items yet. Add them from a task card in the Planner and they appear here.
+            </p>
+          ) : (
+            (() => {
+              const visible = opsShowDone ? opsItems : opsItems.filter((i) => !i.done);
+              // Group by the task they were raised against, so the list reads
+              // as work-per-task rather than a flat stream.
+              const groups = new Map<string, OpsChecklistItem[]>();
+              for (const i of visible) {
+                const key = `${i.context.row} · ${i.context.task} · ${i.context.when}`;
+                groups.set(key, [...(groups.get(key) ?? []), i]);
+              }
+              if (visible.length === 0) {
+                return <p className="text-sm text-gray-400">Nothing open — every support item is done.</p>;
+              }
+              return (
+                <div className="space-y-4">
+                  {[...groups.entries()].map(([heading, list]) => (
+                    <div key={heading}>
+                      <div className="flex items-baseline gap-2 mb-1.5">
+                        <span className="text-[12px] font-semibold text-gray-900 dark:text-white">
+                          {list[0].context.task}
+                        </span>
+                        <span className="text-[10.5px] text-gray-400">
+                          {list[0].context.row} · {list[0].context.when}
+                        </span>
+                        <span className="text-[10.5px] text-gray-400 ml-auto">
+                          {list.filter((i) => i.done).length}/{list.length} done
+                        </span>
+                      </div>
+                      <ul className="space-y-0.5 pl-0.5">
+                        {list.map((i) => (
+                          <li key={i.id} className="flex items-start gap-2 py-0.5">
+                            <input type="checkbox" checked={i.done} onChange={() => toggleOps(i)}
+                              className="mt-1 shrink-0 accent-indigo-600 cursor-pointer" aria-label={i.label} />
+                            <span className={`text-[13px] flex-1 break-words ${i.done ? "line-through text-gray-400" : "text-gray-700 dark:text-gray-200"}`}>
+                              {i.label}
+                            </span>
+                            <span className="text-[10px] text-gray-400 shrink-0 mt-1">
+                              {i.done && i.done_by ? `done · ${i.done_by}` : `added by ${i.created_by}`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
 
       {/* KPI Cards — clickable filters. Filters only show under Task Feedback. */}
       {activeTab === "task_feedback" && (
