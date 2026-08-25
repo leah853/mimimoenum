@@ -48,7 +48,7 @@ function statsTitle(label: string, stats: ProgressStats) {
   return `${label}: ${stats.percent}% complete · ${stats.total} item${stats.total === 1 ? "" : "s"} — ${parts.join(", ")}`;
 }
 
-const RAIL_W = 264;
+const RAIL_W = 224;
 const COL_W = 132;
 
 // ── Inline editor ────────────────────────────────────────────────────
@@ -145,10 +145,13 @@ function ItemCard({ item, onOpen }: { item: PlannerItem; onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       title={`${item.title || "Untitled"} — ${STATUS_LABELS[item.status]}${item.owner ? ` · ${item.owner}` : ""}`}
-      className="w-full text-left rounded-md px-1.5 py-1 text-[11px] leading-snug hover:ring-2 hover:ring-indigo-400/50 transition-shadow"
-      style={{ background: `${color}1F`, borderLeft: `3px solid ${color}` }}
+      className="group/card w-full text-left rounded flex items-center gap-1.5 pl-1.5 pr-1 py-[3px] text-[11px] leading-[1.35] hover:ring-1 hover:ring-indigo-400/70 transition-all"
+      style={{ background: `${color}1A`, borderLeft: `2.5px solid ${color}` }}
     >
-      <span className="line-clamp-2 text-gray-700 dark:text-gray-200 break-words">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+      {/* One line: a card's height must not be set by its longest title, or a
+          single busy week makes every other week in the row tall and empty. */}
+      <span className="truncate text-gray-700 dark:text-gray-200">
         {item.title || <span className="text-gray-400">Untitled</span>}
       </span>
     </button>
@@ -163,6 +166,7 @@ function Row({
   minHeight,
   rowClass = "",
   railClass = "",
+  scrolled = false,
 }: {
   rail: React.ReactNode;
   cols: number;
@@ -170,12 +174,14 @@ function Row({
   minHeight: number;
   rowClass?: string;
   railClass?: string;
+  /** Casts a shadow off the rail once columns slide beneath it. */
+  scrolled?: boolean;
 }) {
   return (
     <div className={`flex items-stretch ${rowClass}`} style={{ minHeight }}>
       <div
-        className={`sticky left-0 z-20 shrink-0 flex items-center px-3 border-r border-b border-gray-200/70 dark:border-gray-800/70 ${railClass}`}
-        style={{ width: RAIL_W }}
+        className={`sticky left-0 z-20 shrink-0 flex items-center px-3 border-r border-b border-gray-200/70 dark:border-gray-800/70 transition-shadow ${railClass}`}
+        style={{ width: RAIL_W, boxShadow: scrolled ? "6px 0 12px -6px rgba(15,23,42,0.18)" : undefined }}
       >
         {rail}
       </div>
@@ -207,7 +213,13 @@ export default function PlannerGrid({
 }) {
   const columns = useMemo(() => flattenColumns(board), [board]);
   const cols = columns.length;
+  const [scrolled, setScrolled] = useState(false);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  /** Column index of the week containing today, or -1 when out of range. */
+  const todayCol = useMemo(
+    () => columns.findIndex((c) => c.week.start <= today && today <= c.week.end),
+    [columns, today]
+  );
 
   /** Inclusive column span of each quarter, keyed by quarter key. */
   const quarterSpans = useMemo(() => {
@@ -328,11 +340,15 @@ export default function PlannerGrid({
 
   return (
     <div className="rounded-2xl border border-gray-200/70 dark:border-gray-800/70 bg-white dark:bg-gray-900 overflow-hidden">
-      <div className="overflow-auto max-h-[calc(100vh-180px)]">
+      <div
+        className="overflow-auto max-h-[calc(100vh-180px)]"
+        onScroll={(e) => setScrolled(e.currentTarget.scrollLeft > 4)}
+      >
         <div style={{ minWidth: RAIL_W + cols * COL_W }}>
           {/* ── Header stack ─────────────────────────────────────── */}
           <div className="sticky top-0 z-30 bg-white dark:bg-gray-900">
             <Row
+              scrolled={scrolled}
               cols={cols}
               minHeight={44}
               railClass="bg-white dark:bg-gray-900"
@@ -347,6 +363,9 @@ export default function PlannerGrid({
                     className="m-1 rounded-lg flex items-center justify-center gradient-primary text-white text-sm font-semibold"
                     style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
                   >
+                    {/* Pin the label: a quarter spans up to twelve columns, so
+                        a centred label scrolls out of sight on a wide board. */}
+                    <div className="sticky px-2" style={{ left: RAIL_W + 8 }}>
                     <EditableText
                       readOnly={readOnly}
                       value={q.label}
@@ -356,12 +375,14 @@ export default function PlannerGrid({
                       inputClassName="text-gray-900 dark:text-white font-semibold"
                       onCommit={(v) => setQuarterLabel(q.key, v)}
                     />
+                    </div>
                   </div>
                 );
               })}
             </Row>
 
             <Row
+              scrolled={scrolled}
               cols={cols}
               minHeight={38}
               railClass="bg-white dark:bg-gray-900"
@@ -410,6 +431,7 @@ export default function PlannerGrid({
                 several — same card shape as the week cells, so they open in
                 the same detail drawer. */}
             <Row
+              scrolled={scrolled}
               cols={cols}
               minHeight={40}
               railClass="bg-white dark:bg-gray-900"
@@ -422,34 +444,44 @@ export default function PlannerGrid({
                   return (
                     <div
                       key={`${q.key}:${it.key}`}
-                      className="group/goal m-1 rounded-md flex flex-col gap-1 p-1 bg-indigo-50/70 dark:bg-indigo-500/10"
+                      className="group/goal relative m-1 rounded-md p-1 pb-1 bg-indigo-50/70 dark:bg-indigo-500/10"
                       style={{ gridColumn: `${span[0] + 1} / ${span[1] + 2}` }}
                     >
-                      {it.goals.map((goal) => (
-                        <ItemCard
-                          key={goal.id}
-                          item={goal}
-                          onOpen={() => onSelectGoal(q.key, it.key, goal.id)}
-                        />
-                      ))}
+                      {/* Capped and scrollable: the Goals row is as tall as its
+                          fullest iteration, and one iteration with eight goals
+                          would otherwise push the sticky header over half the
+                          screen. */}
+                      <div className="flex flex-col gap-[3px] max-h-[86px] overflow-y-auto">
+                        {it.goals.map((goal) => (
+                          <ItemCard
+                            key={goal.id}
+                            item={goal}
+                            onOpen={() => onSelectGoal(q.key, it.key, goal.id)}
+                          />
+                        ))}
+                      </div>
 
-                      {readOnly
-                        ? it.goals.length === 0 && (
-                            <span className="text-[11px] text-indigo-300 dark:text-indigo-400/50 px-1.5 text-center">
-                              No goals
-                            </span>
-                          )
-                        : (
-                          <button
-                            type="button"
-                            onClick={() => onSelectGoal(q.key, it.key, addGoal(q.key, it.key))}
-                            className={`text-[11px] px-1.5 py-1 rounded-md text-indigo-400 hover:text-indigo-700 hover:bg-white/60 dark:hover:bg-white/10 transition-colors ${
-                              it.goals.length ? "opacity-0 group-hover/goal:opacity-100" : ""
-                            }`}
-                          >
-                            {it.goals.length ? "+ Add goal" : "+ Add a goal"}
-                          </button>
-                        )}
+                      {/* Overlaid, not in flow: the Goals row is as tall as
+                          its fullest iteration, so a hidden button in all
+                          fourteen bands would pad the row needlessly. */}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectGoal(q.key, it.key, addGoal(q.key, it.key))}
+                          className={
+                            it.goals.length
+                              ? "absolute left-1 right-1 bottom-0 h-4 rounded text-[10px] leading-none text-indigo-500 bg-white/70 dark:bg-white/10 opacity-0 group-hover/goal:opacity-100 focus:opacity-100 transition-opacity"
+                              : "absolute inset-0 text-[11px] text-indigo-400 hover:text-indigo-700 transition-colors"
+                          }
+                        >
+                          {it.goals.length ? "+ Add goal" : "+ Add a goal"}
+                        </button>
+                      )}
+                      {readOnly && it.goals.length === 0 && (
+                        <span className="text-[11px] text-indigo-300 dark:text-indigo-400/50 px-1.5 text-center">
+                          No goals
+                        </span>
+                      )}
                     </div>
                   );
                 })
@@ -457,6 +489,7 @@ export default function PlannerGrid({
             </Row>
 
             <Row
+              scrolled={scrolled}
               cols={cols}
               minHeight={54}
               rowClass="bg-gray-50 dark:bg-gray-900"
@@ -465,7 +498,7 @@ export default function PlannerGrid({
             >
               {columns.map((c, i) => {
                 const stats = summarize(weekItems(board, c.key));
-                const isCurrent = c.week.start <= today && today <= c.week.end;
+                const isCurrent = i === todayCol;
                 return (
                   <div
                     key={c.key}
@@ -508,17 +541,18 @@ export default function PlannerGrid({
             row.kind === "section" ? (
               <Row
                 key={row.key}
+                scrolled={scrolled}
                 cols={cols}
-                minHeight={38}
-                rowClass="bg-gray-50 dark:bg-gray-800"
-                railClass="bg-gray-50 dark:bg-gray-800 group"
+                minHeight={30}
+                rowClass="bg-gray-100/80 dark:bg-gray-800"
+                railClass="bg-gray-100/80 dark:bg-gray-800 group"
                 rail={
                   <div className="flex items-center gap-1 w-full">
                     <EditableText
                       readOnly={readOnly}
                       value={row.label}
                       placeholder="Section"
-                      className="text-[13px] font-semibold text-gray-900 dark:text-white"
+                      className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400"
                       onCommit={(v) => setRowLabel(row.key, v)}
                     />
                     {!readOnly && (
@@ -534,20 +568,14 @@ export default function PlannerGrid({
                   </div>
                 }
               >
-                {columns.map((c, i) => (
-                  <div
-                    key={c.key}
-                    aria-hidden
-                    className="border-r border-gray-100 dark:border-gray-800/50"
-                    style={{ gridColumn: `${i + 1} / ${i + 2}` }}
-                  />
-                ))}
+                <div aria-hidden style={{ gridColumn: `1 / ${cols + 1}` }} />
               </Row>
             ) : (
               <Row
                 key={row.key}
+                scrolled={scrolled}
                 cols={cols}
-                minHeight={44}
+                minHeight={34}
                 rowClass="hover:bg-indigo-50/30 dark:hover:bg-indigo-500/[0.04] transition-colors"
                 railClass="bg-white dark:bg-gray-900 group"
                 rail={
@@ -582,27 +610,32 @@ export default function PlannerGrid({
                   return (
                     <div
                       key={c.key}
-                      className="group/cell flex flex-col gap-1 border-r border-gray-100 dark:border-gray-800/50 p-1"
+                      className={`group/cell relative flex flex-col gap-[3px] border-r border-gray-100 dark:border-gray-800/50 px-1 py-1 ${
+                        i === todayCol ? "bg-indigo-50/40 dark:bg-indigo-500/[0.06]" : ""
+                      }`}
                       style={{ gridColumn: `${i + 1} / ${i + 2}` }}
                     >
                       {items.map((item) => (
                         <ItemCard key={item.id} item={item} onOpen={() => onSelect(key, item.id)} />
                       ))}
 
-                      {readOnly
-                        ? items.length === 0 && <span className="text-[11px] text-gray-300 dark:text-gray-600 px-1.5">–</span>
-                        : (
-                          <button
-                            type="button"
-                            onClick={() => onSelect(key, addItem(row.key, c.key))}
-                            title="Add an item"
-                            className={`text-left text-[11px] px-1.5 py-1 rounded-md text-gray-300 dark:text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-500/10 transition-colors ${
-                              items.length ? "opacity-0 group-hover/cell:opacity-100" : ""
-                            }`}
-                          >
-                            {items.length ? "+ Add" : "–"}
-                          </button>
-                        )}
+                      {/* Absolutely positioned so it never contributes height:
+                          otherwise a hidden button in all 42 cells inflates
+                          every row, including the empty ones. */}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => onSelect(key, addItem(row.key, c.key))}
+                          title="Add an item"
+                          className={
+                            items.length
+                              ? "absolute left-1 right-1 bottom-0 h-4 rounded text-[10px] leading-none text-indigo-500 bg-indigo-50/90 dark:bg-indigo-500/20 opacity-0 group-hover/cell:opacity-100 focus:opacity-100 transition-opacity"
+                              : "absolute inset-0 text-[10px] text-indigo-500 opacity-0 group-hover/cell:opacity-100 focus:opacity-100 transition-opacity"
+                          }
+                        >
+                          + Add
+                        </button>
+                      )}
                     </div>
                   );
                 })}
