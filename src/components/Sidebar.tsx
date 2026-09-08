@@ -8,8 +8,9 @@ import { useApi } from "@/lib/use-api";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import {
   HiOutlineClipboardList,
+  HiOutlineClipboardCheck,
   HiOutlineDocumentText, HiOutlineUpload, HiOutlineLogout,
-  HiOutlineTable, HiOutlineSun, HiOutlineMoon, HiOutlineAnnotation,
+  HiOutlineSun, HiOutlineMoon, HiOutlineAnnotation,
   HiOutlineVideoCamera, HiOutlinePaperClip, HiOutlineCalendar,
 } from "react-icons/hi";
 
@@ -33,7 +34,7 @@ export default function Sidebar() {
 
   const NAV_ITEMS = [
     { href: "/planner", label: "Planner", icon: HiOutlineCalendar, badge: 0 },
-    { href: "/milestones", label: "Milestones", icon: HiOutlineTable, badge: 0 },
+    { href: "/campaigns", label: "Campaign Checklist", icon: HiOutlineClipboardCheck, badge: 0 },
     { href: "/deliverables", label: "Deliverables", icon: HiOutlinePaperClip, badge: 0 },
     { href: "/tasks", label: "Tasks", icon: HiOutlineClipboardList, badge: 0 },
     { href: "/feedback", label: "Feedback Trail", icon: HiOutlineAnnotation, badge: feedbackCount },
