@@ -46,5 +46,25 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return err(error.message, 400);
+
+  // Mirror the decision's feedback into the thread as a rep message, unless
+  // one already exists for this submission.
+  if (feedback && feedback.trim() && updated) {
+    const { data: existing } = await sb
+      .from("campaign_thread_messages")
+      .select("id")
+      .eq("submission_id", submissionId)
+      .limit(1);
+    if (!existing || existing.length === 0) {
+      await sb.from("campaign_thread_messages").insert({
+        node_id: updated.node_id,
+        submission_id: submissionId,
+        author_email: email,
+        author_role: "rep",
+        body: feedback.trim(),
+      });
+    }
+  }
+
   return ok(updated);
 }

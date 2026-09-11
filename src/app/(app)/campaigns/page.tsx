@@ -37,6 +37,14 @@ interface Version {
   attachments: Attachment[];
 }
 interface Rollup { totalLeaves: number; goLeaves: number; percent: number }
+interface ThreadMessage {
+  id: string;
+  body: string;
+  author_email: string;
+  author_role: "owner" | "rep" | "admin";
+  submission_id: string | null;
+  created_at: string;
+}
 interface Leaf {
   id: string;
   title: string;
@@ -45,6 +53,7 @@ interface Leaf {
   versions: Version[];
   decision: Decision;
   locked: boolean;
+  messages: ThreadMessage[];
 }
 interface ItemNode {
   id: string;
@@ -55,6 +64,7 @@ interface ItemNode {
   versions?: Version[];
   decision?: Decision;
   locked?: boolean;
+  messages?: ThreadMessage[];
   rollup: Rollup;
 }
 interface Section {
@@ -416,6 +426,116 @@ function RepPanel({ submissionId, initialFeedback, onDecided }: { submissionId: 
   );
 }
 
+// ─── Thread section ────────────────────────────────────────────────────
+const REP_BUBBLE_BG = "#EEF1FE";
+const REP_BUBBLE_ACCENT = "#4F46E5";
+const OWNER_BUBBLE_BG = "#EAF3DE";
+const OWNER_BUBBLE_ACCENT = "#3B6D11";
+
+function versionOf(msg: ThreadMessage, versions: Version[]): number | null {
+  if (!msg.submission_id) return null;
+  const v = versions.find((x) => x.id === msg.submission_id);
+  return v ? v.version_number : null;
+}
+
+function ThreadBubble({ msg, versions }: { msg: ThreadMessage; versions: Version[] }) {
+  const isRep = msg.author_role === "rep";
+  const bg = isRep ? REP_BUBBLE_BG : OWNER_BUBBLE_BG;
+  const accent = isRep ? REP_BUBBLE_ACCENT : OWNER_BUBBLE_ACCENT;
+  const roleLabel = msg.author_role === "rep" ? "REP" : msg.author_role === "admin" ? "ADMIN" : "OWNER";
+  const ver = versionOf(msg, versions);
+  return (
+    <div className={`flex ${isRep ? "justify-start" : "justify-end"}`}>
+      <div
+        className="max-w-[85%] rounded-2xl px-3 py-2 border"
+        style={{ background: bg, borderColor: accent + "33" }}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-semibold" style={{ color: accent }}>
+            {msg.author_email}
+          </span>
+          <span
+            className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+            style={{ background: accent, color: "#fff" }}
+          >
+            {roleLabel}
+          </span>
+          {ver !== null && (
+            <span
+              className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border"
+              style={{ color: accent, borderColor: accent + "66" }}
+            >
+              v{ver} feedback
+            </span>
+          )}
+          <span className="text-[10px] text-gray-500 ml-auto">
+            {new Date(msg.created_at).toLocaleString()}
+          </span>
+        </div>
+        <div className="mt-1 text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap">
+          {msg.body}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThreadSection({ nodeId, messages, versions, onPosted }: { nodeId: string; messages: ThreadMessage[]; versions: Version[]; onPosted: () => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiPost("/api/campaigns/messages", { node_id: nodeId, body: text.trim() });
+      setText("");
+      invalidateCache("/api/campaigns");
+      onPosted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Send failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/50 p-4">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-gray-500">
+        Thread · {messages.length} message{messages.length === 1 ? "" : "s"}
+      </div>
+      {messages.length > 0 && (
+        <div className="space-y-2">
+          {messages.map((m) => (
+            <ThreadBubble key={m.id} msg={m} versions={versions} />
+          ))}
+        </div>
+      )}
+      <div className="pt-1 flex flex-col gap-1">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={2}
+          placeholder="Write a message…"
+          className="w-full text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent"
+        />
+        {error && <div className="text-xs text-red-600">{error}</div>}
+        <div className="flex justify-end">
+          <button
+            onClick={send}
+            disabled={busy || !text.trim()}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {busy ? "Sending…" : "Send"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Leaf row ──────────────────────────────────────────────────────────
 function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; indent: number; isOwner: boolean; isRep: boolean; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
@@ -470,6 +590,14 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
           )}
 
           {showUpload && <UploadPanel nodeId={leaf.id} nextVersion={nextVersion} onSaved={onChanged} />}
+
+          <ThreadSection
+            nodeId={leaf.id}
+            messages={leaf.messages}
+            versions={leaf.versions}
+            onPosted={onChanged}
+          />
+
           {showRep && latest && <RepPanel submissionId={latest.id} initialFeedback={latest.feedback} onDecided={onChanged} />}
           {leaf.locked && (
             <div className="mt-2 text-xs text-green-700 font-semibold">Locked — this leaf is GO.</div>
@@ -494,6 +622,7 @@ function ItemRow({ item, indent, isOwner, isRep, onChanged }: { item: ItemNode; 
       versions: item.versions ?? [],
       decision: item.decision ?? "pending",
       locked: !!item.locked,
+      messages: item.messages ?? [],
     };
     return <LeafRow leaf={asLeaf} indent={indent} isOwner={isOwner} isRep={isRep} onChanged={onChanged} />;
   }

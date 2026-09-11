@@ -37,6 +37,25 @@ interface RawSubmission {
   feedback: string | null;
 }
 
+interface RawMessage {
+  id: string;
+  node_id: string;
+  submission_id: string | null;
+  author_email: string;
+  author_role: "owner" | "rep" | "admin";
+  body: string;
+  created_at: string;
+}
+
+interface ThreadMessage {
+  id: string;
+  body: string;
+  author_email: string;
+  author_role: "owner" | "rep" | "admin";
+  submission_id: string | null;
+  created_at: string;
+}
+
 interface Version {
   id: string;
   version_number: number;
@@ -57,6 +76,7 @@ interface LeafOut {
   versions: Version[];
   decision: "go" | "no_go" | "pending";
   locked: boolean;
+  messages: ThreadMessage[];
 }
 
 interface ItemOut {
@@ -68,6 +88,7 @@ interface ItemOut {
   versions?: Version[];
   decision?: "go" | "no_go" | "pending";
   locked?: boolean;
+  messages?: ThreadMessage[];
   rollup: { totalLeaves: number; goLeaves: number; percent: number };
 }
 
@@ -91,19 +112,37 @@ export async function GET(request: NextRequest) {
 
   const sb = createServiceClient();
 
-  const [nodesRes, submissionsRes, attachmentsRes] = await Promise.all([
+  const [nodesRes, submissionsRes, attachmentsRes, messagesRes] = await Promise.all([
     sb.from("campaign_nodes").select("*").order("sort_order", { ascending: true }),
     sb.from("campaign_submissions").select("*").order("version_number", { ascending: true }),
     sb.from("campaign_submission_attachments").select("*").order("created_at", { ascending: true }),
+    sb.from("campaign_thread_messages").select("*").order("created_at", { ascending: true }),
   ]);
 
   if (nodesRes.error) return err(nodesRes.error.message, 500);
   if (submissionsRes.error) return err(submissionsRes.error.message, 500);
   if (attachmentsRes.error) return err(attachmentsRes.error.message, 500);
+  if (messagesRes.error) return err(messagesRes.error.message, 500);
 
   const nodes = (nodesRes.data as RawNode[]) || [];
   const submissions = (submissionsRes.data as RawSubmission[]) || [];
   const attachments = (attachmentsRes.data as RawAttachment[]) || [];
+  const rawMessages = (messagesRes.data as RawMessage[]) || [];
+
+  const messagesByNode = new Map<string, ThreadMessage[]>();
+  for (const m of rawMessages) {
+    const entry: ThreadMessage = {
+      id: m.id,
+      body: m.body,
+      author_email: m.author_email,
+      author_role: m.author_role,
+      submission_id: m.submission_id,
+      created_at: m.created_at,
+    };
+    const list = messagesByNode.get(m.node_id) || [];
+    list.push(entry);
+    messagesByNode.set(m.node_id, list);
+  }
 
   // Index attachments by submission id
   const attachmentsBySub = new Map<string, RawAttachment[]>();
@@ -156,6 +195,7 @@ export async function GET(request: NextRequest) {
       versions,
       decision,
       locked: decision === "go",
+      messages: messagesByNode.get(node.id) || [],
     };
   };
 
@@ -187,6 +227,7 @@ export async function GET(request: NextRequest) {
       versions: leaf.versions,
       decision: leaf.decision,
       locked: leaf.locked,
+      messages: leaf.messages,
       rollup: {
         totalLeaves: 1,
         goLeaves: leaf.decision === "go" ? 1 : 0,
