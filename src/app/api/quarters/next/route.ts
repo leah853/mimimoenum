@@ -57,9 +57,14 @@ export async function POST(request: NextRequest) {
   const dup = quarters.find((q: { name: string }) => q.name === newName);
   if (dup) return err(`Quarter "${newName}" already exists`, 409);
 
+  // Breather Week: Sun-Sat slot immediately after the quarter's exec window.
+  // Reflection/reset only — no iterations or week rows live here.
+  const breather_start = addDays(end, 1);
+  const breather_end = addDays(end, 7);
+
   const { data: quarter, error: insQErr } = await sb
     .from("quarters")
-    .insert({ name: newName, start_date: start, end_date: end })
+    .insert({ name: newName, start_date: start, end_date: end, breather_start, breather_end })
     .select()
     .single();
   if (insQErr) return err(insQErr.message, 500);
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
   }
 
   return ok({
-    quarter: { id: quarter.id, name: newName, start_date: start, end_date: end },
+    quarter: { id: quarter.id, name: newName, start_date: start, end_date: end, breather_start, breather_end },
     iterations_created: ITER_COUNT,
     weeks_created: ITER_COUNT * WEEK_COUNT_PER_ITER,
   }, 201);

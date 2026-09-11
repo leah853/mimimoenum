@@ -24,7 +24,26 @@ type FullTask = Task & {
 type UserOption = { id: string; full_name: string; email: string };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
 type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
-type QuarterOption = { id: string; name: string; start_date: string; end_date: string; iterations: IterOption[] };
+type QuarterOption = { id: string; name: string; start_date: string; end_date: string; breather_start?: string | null; breather_end?: string | null; iterations: IterOption[] };
+
+const BREATHER_TOOLTIP = "Reflection & reset week between quarters — no tasks planned here.";
+function BreatherTile({ start, end }: { start: string; end: string }) {
+  return (
+    <div
+      title={`Breather Week · ${shortDate(start)} → ${shortDate(end)} — ${BREATHER_TOOLTIP}`}
+      className="text-left rounded-lg px-3 py-2 flex-1 min-w-0 cursor-default"
+      style={{ background: "#FBFAF5", border: "1px solid #E8E5DC" }}
+      aria-label="Breather Week"
+    >
+      <div className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: "#8A7F62" }}>
+        Breather
+      </div>
+      <div className="text-[9.5px] mt-0.5 truncate" style={{ color: "#8A8577" }}>
+        {shortDate(start)} – {shortDate(end)}
+      </div>
+    </div>
+  );
+}
 
 // ─── Palette per owner (soft chip colours matched to the app's existing
 //    OWNER_STYLE tints — keeps continuity with the rest of the pages). ───
@@ -417,6 +436,7 @@ function TasksInner() {
         <BoardLayout
           iteration={iteration}
           iterations={iterations}
+          quarter={quarter}
           iterId={iterId}
           setIterId={setIterId}
           allTasks={all}
@@ -496,6 +516,9 @@ function TasksInner() {
             </button>
           );
         })}
+        {quarter?.breather_start && quarter?.breather_end && (
+          <BreatherTile start={quarter.breather_start} end={quarter.breather_end} />
+        )}
       </div>
 
       {/* ── Category chips — grouped by the 3 foundations ───────────── */}
@@ -700,7 +723,7 @@ const BOARD_COLUMNS: { status: TaskStatus; label: string; dot: string }[] = [
 ];
 
 function BoardLayout({
-  iteration, iterations, iterId, setIterId, allTasks,
+  iteration, iterations, quarter, iterId, setIterId, allTasks,
   visible, all, iterCounts, activeWeekTab, setActiveWeekTab,
   onDrop, draggingId, setDraggingId, dropTarget, setDropTarget,
   catFilter, setCatFilter, urgencyFilter, setUrgencyFilter,
@@ -708,6 +731,7 @@ function BoardLayout({
 }: {
   iteration: IterOption;
   iterations: IterOption[];
+  quarter: QuarterOption | null;
   iterId: string;
   setIterId: (id: string) => void;
   allTasks: FullTask[];
@@ -814,6 +838,9 @@ function BoardLayout({
             </button>
           );
         })}
+        {quarter?.breather_start && quarter?.breather_end && (
+          <BreatherTile start={quarter.breather_start} end={quarter.breather_end} />
+        )}
       </div>
 
       {/* Health strip */}
