@@ -50,6 +50,17 @@ function statsTitle(label: string, stats: ProgressStats) {
 
 const RAIL_W = 224;
 const COL_W = 164;
+/**
+ * The Breather column is a spacer, not a first-class column — narrower than
+ * a week so the eye reads it as a gap between quarters rather than another
+ * week to plan into.
+ */
+const BREATHER_W = Math.round(COL_W * 0.6);
+
+/** Format a "start – end" date range like "27 Sep – 3 Oct". */
+function breatherRange(start: string, end: string) {
+  return formatRange(start, end);
+}
 
 // ── Inline editor ────────────────────────────────────────────────────
 // One component for every editable surface: rail labels, band labels, week
@@ -161,7 +172,7 @@ function ItemCard({ item, onOpen }: { item: PlannerItem; onOpen: () => void }) {
 // ── Row scaffold ─────────────────────────────────────────────────────
 function Row({
   rail,
-  cols,
+  template,
   children,
   minHeight,
   rowClass = "",
@@ -169,7 +180,9 @@ function Row({
   scrolled = false,
 }: {
   rail: React.ReactNode;
-  cols: number;
+  /** Explicit `grid-template-columns` — columns vary in width once breathers
+   *  are interleaved, so a simple repeat() no longer suffices. */
+  template: string;
   children?: React.ReactNode;
   minHeight: number;
   rowClass?: string;
@@ -187,7 +200,7 @@ function Row({
       </div>
       <div
         className="relative grid border-b border-gray-200/70 dark:border-gray-800/70"
-        style={{ gridTemplateColumns: `repeat(${cols}, ${COL_W}px)` }}
+        style={{ gridTemplateColumns: template }}
       >
         {children}
       </div>
@@ -211,38 +224,103 @@ export default function PlannerGrid({
   onSelectGoal: (quarterKey: string, iterationKey: string, itemId: string) => void;
   readOnly?: boolean;
 }) {
-  const columns = useMemo(() => flattenColumns(board), [board]);
-  const cols = columns.length;
-  const [scrolled, setScrolled] = useState(false);
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  /** Column index of the week containing today, or -1 when out of range. */
-  const todayCol = useMemo(
-    () => columns.findIndex((c) => c.week.start <= today && today <= c.week.end),
-    [columns, today]
+  /**
+   * The rendered column sequence: every week from the board, interleaved with
+   * a narrower "breather" spacer after each quarter that has one. Breather
+   * columns carry no cells and no interactions — they are visual reflection
+   * markers between quarters.
+   */
+  type WeekDef = ReturnType<typeof flattenColumns>[number];
+  type ColumnDef =
+    | { kind: "week"; key: string; def: WeekDef; width: number }
+    | {
+        kind: "breather";
+        key: string;
+        quarterKey: string;
+        quarterLabel: string;
+        breather: { start: string; end: string };
+        width: number;
+      };
+  const columnDefs = useMemo<ColumnDef[]>(() => {
+    const defs: ColumnDef[] = [];
+    for (const q of board.quarters) {
+      for (const it of q.iterations) {
+        for (const w of it.weeks) {
+          const key = `${q.key}:${it.key}:${w.key}`;
+          defs.push({
+            kind: "week",
+            key,
+            def: { key, quarter: q, iteration: it, week: w },
+            width: COL_W,
+          });
+        }
+      }
+      if (q.breather) {
+        defs.push({
+          kind: "breather",
+          key: `${q.key}:breather`,
+          quarterKey: q.key,
+          quarterLabel: q.label,
+          breather: q.breather,
+          width: BREATHER_W,
+        });
+      }
+    }
+    return defs;
+  }, [board.quarters]);
+  const totalCols = columnDefs.length;
+  const gridTemplate = useMemo(
+    () => columnDefs.map((d) => `${d.width}px`).join(" "),
+    [columnDefs]
+  );
+  const boardWidth = useMemo(
+    () => columnDefs.reduce((sum, d) => sum + d.width, 0),
+    [columnDefs]
   );
 
-  /** Inclusive column span of each quarter, keyed by quarter key. */
+  const [scrolled, setScrolled] = useState(false);
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  /** columnDefs index of the week containing today, or -1 when out of range. */
+  const todayCol = useMemo(
+    () =>
+      columnDefs.findIndex(
+        (c) => c.kind === "week" && c.def.week.start <= today && today <= c.def.week.end
+      ),
+    [columnDefs, today]
+  );
+
+  /**
+   * Inclusive column span of each quarter, keyed by quarter key. Includes the
+   * breather column when present so the quarter's header block visually wraps
+   * its reflection week too.
+   */
   const quarterSpans = useMemo(() => {
     const spans = new Map<string, [number, number]>();
-    columns.forEach((c, i) => {
-      const span = spans.get(c.quarter.key);
+    columnDefs.forEach((c, i) => {
+      const qKey = c.kind === "week" ? c.def.quarter.key : c.quarterKey;
+      const span = spans.get(qKey);
       if (span) span[1] = i;
-      else spans.set(c.quarter.key, [i, i]);
+      else spans.set(qKey, [i, i]);
     });
     return spans;
-  }, [columns]);
+  }, [columnDefs]);
 
-  /** Inclusive column span of each iteration, keyed `${quarterKey}:${iterKey}`. */
+  /**
+   * Inclusive column span of each iteration, keyed `${quarterKey}:${iterKey}`.
+   * Iterations own only their week columns — the breather sits outside every
+   * iteration, so the Iteration and Goals rows leave that column empty.
+   */
   const iterationSpans = useMemo(() => {
     const spans = new Map<string, [number, number]>();
-    columns.forEach((c, i) => {
-      const key = `${c.quarter.key}:${c.iteration.key}`;
+    columnDefs.forEach((c, i) => {
+      if (c.kind !== "week") return;
+      const key = `${c.def.quarter.key}:${c.def.iteration.key}`;
       const span = spans.get(key);
       if (span) span[1] = i;
       else spans.set(key, [i, i]);
     });
     return spans;
-  }, [columns]);
+  }, [columnDefs]);
 
   // ── Mutations (all immutable, all routed through onChange) ─────────
   /** Append a blank card to a cell and return its id so it can be opened. */
@@ -330,7 +408,7 @@ export default function PlannerGrid({
     return i - 1;
   }
 
-  if (cols === 0) {
+  if (totalCols === 0) {
     return (
       <div className="rounded-2xl border border-gray-200/70 dark:border-gray-800/70 bg-white dark:bg-gray-900 p-10 text-center text-sm text-gray-500">
         This board has no week columns.
@@ -344,12 +422,12 @@ export default function PlannerGrid({
         className="overflow-auto max-h-[calc(100vh-180px)]"
         onScroll={(e) => setScrolled(e.currentTarget.scrollLeft > 4)}
       >
-        <div style={{ minWidth: RAIL_W + cols * COL_W }}>
+        <div style={{ minWidth: RAIL_W + boardWidth }}>
           {/* ── Header stack ─────────────────────────────────────── */}
           <div className="sticky top-0 z-30 bg-white dark:bg-gray-900">
             <Row
               scrolled={scrolled}
-              cols={cols}
+              template={gridTemplate}
               minHeight={44}
               railClass="bg-white dark:bg-gray-900"
               rail={<span className="text-sm font-semibold text-gray-900 dark:text-white px-1">Timeline</span>}
@@ -383,7 +461,7 @@ export default function PlannerGrid({
 
             <Row
               scrolled={scrolled}
-              cols={cols}
+              template={gridTemplate}
               minHeight={38}
               railClass="bg-white dark:bg-gray-900"
               rail={<span className="text-sm font-semibold text-gray-900 dark:text-white px-1">Iteration</span>}
@@ -432,7 +510,7 @@ export default function PlannerGrid({
                 the same detail drawer. */}
             <Row
               scrolled={scrolled}
-              cols={cols}
+              template={gridTemplate}
               minHeight={40}
               railClass="bg-white dark:bg-gray-900"
               rail={<span className="text-sm font-semibold text-gray-900 dark:text-white px-1">Goals</span>}
@@ -488,13 +566,43 @@ export default function PlannerGrid({
 
             <Row
               scrolled={scrolled}
-              cols={cols}
+              template={gridTemplate}
               minHeight={54}
               rowClass="bg-gray-50 dark:bg-gray-900"
               railClass="bg-gray-50 dark:bg-gray-900"
               rail={<span className="text-[11px] uppercase tracking-wide text-gray-400 px-1">Week</span>}
             >
-              {columns.map((c, i) => {
+              {columnDefs.map((cd, i) => {
+                if (cd.kind === "breather") {
+                  const range = breatherRange(cd.breather.start, cd.breather.end);
+                  return (
+                    <div
+                      key={cd.key}
+                      title={`Reflection & reset week between quarters — no tasks planned here.\n${cd.quarterLabel} · ${range}`}
+                      className="flex flex-col items-center justify-center gap-1 px-1 border-r"
+                      style={{
+                        gridColumn: `${i + 1} / ${i + 2}`,
+                        background: "#FBFAF5",
+                        borderRightColor: "#E8E5DC",
+                      }}
+                    >
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-[0.14em] px-1.5 py-[2px] rounded-full"
+                        style={{
+                          background: "#FFFFFF",
+                          color: "#8A7F60",
+                          border: "1px solid #E8E5DC",
+                        }}
+                      >
+                        Breather
+                      </span>
+                      <div className="text-[9.5px] leading-none text-center whitespace-nowrap" style={{ color: "#8A7F60" }}>
+                        {range}
+                      </div>
+                    </div>
+                  );
+                }
+                const c = cd.def;
                 const stats = summarize(weekItems(board, c.key));
                 const isCurrent = i === todayCol;
                 return (
@@ -540,7 +648,7 @@ export default function PlannerGrid({
               <Row
                 key={row.key}
                 scrolled={scrolled}
-                cols={cols}
+                template={gridTemplate}
                 minHeight={30}
                 rowClass="bg-gray-100/80 dark:bg-gray-800"
                 railClass="bg-gray-100/80 dark:bg-gray-800 group"
@@ -566,13 +674,13 @@ export default function PlannerGrid({
                   </div>
                 }
               >
-                <div aria-hidden style={{ gridColumn: `1 / ${cols + 1}` }} />
+                <div aria-hidden style={{ gridColumn: `1 / ${totalCols + 1}` }} />
               </Row>
             ) : (
               <Row
                 key={row.key}
                 scrolled={scrolled}
-                cols={cols}
+                template={gridTemplate}
                 minHeight={34}
                 rowClass="hover:bg-indigo-50/30 dark:hover:bg-indigo-500/[0.04] transition-colors"
                 railClass="bg-white dark:bg-gray-900 group"
@@ -602,7 +710,24 @@ export default function PlannerGrid({
                   </div>
                 }
               >
-                {columns.map((c, i) => {
+                {columnDefs.map((cd, i) => {
+                  if (cd.kind === "breather") {
+                    // Reflection week — no cell key, no items, no drop target.
+                    return (
+                      <div
+                        key={cd.key}
+                        aria-hidden
+                        title="Reflection & reset week between quarters — no tasks planned here."
+                        className="border-r"
+                        style={{
+                          gridColumn: `${i + 1} / ${i + 2}`,
+                          background: "#FBFAF5",
+                          borderRightColor: "#E8E5DC",
+                        }}
+                      />
+                    );
+                  }
+                  const c = cd.def;
                   const key = cellKey(row.key, c.key);
                   const items = board.cells[key] ?? [];
                   return (

@@ -87,14 +87,67 @@ export async function GET(request: NextRequest) {
   }
   if (error) return err(error.message, 500);
 
-  if (!data) return ok({ board: defaultBoard(), persisted: true, updated_at: null, updated_by: null });
+  const stored = (data?.data as PlannerBoard | undefined) ?? defaultBoard();
+  const board = await withBreathers(sb, stored);
+
+  if (!data) {
+    return ok({ board, persisted: true, updated_at: null, updated_by: null });
+  }
 
   return ok({
-    board: data.data as PlannerBoard,
+    board,
     persisted: true,
     updated_at: data.updated_at,
     updated_by: data.updated_by,
   });
+}
+
+/**
+ * Overlay each board quarter with its "breather week" span, looked up from
+ * the `quarters` table by matching `quarters.name` against `PlannerQuarter.label`
+ * (e.g. "Q3 2026"). Purely additive — the stored JSON is untouched, so writes
+ * continue to round-trip only what the client authors. Quarters without a
+ * matching row, without breather dates, or when the table is absent, receive
+ * `breather: null` and the frontend simply omits the column.
+ */
+async function withBreathers(
+  sb: ReturnType<typeof createServiceClient>,
+  board: PlannerBoard
+): Promise<PlannerBoard> {
+  const { data, error } = await sb
+    .from("quarters")
+    .select("name, breather_start, breather_end");
+
+  if (error) {
+    // Table missing (fresh env without the migration) or any other read
+    // failure: quietly render without breather columns rather than failing
+    // the whole board load.
+    if (!isMissingTable(error, "quarters")) {
+      console.error("planner: failed to read quarters breather columns", error.message);
+    }
+    return {
+      ...board,
+      quarters: (board.quarters ?? []).map((q) => ({ ...q, breather: null })),
+    };
+  }
+
+  const byName = new Map<string, { start: string; end: string } | null>();
+  for (const row of (data ?? []) as { name: string; breather_start: string | null; breather_end: string | null }[]) {
+    byName.set(
+      row.name,
+      row.breather_start && row.breather_end
+        ? { start: row.breather_start, end: row.breather_end }
+        : null
+    );
+  }
+
+  return {
+    ...board,
+    quarters: (board.quarters ?? []).map((q) => ({
+      ...q,
+      breather: byName.get(q.label) ?? null,
+    })),
+  };
 }
 
 export async function PUT(request: NextRequest) {

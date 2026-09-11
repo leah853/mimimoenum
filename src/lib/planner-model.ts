@@ -39,6 +39,14 @@ export interface PlannerQuarter {
   key: string;
   label: string;
   iterations: PlannerIteration[];
+  /**
+   * Reflection-and-reset week that follows this quarter's last iteration.
+   * Display-only: no cells can be placed here. Injected by the API from the
+   * `quarters` table's `breather_start` / `breather_end` columns; older
+   * quarters that were never backfilled carry null (rendered by omitting the
+   * column entirely).
+   */
+  breather?: { start: string; end: string } | null;
 }
 
 export interface PlannerRow {
