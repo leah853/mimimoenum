@@ -9,15 +9,20 @@ import {
   defaultBoard,
   flattenColumns,
   normalizeBoard,
+  PLANNER_ROW_TO_CATEGORY,
   type PlannerBoard,
   type PlannerItem,
 } from "@/lib/planner-model";
+import { invalidateCache } from "@/lib/use-api";
 
+interface SyncCell { quarterId: string; iterationId: string; weekId: string }
 interface BoardResponse {
   board: PlannerBoard;
   persisted: boolean;
   updated_at: string | null;
   updated_by: string | null;
+  syncBoundary?: string;
+  syncContext?: Record<string, SyncCell>;
 }
 
 type SaveState =
@@ -52,7 +57,7 @@ function statusText(readOnly: boolean, kind: SaveState["kind"]) {
 export default function PlannerPage() {
   // Reps (@mimimomentum.com) review the plan; owners author it. Mirrors the
   // task-editing rule, and /api/planner enforces the same check server-side.
-  const { appRole } = useAuth();
+  const { appRole, dbUser } = useAuth();
   const readOnly = !canEditTasks(appRole);
 
   // ?board=<id> selects a different planner document. The live plan is
@@ -77,6 +82,7 @@ export default function PlannerPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [persisted, setPersisted] = useState(true);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  const [syncContext, setSyncContext] = useState<Record<string, SyncCell>>({});
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards against an in-flight save overwriting a newer edit: only the most
@@ -94,25 +100,30 @@ export default function PlannerPage() {
   const inFlight = useRef(false);
   const queued = useRef(false);
 
+  const refetchBoard = useCallback(async () => {
+    try {
+      const res = await fetch(api);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setBoard(normalizeBoard(json.board ?? defaultBoard()));
+      setPersisted(json.persisted);
+      setSyncContext(json.syncContext ?? {});
+      baseUpdatedAt.current = json.updated_at;
+      return json as BoardResponse;
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Unknown error");
+      return null;
+    }
+  }, [api]);
+
   useEffect(() => {
     let cancelled = false;
-    fetch(api)
-      .then(async (res) => {
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-        return json as BoardResponse;
-      })
-      .then((json) => {
-        if (cancelled) return;
-        setBoard(normalizeBoard(json.board ?? defaultBoard()));
-        setPersisted(json.persisted);
-        baseUpdatedAt.current = json.updated_at;
-      })
-      .catch((e) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Unknown error");
-      });
+    (async () => {
+      const json = await refetchBoard();
+      if (cancelled && json) { /* ignored */ }
+    })();
     return () => { cancelled = true; };
-  }, [api]);
+  }, [refetchBoard]);
 
   const flush = useCallback(async () => {
     if (inFlight.current) { queued.current = true; return; }
@@ -227,8 +238,33 @@ export default function PlannerPage() {
     };
   }
 
+  /**
+   * If the selection points at a task-backed cell, return the item and its
+   * sync IDs; otherwise null. Task items carry `source: 'task'` and their
+   * cell's colKey lives in `syncContext`.
+   */
+  function selectedSyncedTask(): { item: PlannerItem; sync: SyncCell } | null {
+    if (!board || !selected || selected.kind !== "cell") return null;
+    const [, colKey] = selected.cell.split("|");
+    const sync = syncContext[colKey];
+    if (!sync) return null;
+    const item = board.cells[selected.cell]?.find((i) => i.id === selected.itemId);
+    if (!item || item.source !== "task") return null;
+    return { item, sync };
+  }
+
+  /** Only tasks-table columns are patched through /api/tasks. Everything the
+   *  drawer edits (title/status/owner/note) except note maps 1:1; note is a
+   *  planner-only field with no tasks-table home, so it is dropped for tasks. */
+  function patchToTaskBody(patch: Partial<PlannerItem>) {
+    const body: Record<string, unknown> = {};
+    if (patch.title !== undefined) body.title = patch.title;
+    if (patch.status !== undefined) body.status = patch.status;
+    return body;
+  }
+
   /** Merge a patch into whichever card is selected, against current state. */
-  function updateItem(patch: Partial<PlannerItem>) {
+  async function updateItem(patch: Partial<PlannerItem>) {
     if (!board || !selected) return;
     const apply = (i: PlannerItem) => (i.id === selected.itemId ? { ...i, ...patch } : i);
 
@@ -238,17 +274,61 @@ export default function PlannerPage() {
       handleChange(withGoals(selected, iteration.goals.map(apply)));
       return;
     }
+
+    const synced = selectedSyncedTask();
+    if (synced) {
+      const body = patchToTaskBody(patch);
+      if (Object.keys(body).length === 0) return;
+      // Optimistic update so the drawer feels immediate; the refetch reconciles.
+      const list = board.cells[selected.cell] ?? [];
+      setBoard({ ...board, cells: { ...board.cells, [selected.cell]: list.map(apply) } });
+      try {
+        const res = await fetch(`/api/tasks/${selected.itemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `HTTP ${res.status}`);
+        }
+        invalidateCache("/api/tasks", "/api/planner");
+        void refetchBoard();
+      } catch (e) {
+        // Revert on failure.
+        alert(`Could not update task: ${e instanceof Error ? e.message : "unknown"}`);
+        void refetchBoard();
+      }
+      return;
+    }
+
     const list = board.cells[selected.cell] ?? [];
     handleChange({ ...board, cells: { ...board.cells, [selected.cell]: list.map(apply) } });
   }
 
-  function deleteItem() {
+  async function deleteItem() {
     if (!board || !selected) return;
     if (selected.kind === "goal") {
       const { iteration } = findIteration(selected);
       if (!iteration) return;
       handleChange(withGoals(selected, iteration.goals.filter((g) => g.id !== selected.itemId)));
       setSelected(null);
+      return;
+    }
+    const synced = selectedSyncedTask();
+    if (synced) {
+      try {
+        const res = await fetch(`/api/tasks/${selected.itemId}`, { method: "DELETE" });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `HTTP ${res.status}`);
+        }
+        invalidateCache("/api/tasks", "/api/planner");
+        setSelected(null);
+        void refetchBoard();
+      } catch (e) {
+        alert(`Could not delete task: ${e instanceof Error ? e.message : "unknown"}`);
+      }
       return;
     }
     const list = (board.cells[selected.cell] ?? []).filter((i) => i.id !== selected.itemId);
@@ -259,6 +339,53 @@ export default function PlannerPage() {
     handleChange({ ...board, cells });
     setSelected(null);
   }
+
+  /**
+   * Create a task for a synced cell and return its id so the drawer can open
+   * on the fresh row. Task rows demand an owner and a deadline: caller (the
+   * current user) is a good default owner, and the week's last day is the
+   * safest default deadline — inside its own week, out of any overdue tint.
+   */
+  const onSyncedAdd = useCallback(
+    async (rowKey: string, colKey: string): Promise<string | null> => {
+      const category = PLANNER_ROW_TO_CATEGORY[rowKey];
+      const sync = syncContext[colKey];
+      if (!category || !sync) return null;
+      if (!dbUser?.id) {
+        alert("Sign in required to add a synced task.");
+        return null;
+      }
+      // Deadline = last day of the target week, derived from the board layout.
+      let deadline: string | null = null;
+      const col = board ? flattenColumns(board).find((c) => c.key === colKey) : null;
+      if (col) deadline = col.week.end;
+      try {
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "",
+            owner_id: dbUser.id,
+            deadline,
+            category,
+            quarter_id: sync.quarterId,
+            iteration_id: sync.iterationId,
+            week_id: sync.weekId,
+            status: "not_started",
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        invalidateCache("/api/tasks", "/api/planner");
+        await refetchBoard();
+        return json?.id ?? null;
+      } catch (e) {
+        alert(`Could not add task: ${e instanceof Error ? e.message : "unknown"}`);
+        return null;
+      }
+    },
+    [board, dbUser?.id, refetchBoard, syncContext]
+  );
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
@@ -365,6 +492,8 @@ export default function PlannerPage() {
             setSelected({ kind: "goal", quarterKey, iterationKey, itemId })
           }
           readOnly={readOnly}
+          syncContext={syncContext}
+          onSyncedAdd={onSyncedAdd}
         />
       )}
 

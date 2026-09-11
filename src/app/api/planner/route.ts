@@ -3,7 +3,13 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { ok, err, safeJson } from "@/lib/api-helpers";
 import { getCallerRole, isDoerOrAdmin } from "@/lib/api-auth";
 import { AUTH_COOKIE_NAME, decodeSession } from "@/lib/basic-auth";
-import { defaultBoard, type PlannerBoard } from "@/lib/planner-model";
+import {
+  defaultBoard,
+  SYNC_BOUNDARY,
+  CATEGORY_TO_ROW,
+  type PlannerBoard,
+  type PlannerItem,
+} from "@/lib/planner-model";
 
 const DEFAULT_BOARD_ID = "default";
 /** Versions retained per board. Older ones are pruned on write. */
@@ -88,10 +94,18 @@ export async function GET(request: NextRequest) {
   if (error) return err(error.message, 500);
 
   const stored = (data?.data as PlannerBoard | undefined) ?? defaultBoard();
-  const board = await withBreathers(sb, stored);
+  const withBreather = await withBreathers(sb, stored);
+  const { board, syncContext } = await overlayTaskCells(sb, withBreather);
 
   if (!data) {
-    return ok({ board, persisted: true, updated_at: null, updated_by: null });
+    return ok({
+      board,
+      persisted: true,
+      updated_at: null,
+      updated_by: null,
+      syncBoundary: SYNC_BOUNDARY,
+      syncContext,
+    });
   }
 
   return ok({
@@ -99,7 +113,137 @@ export async function GET(request: NextRequest) {
     persisted: true,
     updated_at: data.updated_at,
     updated_by: data.updated_by,
+    syncBoundary: SYNC_BOUNDARY,
+    syncContext,
   });
+}
+
+interface IterationRow {
+  id: string;
+  quarter_id: string;
+  iteration_number: number;
+  start_date: string;
+  weeks: { id: string; week_number: number }[];
+}
+interface QuarterRow { id: string; name: string; iterations: IterationRow[] }
+interface TaskRow {
+  id: string;
+  title: string;
+  status: string;
+  category: string | null;
+  deadline: string | null;
+  iteration_id: string | null;
+  week_id: string | null;
+  quarter_id: string | null;
+}
+
+export interface PlannerSyncCell {
+  quarterId: string;
+  iterationId: string;
+  weekId: string;
+}
+
+/**
+ * From Q3 2026 Iteration 4 onward (iterations that start on/after
+ * SYNC_BOUNDARY), the planner cells whose row_key maps to a task category
+ * are sourced from the `tasks` table. Other cells (older iterations, or
+ * rows without a category mapping) keep their JSON contents untouched.
+ *
+ * Returns the merged board plus a `syncContext` map from column key
+ * (`qKey:iKey:wKey`) → the IDs the client needs to POST a task into that
+ * cell.
+ */
+async function overlayTaskCells(
+  sb: ReturnType<typeof createServiceClient>,
+  board: PlannerBoard
+): Promise<{ board: PlannerBoard; syncContext: Record<string, PlannerSyncCell> }> {
+  // Fetch quarter/iteration/week metadata for the sync window. We match
+  // planner labels (e.g. "Q3 2026" → key "q3-2026", iteration_number → "i3",
+  // week_number → "w1") so the column key is deterministically reproducible.
+  const { data: quarterRows, error: qErr } = await sb
+    .from("quarters")
+    .select("id, name, iterations(id, quarter_id, iteration_number, start_date, weeks(id, week_number))")
+    .gte("iterations.start_date", SYNC_BOUNDARY);
+
+  const syncContext: Record<string, PlannerSyncCell> = {};
+  const cellIdByIterWeek = new Map<string, string>(); // "iterId|weekId" → column key
+
+  if (qErr || !quarterRows) {
+    return { board, syncContext };
+  }
+
+  for (const q of quarterRows as QuarterRow[]) {
+    const qKey = q.name.toLowerCase().replace(/\s+/g, "-");
+    for (const it of q.iterations ?? []) {
+      if (!it.start_date || it.start_date < SYNC_BOUNDARY) continue;
+      const iKey = `i${it.iteration_number}`;
+      for (const w of it.weeks ?? []) {
+        const wKey = `w${w.week_number}`;
+        const colKey = `${qKey}:${iKey}:${wKey}`;
+        syncContext[colKey] = { quarterId: q.id, iterationId: it.id, weekId: w.id };
+        cellIdByIterWeek.set(`${it.id}|${w.id}`, colKey);
+      }
+    }
+  }
+
+  if (cellIdByIterWeek.size === 0) return { board, syncContext };
+
+  // Pull only the tasks that fall inside the sync window and carry a mapped
+  // category. Everything else is invisible to the planner.
+  const iterIds = Array.from(new Set(
+    Object.values(syncContext).map((c) => c.iterationId)
+  ));
+  const { data: taskRows, error: tErr } = await sb
+    .from("tasks")
+    .select("id, title, status, category, deadline, iteration_id, week_id, quarter_id")
+    .in("iteration_id", iterIds);
+
+  if (tErr || !taskRows) return { board, syncContext };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const cells: Record<string, PlannerItem[]> = { ...board.cells };
+
+  // For each synced column that has any task, replace the cell contents
+  // (source of truth = tasks). JSON items for that cell are dropped —
+  // owners see only the shared, DB-backed cards.
+  const replaced = new Set<string>();
+  for (const t of taskRows as TaskRow[]) {
+    if (!t.iteration_id || !t.week_id) continue;
+    const colKey = cellIdByIterWeek.get(`${t.iteration_id}|${t.week_id}`);
+    if (!colKey) continue;
+    const rowKey = t.category ? CATEGORY_TO_ROW[t.category] : undefined;
+    if (!rowKey) continue;
+    const cellKey = `${rowKey}|${colKey}`;
+    if (!replaced.has(cellKey)) {
+      cells[cellKey] = [];
+      replaced.add(cellKey);
+    }
+    const overdue =
+      !!t.deadline && t.deadline < today && t.status !== "completed";
+    cells[cellKey].push({
+      id: t.id,
+      title: t.title,
+      status: (t.status as PlannerItem["status"]) ?? "not_started",
+      source: "task",
+      overdue,
+    });
+  }
+
+  // For synced rows/cols where the JSON had legacy content but there is no
+  // matching task, empty the cell too — the JSON must not resurface once we
+  // have declared this cell as tasks-owned. A row is "tasks-owned" whenever
+  // its key is in CATEGORY_TO_ROW's values.
+  const taskOwnedRowKeys = new Set(Object.values(CATEGORY_TO_ROW));
+  for (const colKey of Object.keys(syncContext)) {
+    for (const rowKey of taskOwnedRowKeys) {
+      const cellKey = `${rowKey}|${colKey}`;
+      if (!replaced.has(cellKey) && cells[cellKey]?.length) {
+        delete cells[cellKey];
+      }
+    }
+  }
+
+  return { board: { ...board, cells }, syncContext };
 }
 
 /**
@@ -160,10 +304,26 @@ export async function PUT(request: NextRequest) {
   const body = await safeJson(request);
   if (!body?.board) return err("board required");
 
-  const board = body.board as PlannerBoard;
-  if (!Array.isArray(board.quarters) || !Array.isArray(board.rows) || typeof board.cells !== "object") {
+  const incoming = body.board as PlannerBoard;
+  if (!Array.isArray(incoming.quarters) || !Array.isArray(incoming.rows) || typeof incoming.cells !== "object") {
     return err("Malformed board: expected quarters, rows and cells");
   }
+
+  // Task-sourced items are projections, never stored in the board JSON.
+  // Strip them before persisting so the JSON stays authoritative only for
+  // legacy / unmapped cells.
+  const cleanedCells: Record<string, PlannerItem[]> = {};
+  for (const [k, list] of Object.entries(incoming.cells ?? {})) {
+    const kept = (list ?? []).filter((i) => i && i.source !== "task");
+    if (kept.length) {
+      // Also strip transient overdue flag — that is server-computed on read.
+      cleanedCells[k] = kept.map(({ overdue: _o, source: _s, ...rest }) => {
+        void _o; void _s;
+        return rest as PlannerItem;
+      });
+    }
+  }
+  const board: PlannerBoard = { ...incoming, cells: cleanedCells };
 
   const sb = createServiceClient();
   const id = boardId(request);

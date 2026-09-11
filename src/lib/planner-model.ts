@@ -16,6 +16,54 @@ export interface PlannerItem {
   status: TaskStatus;
   owner?: string;
   note?: string;
+  /**
+   * Where this item lives. "task" items are projections of a row in the
+   * `tasks` table — mutations must go through /api/tasks. Absent / "json"
+   * items live only in the planner board JSON.
+   */
+  source?: "task" | "json";
+  /** Server-computed: deadline is past and status is not completed. */
+  overdue?: boolean;
+}
+
+/**
+ * Q3 2026 Iteration 4 starts on this date. From here on, cells whose row is
+ * mapped to a task category and whose iteration begins on or after this date
+ * are sourced from the `tasks` table rather than the JSON board.
+ */
+export const SYNC_BOUNDARY = "2026-09-06";
+
+/**
+ * Row keys on the planner ↔ the `tasks.category` string used everywhere else.
+ * Rows whose key is not in this map (built-in unmapped rows like
+ * `prerequisites`, or user-added `row-<hash>` rows) stay JSON-only forever.
+ */
+export const PLANNER_ROW_TO_CATEGORY: Record<string, string> = {
+  branding: "Branding",
+  campaign: "Milestone Execution",
+  workflows: "Workflows",
+  "engg-mvp": "Product & Engineering",
+  cybersecurity: "Cybersecurity / Compliance",
+  "talent-acquisition": "Talent Acquisition",
+  "hackathon-community": "Talent Acquisition",
+  "consultant-hiring": "Talent Acquisition",
+  "knowledge-culture": "Training & Culture",
+};
+
+/** Reverse: category → row_key. First mapping wins for ambiguous categories
+ *  (three of the four Talent-family rows share "Talent Acquisition"; tasks
+ *  in that category surface on `talent-acquisition`). */
+export const CATEGORY_TO_ROW: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const [row, cat] of Object.entries(PLANNER_ROW_TO_CATEGORY)) {
+    if (!(cat in map)) map[cat] = row;
+  }
+  return map;
+})();
+
+export function isCellSynced(colKey: string, syncContext: Record<string, unknown> | null | undefined): boolean {
+  if (!syncContext) return false;
+  return Object.prototype.hasOwnProperty.call(syncContext, colKey);
 }
 
 export interface PlannerWeek {

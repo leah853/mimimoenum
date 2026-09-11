@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Task, TaskStatus } from "@/lib/types";
 import { STATUS_LABELS } from "@/lib/types";
-import { useApi, apiPost, apiPatch } from "@/lib/use-api";
+import { useApi, apiPost, apiPatch, invalidateCache } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { canCreateTasks } from "@/lib/roles";
 import { HiPlus, HiOutlineChatAlt, HiOutlinePaperClip, HiOutlineFilm, HiX, HiChevronLeft, HiChevronRight, HiSearch } from "react-icons/hi";
@@ -306,7 +306,12 @@ function TasksInner() {
       if (t && !t.feedback?.length) { toast("Cannot ship — no feedback received", "error"); return; }
     }
     setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, [field]: value } as FullTask : t) : prev);
-    try { await apiPatch(`/api/tasks/${taskId}`, { [field]: value }); }
+    try {
+      await apiPatch(`/api/tasks/${taskId}`, { [field]: value });
+      // Planner overlays synced tasks — clear its dedup cache so a page
+      // switch immediately picks up the new field.
+      invalidateCache("/api/planner");
+    }
     catch (e) { toast(handleApiError(e), "error"); await refetch(); }
   }
 
@@ -456,7 +461,10 @@ function TasksInner() {
               if (t && !t.feedback?.length) { toast("Cannot ship — no feedback received", "error"); return; }
             }
             setTasks((prev) => prev ? prev.map((t) => t.id === taskId ? { ...t, status: newStatus } as FullTask : t) : prev);
-            try { await apiPatch(`/api/tasks/${taskId}`, { status: newStatus }); }
+            try {
+              await apiPatch(`/api/tasks/${taskId}`, { status: newStatus });
+              invalidateCache("/api/planner");
+            }
             catch (e) { toast(handleApiError(e), "error"); await refetch(); }
           }}
           draggingId={draggingId}
@@ -1304,6 +1312,7 @@ function CreateTaskModal({ users, quarters, categories, defaultIterationId, onCl
         owner_id: ownerId, deadline, quarter_id: quarterIdLocal || null,
         iteration_id: iterationId || null, status: "not_started",
       });
+      invalidateCache("/api/planner");
       onCreated();
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     setSaving(false);

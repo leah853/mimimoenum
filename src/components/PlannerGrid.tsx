@@ -9,6 +9,8 @@ import {
   newItem,
   summarize,
   weekItems,
+  isCellSynced,
+  PLANNER_ROW_TO_CATEGORY,
   type ProgressStats,
   type PlannerBoard,
   type PlannerItem,
@@ -151,20 +153,37 @@ function EditableText({
 /** One card in a week cell: status colour on the left edge, click to open. */
 function ItemCard({ item, onOpen }: { item: PlannerItem; onOpen: () => void }) {
   const color = STATUS_COLORS[item.status] ?? STATUS_COLORS.not_started;
+  // Overdue matches the Tasks Board treatment: warm-red tint + border. Same
+  // hex values, so a card the user recognises from Tasks stays recognisable
+  // here.
+  const overdue = !!item.overdue;
+  const isTask = item.source === "task";
+  const style: React.CSSProperties = overdue
+    ? { background: "#FFF5F5", borderLeft: `2px solid ${color}`, boxShadow: "inset 0 0 0 1px #FCA5A5" }
+    : { background: `${color}12`, borderLeft: `2px solid ${color}` };
+  const titleText = `${item.title || "Untitled"} — ${STATUS_LABELS[item.status]}${
+    item.owner ? ` · ${item.owner}` : ""
+  }${overdue ? " · overdue" : ""}${isTask ? " · synced with Tasks" : ""}`;
   return (
     <button
       type="button"
       onClick={onOpen}
-      title={`${item.title || "Untitled"} — ${STATUS_LABELS[item.status]}${item.owner ? ` · ${item.owner}` : ""}`}
-      className="group/card w-full text-left rounded-[3px] block pl-2 pr-1.5 py-[3px] text-[11px] leading-[1.4] hover:ring-1 hover:ring-indigo-400/70 transition-all"
-      style={{ background: `${color}12`, borderLeft: `2px solid ${color}` }}
+      title={titleText}
+      className="group/card w-full text-left rounded-[3px] flex items-center gap-1 pl-2 pr-1.5 py-[3px] text-[11px] leading-[1.4] hover:ring-1 hover:ring-indigo-400/70 transition-all"
+      style={style}
     >
-      {/* The left bar already carries the status — a dot as well was a third
-          redundant signal on every card, and four of those in one narrow cell
-          is what made the grid read as noise. */}
-      <span className="truncate block text-gray-700 dark:text-gray-200">
+      <span className="truncate block flex-1 text-gray-700 dark:text-gray-200">
         {item.title || <span className="text-gray-400">Untitled</span>}
       </span>
+      {isTask && (
+        <span
+          aria-label="Shared with Tasks"
+          title="Shared with Tasks"
+          className="shrink-0 text-[8.5px] font-semibold tracking-wider uppercase rounded-sm px-1 py-[1px] text-indigo-700 dark:text-indigo-200 bg-indigo-100/80 dark:bg-indigo-500/20"
+        >
+          T
+        </span>
+      )}
     </button>
   );
 }
@@ -215,6 +234,8 @@ export default function PlannerGrid({
   onSelect,
   onSelectGoal,
   readOnly = false,
+  syncContext = null,
+  onSyncedAdd,
 }: {
   board: PlannerBoard;
   onChange: (next: PlannerBoard) => void;
@@ -223,6 +244,15 @@ export default function PlannerGrid({
   /** Opens the detail drawer for an iteration goal. */
   onSelectGoal: (quarterKey: string, iterationKey: string, itemId: string) => void;
   readOnly?: boolean;
+  /**
+   * Map of week column-key → sync IDs. Cells whose column-key is in this map
+   * AND whose row_key is in PLANNER_ROW_TO_CATEGORY are backed by /api/tasks;
+   * mutations go through `onSyncedAdd` (add) and the parent's task-aware
+   * `updateItem`/`deleteItem` (edit/delete via the detail drawer).
+   */
+  syncContext?: Record<string, unknown> | null;
+  /** Create a new task for a synced cell. Returns the new item id or null. */
+  onSyncedAdd?: (rowKey: string, colKey: string) => Promise<string | null>;
 }) {
   /**
    * The rendered column sequence: every week from the board, interleaved with
@@ -746,7 +776,20 @@ export default function PlannerGrid({
                       {!readOnly && (
                         <button
                           type="button"
-                          onClick={() => onSelect(key, addItem(row.key, cd.key))}
+                          onClick={async () => {
+                            const synced =
+                              isCellSynced(cd.key, syncContext) &&
+                              !!PLANNER_ROW_TO_CATEGORY[row.key];
+                            let id: string | null;
+                            if (synced && onSyncedAdd) {
+                              id = await onSyncedAdd(row.key, cd.key);
+                            } else if (synced) {
+                              return; // Task backing not wired — refuse silently rather than desynchronising
+                            } else {
+                              id = addItem(row.key, cd.key);
+                            }
+                            if (id) onSelect(key, id);
+                          }}
                           title={isBreatherCol ? "Add a breather task" : "Add an item"}
                           className={
                             items.length
