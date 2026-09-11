@@ -111,7 +111,11 @@ export function normalizeBoard(board: PlannerBoard): PlannerBoard {
       cells[key] = [{ id: `legacy-${key}`, title: value, status: "not_started" }];
     }
   }
-  // Boards saved before weeks carried dates get them backfilled in board order.
+  // Weeks are ALWAYS derived from board position, not read from storage. Older
+  // saves computed Q1/Q2 2027 dates without accounting for the breather gap
+  // between quarters, so their stored dates overlap with the prior quarter.
+  // Recomputing on every load fixes those in place. Users can rename weeks
+  // (label) but not edit their date range, so no user input is destroyed here.
   let weekCursor = 0;
 
   const quarters = (board.quarters ?? []).map((q) => {
@@ -125,8 +129,8 @@ export function normalizeBoard(board: PlannerBoard): PlannerBoard {
 
     const iterations = (q.iterations ?? []).map((it, index) => {
       const dated = (it.weeks ?? []).map((w) => {
-        const fallback = weekDates(weekCursor++);
-        return { ...w, start: w.start || fallback.start, end: w.end || fallback.end };
+        const d = weekDates(weekCursor++);
+        return { ...w, start: d.start, end: d.end };
       });
       return {
         ...it,
@@ -139,6 +143,10 @@ export function normalizeBoard(board: PlannerBoard): PlannerBoard {
       };
     });
 
+    // Skip a slot for this quarter's breather week so the following quarter
+    // starts one Sunday later — matching the DB breather span.
+    if (QUARTERS_WITH_BREATHER.has(q.label)) weekCursor += 1;
+
     const { goal: _legacy, ...rest } = q as PlannerQuarter & { goal?: string };
     void _legacy;
     return { ...rest, iterations };
@@ -148,11 +156,24 @@ export function normalizeBoard(board: PlannerBoard): PlannerBoard {
 }
 
 /**
- * The board's first week (I3 W1 of Q3 2026). Anchored on I3 W2 running
- * 24–30 Aug 2026, so weeks are Monday-to-Sunday and every following week
- * is the next consecutive seven days.
+ * The board's first week (I3 W1 of Q3 2026). Anchored on a Sunday so weeks
+ * run Sun–Sat, matching the DB convention (quarters, iterations and weeks
+ * are all Sun–Sat) — and so Q1 2027 I1 W1 lands on 2027-01-03 after the
+ * Q4 2026 breather, not overlapping with it.
  */
-const BOARD_START = "2026-08-17";
+const BOARD_START = "2026-08-16";
+
+/**
+ * Quarters that carry a one-week breather at their end. Each entry inserts
+ * a 7-day gap into the week cursor so the following quarter's first week
+ * starts after that breather rather than overlapping it.
+ */
+const QUARTERS_WITH_BREATHER = new Set<string>([
+  "Q3 2026",
+  "Q4 2026",
+  "Q1 2027",
+  "Q2 2027",
+]);
 
 const DAY_MS = 86_400_000;
 
@@ -200,7 +221,9 @@ function weeks(startIndex: number, count = 3): PlannerWeek[] {
  */
 export function defaultBoard(): PlannerBoard {
   // Weeks run consecutively across the whole board, so the counter carries
-  // from one iteration (and quarter) to the next.
+  // from one iteration (and quarter) to the next. Quarters that end in a
+  // breather insert a 7-day gap after their last week so the following
+  // quarter's first week starts after the breather, not on top of it.
   let cursor = 0;
   const iterations = (numbers: number[]): PlannerIteration[] =>
     numbers.map((n) => {
@@ -213,13 +236,18 @@ export function defaultBoard(): PlannerBoard {
       cursor += iteration.weeks.length;
       return iteration;
     });
+  const quarter = (key: string, label: string, iters: number[], hasBreather: boolean) => {
+    const q = { key, label, iterations: iterations(iters) };
+    if (hasBreather) cursor += 1;
+    return q;
+  };
 
   return {
     quarters: [
-      { key: "q3-2026", label: "Q3 2026", iterations: iterations([3, 4]) },
-      { key: "q4-2026", label: "Q4 2026", iterations: iterations([1, 2, 3, 4]) },
-      { key: "q1-2027", label: "Q1 2027", iterations: iterations([1, 2, 3, 4]) },
-      { key: "q2-2027", label: "Q2 2027", iterations: iterations([1, 2, 3, 4]) },
+      quarter("q3-2026", "Q3 2026", [3, 4],       true),
+      quarter("q4-2026", "Q4 2026", [1, 2, 3, 4], true),
+      quarter("q1-2027", "Q1 2027", [1, 2, 3, 4], true),
+      quarter("q2-2027", "Q2 2027", [1, 2, 3, 4], true),
     ],
     rows: [
       { key: "prerequisites", label: "Prerequisites", kind: "row", strong: true },

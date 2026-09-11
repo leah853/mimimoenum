@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const sb = createServiceClient();
   const { data, error } = await sb
     .from("quarters")
-    .select("id, name, start_date, end_date, breather_start, breather_end, iterations(*, weeks(*))")
+    .select("id, name, start_date, end_date, breather_start, breather_end, iterations(id, quarter_id, name, iteration_number, start_date, end_date, is_breather, weeks(*))")
     .order("start_date", { ascending: false });
 
   if (error) return err(error.message, 500);

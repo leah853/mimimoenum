@@ -711,32 +711,30 @@ export default function PlannerGrid({
                 }
               >
                 {columnDefs.map((cd, i) => {
-                  if (cd.kind === "breather") {
-                    // Reflection week — no cell key, no items, no drop target.
-                    return (
-                      <div
-                        key={cd.key}
-                        aria-hidden
-                        title="Reflection & reset week between quarters — no tasks planned here."
-                        className="border-r"
-                        style={{
-                          gridColumn: `${i + 1} / ${i + 2}`,
-                          background: "#FBFAF5",
-                          borderRightColor: "#E8E5DC",
-                        }}
-                      />
-                    );
-                  }
-                  const c = cd.def;
-                  const key = cellKey(row.key, c.key);
+                  // Breather column now holds real cells. Keep the tan tint so
+                  // it still reads as the reflection week, but let users drop
+                  // (i.e. add) tasks into it exactly like any other week.
+                  const isBreatherCol = cd.kind === "breather";
+                  const key = cellKey(row.key, cd.key);
                   const items = board.cells[key] ?? [];
+                  const colStyle: React.CSSProperties = { gridColumn: `${i + 1} / ${i + 2}` };
+                  if (isBreatherCol) {
+                    colStyle.background = "#FBFAF5";
+                    colStyle.borderRightColor = "#E8E5DC";
+                  }
+                  const isTodayCol = !isBreatherCol && i === todayCol;
                   return (
                     <div
-                      key={c.key}
-                      className={`group/cell relative flex flex-col gap-[5px] border-r border-gray-100 dark:border-gray-800/50 px-1.5 py-1.5 ${
-                        i === todayCol ? "bg-indigo-50/40 dark:bg-indigo-500/[0.06]" : ""
+                      key={cd.key}
+                      title={isBreatherCol ? "Breather week — reflection & reset. Tasks are allowed here." : undefined}
+                      className={`group/cell relative flex flex-col gap-[5px] border-r px-1.5 py-1.5 ${
+                        isBreatherCol
+                          ? ""
+                          : `border-gray-100 dark:border-gray-800/50 ${
+                              isTodayCol ? "bg-indigo-50/40 dark:bg-indigo-500/[0.06]" : ""
+                            }`
                       }`}
-                      style={{ gridColumn: `${i + 1} / ${i + 2}` }}
+                      style={colStyle}
                     >
                       {items.map((item) => (
                         <ItemCard key={item.id} item={item} onOpen={() => onSelect(key, item.id)} />
@@ -748,8 +746,8 @@ export default function PlannerGrid({
                       {!readOnly && (
                         <button
                           type="button"
-                          onClick={() => onSelect(key, addItem(row.key, c.key))}
-                          title="Add an item"
+                          onClick={() => onSelect(key, addItem(row.key, cd.key))}
+                          title={isBreatherCol ? "Add a breather task" : "Add an item"}
                           className={
                             items.length
                               ? "absolute left-1 right-1 bottom-0 h-4 rounded text-[10px] leading-none text-indigo-500 bg-indigo-50/90 dark:bg-indigo-500/20 opacity-0 group-hover/cell:opacity-100 focus:opacity-100 transition-opacity"

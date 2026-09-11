@@ -26,6 +26,12 @@ export interface Iteration {
   iteration_number: number;
   start_date: string;
   end_date: string;
+  /**
+   * True for the reflection-and-reset "Breather" iteration that lives at the
+   * end of each quarter. Iteration_number is 99 so it sorts after I1–I4.
+   * Tasks may still be planned into it via its single week.
+   */
+  is_breather?: boolean;
 }
 
 export interface Week {

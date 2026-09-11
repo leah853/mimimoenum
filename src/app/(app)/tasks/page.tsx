@@ -23,7 +23,7 @@ type FullTask = Task & {
 };
 type UserOption = { id: string; full_name: string; email: string };
 type WeekOption = { id: string; week_number: number; start_date: string; end_date: string };
-type IterOption = { id: string; name: string; start_date: string; end_date: string; weeks?: WeekOption[] };
+type IterOption = { id: string; name: string; start_date: string; end_date: string; iteration_number?: number; is_breather?: boolean; weeks?: WeekOption[] };
 type QuarterOption = { id: string; name: string; start_date: string; end_date: string; breather_start?: string | null; breather_end?: string | null; iterations: IterOption[] };
 
 const BREATHER_TOOLTIP = "Reflection & reset week between quarters — no tasks planned here.";
@@ -159,7 +159,11 @@ function TasksInner() {
   }, [allQuarters, quarterId]);
 
   const quarter = allQuarters.find((q) => q.id === quarterId) || null;
-  const iterations = quarter?.iterations || [];
+  // Sort so Breather (iteration_number = 99) always sits at the end of the row.
+  const iterations = useMemo(
+    () => (quarter?.iterations || []).slice().sort((a, b) => (a.iteration_number ?? 0) - (b.iteration_number ?? 0)),
+    [quarter]
+  );
 
   useEffect(() => {
     if (!iterations.length) return;
@@ -484,39 +488,64 @@ function TasksInner() {
           const isCurrent = !isPast && !isFuture;
           const isActive = it.id === iterId;
           const late = scoped.filter((t) => isTaskOverdue(t, today)).length;
+          const isBreather = !!it.is_breather;
 
           const baseCls = "text-left rounded-lg px-3 py-2 transition-all flex-1 min-w-0";
-          const style = isActive
-            ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-            : isPast
-              ? "bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/50"
-              : isFuture
-                ? "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
-                : "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50";
+          // Breather iterations keep their tan look even when active, so users
+          // still read "this is the reflection week" while planning into it.
+          const style = isBreather
+            ? isActive
+              ? "text-[#4A422A]"
+              : "text-[#8A7F62] hover:opacity-90"
+            : isActive
+              ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+              : isPast
+                ? "bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                : isFuture
+                  ? "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                  : "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50";
+          const inlineStyle = isBreather
+            ? { background: "#FBFAF5", border: `1px solid ${isActive ? "#8A7F62" : "#E8E5DC"}` }
+            : undefined;
 
           return (
             <button
               key={it.id}
               type="button"
               onClick={() => setIterId(it.id)}
+              title={isBreather ? `Breather Week — ${BREATHER_TOOLTIP}` : undefined}
+              style={inlineStyle}
               className={`${baseCls} ${style} ${isActive ? "flex-[1.4]" : ""}`}
             >
               <div className="text-[11.5px] font-semibold truncate">
-                {it.name}
-                {isCurrent && <span className={`ml-1 ${isActive ? "opacity-70" : "text-gray-400"}`}>· now</span>}
+                {isBreather ? (
+                  <span className="uppercase tracking-[0.12em] text-[10px]">Breather</span>
+                ) : (
+                  <>
+                    {it.name}
+                    {isCurrent && <span className={`ml-1 ${isActive ? "opacity-70" : "text-gray-400"}`}>· now</span>}
+                  </>
+                )}
               </div>
-              <div className={`text-[9.5px] mt-0.5 truncate ${isActive ? "opacity-70" : "text-gray-400"}`}>
-                {shortDate(it.start_date)} · {isPast
-                  ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">shipped {done}</span>
-                  : isFuture
-                    ? <span>planned {total}</span>
-                    : <span>{done}/{total}{late > 0 ? <span className="text-amber-600 dark:text-amber-400 font-medium"> · {late} late</span> : ""}</span>
+              <div className={`text-[9.5px] mt-0.5 truncate ${isBreather ? "" : isActive ? "opacity-70" : "text-gray-400"}`}>
+                {isBreather
+                  ? `${shortDate(it.start_date)} – ${shortDate(it.end_date)}`
+                  : (<>
+                      {shortDate(it.start_date)} · {isPast
+                        ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">shipped {done}</span>
+                        : isFuture
+                          ? <span>planned {total}</span>
+                          : <span>{done}/{total}{late > 0 ? <span className="text-amber-600 dark:text-amber-400 font-medium"> · {late} late</span> : ""}</span>
+                      }
+                    </>)
                 }
               </div>
             </button>
           );
         })}
-        {quarter?.breather_start && quarter?.breather_end && (
+        {/* Legacy fallback: quarters that have breather_start but no breather
+            iteration row yet still get a display-only tile. */}
+        {!iterations.some((it) => it.is_breather) && quarter?.breather_start && quarter?.breather_end && (
           <BreatherTile start={quarter.breather_start} end={quarter.breather_end} />
         )}
       </div>
@@ -810,35 +839,54 @@ function BoardLayout({
           const isCurrent = !isPast && !isFuture;
           const isActive = it.id === iterId;
           const late = scoped.filter((t) => isTaskOverdue(t, today)).length;
+          const isBreather = !!it.is_breather;
+          const inlineStyle = isBreather
+            ? { background: "#FBFAF5", border: `1px solid ${isActive ? "#8A7F62" : "#E8E5DC"}` }
+            : undefined;
           return (
             <button
               key={it.id}
               type="button"
               onClick={() => setIterId(it.id)}
+              title={isBreather ? "Breather Week — reflection & reset. Tasks are allowed here." : undefined}
+              style={inlineStyle}
               className={`text-left rounded-lg px-3 py-1.5 transition-all flex-1 min-w-0 ${
-                isActive
-                  ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-                  : isPast
-                    ? "bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/50"
-                    : "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                isBreather
+                  ? isActive ? "text-[#4A422A]" : "text-[#8A7F62] hover:opacity-90"
+                  : isActive
+                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                    : isPast
+                      ? "bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                      : "bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50"
               }`}
             >
               <div className="text-[11.5px] font-semibold truncate">
-                {it.name}
-                {isCurrent && <span className={`ml-1 ${isActive ? "opacity-70" : "text-gray-400"}`}>· now</span>}
+                {isBreather ? (
+                  <span className="uppercase tracking-[0.12em] text-[10px]">Breather</span>
+                ) : (
+                  <>
+                    {it.name}
+                    {isCurrent && <span className={`ml-1 ${isActive ? "opacity-70" : "text-gray-400"}`}>· now</span>}
+                  </>
+                )}
               </div>
-              <div className={`text-[9.5px] mt-0.5 truncate ${isActive ? "opacity-70" : "text-gray-400"}`}>
-                {shortDate(it.start_date)} · {isPast
-                  ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">shipped {done}</span>
-                  : isFuture
-                    ? <span>planned {total}</span>
-                    : <span>{done}/{total}{late > 0 ? <span className="text-amber-600 dark:text-amber-400 font-medium"> · {late} late</span> : ""}</span>
+              <div className={`text-[9.5px] mt-0.5 truncate ${isBreather ? "" : isActive ? "opacity-70" : "text-gray-400"}`}>
+                {isBreather
+                  ? `${shortDate(it.start_date)} – ${shortDate(it.end_date)}`
+                  : (<>
+                      {shortDate(it.start_date)} · {isPast
+                        ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">shipped {done}</span>
+                        : isFuture
+                          ? <span>planned {total}</span>
+                          : <span>{done}/{total}{late > 0 ? <span className="text-amber-600 dark:text-amber-400 font-medium"> · {late} late</span> : ""}</span>
+                      }
+                    </>)
                 }
               </div>
             </button>
           );
         })}
-        {quarter?.breather_start && quarter?.breather_end && (
+        {!iterations.some((it) => it.is_breather) && quarter?.breather_start && quarter?.breather_end && (
           <BreatherTile start={quarter.breather_start} end={quarter.breather_end} />
         )}
       </div>
@@ -1004,9 +1052,16 @@ function BoardCard({ task, onDragStart, onDragEnd, dragging }: { task: FullTask;
   const group = category ? CATEGORY_GROUP[category] : null;
   const catDot = group === "apex" ? "#EF9F27" : group === "platform" ? "#0F6E56" : group === "people" ? "#534AB7" : "#B4B2A9";
 
-  const cardBg = overdue ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30"
+  // Overdue red tint per spec: deadline < today && status !== "completed".
+  // Uses inline hex tokens so the shade matches the tasks-board finding card
+  // (#FFF5F5 background / #FCA5A5 border) rather than Tailwind's red-50/200.
+  const isOverdueTint = !!task.deadline && !completed && task.deadline < today;
+  const cardBg = isOverdueTint ? "border"
     : dueToday ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30"
     : "bg-white dark:bg-gray-900 border-gray-200/70 dark:border-gray-800/60";
+  const cardInlineStyle: React.CSSProperties | undefined = isOverdueTint
+    ? { backgroundColor: "#FFF5F5", borderColor: "#FCA5A5" }
+    : undefined;
 
   return (
     <Link href={`/tasks/${task.id}`}
@@ -1017,6 +1072,7 @@ function BoardCard({ task, onDragStart, onDragEnd, dragging }: { task: FullTask;
         onDragStart();
       }}
       onDragEnd={onDragEnd}
+      style={cardInlineStyle}
       className={`block border rounded-lg p-2 text-left cursor-grab active:cursor-grabbing hover:shadow-sm transition-all ${cardBg} ${completed ? "opacity-70" : ""} ${dragging ? "opacity-40" : ""}`}
     >
       {category && (
