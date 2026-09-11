@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useApi, apiPost, invalidateCache, uploadDirect } from "@/lib/use-api";
+import { useApi, apiPost, apiDelete, invalidateCache, uploadDirect } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import {
   HiOutlineChevronRight,
@@ -438,12 +438,36 @@ function versionOf(msg: ThreadMessage, versions: Version[]): number | null {
   return v ? v.version_number : null;
 }
 
-function ThreadBubble({ msg, versions }: { msg: ThreadMessage; versions: Version[] }) {
+function ThreadBubble({
+  msg,
+  versions,
+  canDelete,
+  onDeleted,
+}: {
+  msg: ThreadMessage;
+  versions: Version[];
+  canDelete: boolean;
+  onDeleted: () => void;
+}) {
   const isRep = msg.author_role === "rep";
   const bg = isRep ? REP_BUBBLE_BG : OWNER_BUBBLE_BG;
   const accent = isRep ? REP_BUBBLE_ACCENT : OWNER_BUBBLE_ACCENT;
   const roleLabel = msg.author_role === "rep" ? "REP" : msg.author_role === "admin" ? "ADMIN" : "OWNER";
   const ver = versionOf(msg, versions);
+  const [deleting, setDeleting] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const handleDelete = async () => {
+    if (!confirm) { setConfirm(true); return; }
+    setDeleting(true);
+    try {
+      await apiDelete(`/api/campaigns/messages/${msg.id}`);
+      invalidateCache("/api/campaigns");
+      onDeleted();
+    } catch {
+      setDeleting(false);
+      setConfirm(false);
+    }
+  };
   return (
     <div className={`flex ${isRep ? "justify-start" : "justify-end"}`}>
       <div
@@ -471,6 +495,16 @@ function ThreadBubble({ msg, versions }: { msg: ThreadMessage; versions: Version
           <span className="text-[10px] text-gray-500 ml-auto">
             {new Date(msg.created_at).toLocaleString()}
           </span>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title={confirm ? "Click again to confirm" : "Delete message"}
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+            >
+              {deleting ? "…" : confirm ? "Confirm?" : "Delete"}
+            </button>
+          )}
         </div>
         <div className="mt-1 text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap">
           {msg.body}
@@ -484,6 +518,8 @@ function ThreadSection({ nodeId, messages, versions, onPosted }: { nodeId: strin
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { dbUser, appRole } = useAuth();
+  const myEmail = dbUser?.email ?? null;
 
   const send = async () => {
     if (!text.trim()) return;
@@ -509,7 +545,13 @@ function ThreadSection({ nodeId, messages, versions, onPosted }: { nodeId: strin
       {messages.length > 0 && (
         <div className="space-y-2">
           {messages.map((m) => (
-            <ThreadBubble key={m.id} msg={m} versions={versions} />
+            <ThreadBubble
+              key={m.id}
+              msg={m}
+              versions={versions}
+              canDelete={appRole === "admin" || (!!myEmail && myEmail === m.author_email)}
+              onDeleted={onPosted}
+            />
           ))}
         </div>
       )}

@@ -95,7 +95,8 @@ export async function GET(request: NextRequest) {
 
   const stored = (data?.data as PlannerBoard | undefined) ?? defaultBoard();
   const withBreather = await withBreathers(sb, stored);
-  const { board, syncContext } = await overlayTaskCells(sb, withBreather);
+  const { board: overlaid, syncContext } = await overlayTaskCells(sb, withBreather);
+  const board = applyCellOverdue(overlaid);
 
   if (!data) {
     return ok({
@@ -244,6 +245,52 @@ async function overlayTaskCells(
   }
 
   return { board: { ...board, cells }, syncContext };
+}
+
+/**
+ * Apply the week-based overdue rule to every cell on the board: any item in
+ * a week whose end_date < today AND whose status !== "completed" is overdue.
+ * Task-sourced items keep their deadline-based overdue as well (either rule
+ * being true is enough — a strict deadline can trip overdue before its week
+ * ends, and the week fallback trips it once the week itself has passed).
+ * Breather cells use the breather week's `end` date. The flag is transient
+ * — never persisted — so we mutate a shallow copy of `cells`.
+ */
+function applyCellOverdue(board: PlannerBoard): PlannerBoard {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Build colKey → weekEnd (ISO). Include breather columns too.
+  const endByCol = new Map<string, string>();
+  for (const q of board.quarters ?? []) {
+    for (const it of q.iterations ?? []) {
+      for (const w of it.weeks ?? []) {
+        endByCol.set(`${q.key}:${it.key}:${w.key}`, w.end);
+      }
+    }
+    if (q.breather?.end) {
+      // Breather columns use a stable key of `${qKey}:breather`; if the app
+      // uses a different key, cells simply won't match and are left alone —
+      // this is best-effort and safe by omission.
+      endByCol.set(`${q.key}:breather`, q.breather.end);
+    }
+  }
+
+  const cells: Record<string, PlannerItem[]> = {};
+  for (const [cellKey, list] of Object.entries(board.cells ?? {})) {
+    if (!list?.length) continue;
+    const bar = cellKey.indexOf("|");
+    const colKey = bar >= 0 ? cellKey.slice(bar + 1) : "";
+    const weekEnd = endByCol.get(colKey);
+    cells[cellKey] = list.map((item) => {
+      if (item.status === "completed") return item;
+      const weekOverdue = !!weekEnd && weekEnd < today;
+      if (weekOverdue || item.overdue) {
+        return { ...item, overdue: true };
+      }
+      return item;
+    });
+  }
+  return { ...board, cells };
 }
 
 /**
