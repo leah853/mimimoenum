@@ -172,35 +172,132 @@ function Ring({ percent, size = 74, color = "#3B6D11", label }: { percent: numbe
 }
 
 // ─── Status pill ───────────────────────────────────────────────────────
-function StatusPill({ decision, hasSubmission, versionNumber, latestScore }: { decision: Decision; hasSubmission: boolean; versionNumber?: number; latestScore?: number | null }) {
-  if (decision === "go") {
-    return (
-      <span className="inline-flex items-center gap-1">
-        <span className="text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wide" style={{ background: GO_BG, color: GO_TEXT }}>
-          GO
+function SplitPill({
+  label,
+  score,
+  leftBg,
+  leftFg,
+  rightBg,
+  rightFg,
+  borderColor,
+}: {
+  label: string;
+  score: number | null | undefined;
+  leftBg: string;
+  leftFg: string;
+  rightBg: string;
+  rightFg: string;
+  borderColor: string;
+}) {
+  const outer: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "stretch",
+    border: `1px solid ${borderColor}`,
+    borderRadius: 999,
+    overflow: "hidden",
+  };
+  const left: React.CSSProperties = {
+    background: leftBg,
+    color: leftFg,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.3px",
+    display: "inline-flex",
+    alignItems: "center",
+  };
+  const right: React.CSSProperties = {
+    background: rightBg,
+    color: rightFg,
+    padding: "4px 10px",
+    fontSize: 12,
+    fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+  };
+  return (
+    <span style={outer}>
+      <span style={left}>{label}</span>
+      {score != null && (
+        <span style={right}>
+          {score}
+          <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 1 }}>/10</span>
         </span>
-        {latestScore != null && <ScorePill score={latestScore} tone="indigo" />}
+      )}
+    </span>
+  );
+}
+
+function StatusPill({
+  latestDecision,
+  hasSubmission,
+  latestScore,
+}: {
+  latestDecision: Decision | null;
+  hasSubmission: boolean;
+  latestScore?: number | null;
+}) {
+  if (!hasSubmission) {
+    return (
+      <span
+        className="uppercase tracking-wide"
+        style={{
+          background: "#F3F1E9",
+          color: "#7A7972",
+          padding: "4px 12px",
+          fontSize: 11,
+          fontWeight: 700,
+          borderRadius: 999,
+          display: "inline-block",
+        }}
+      >
+        NOT STARTED
       </span>
     );
   }
-  if (!hasSubmission) {
+  if (latestDecision === "pending") {
     return (
-      <span className="text-[11px] font-medium px-2 py-1 rounded-full uppercase tracking-wide" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+      <span
+        className="uppercase tracking-wide"
+        style={{
+          background: PENDING_BG,
+          color: PENDING_TEXT,
+          border: `1px solid ${PENDING_BORDER}`,
+          padding: "4px 12px",
+          fontSize: 11,
+          fontWeight: 700,
+          borderRadius: 999,
+          display: "inline-block",
+        }}
+      >
         AWAITING
       </span>
     );
   }
-  if (decision === "no_go") {
+  if (latestDecision === "go") {
     return (
-      <span className="text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wide" style={{ background: NOGO_BG, color: NOGO_TEXT }}>
-        NO-GO v{versionNumber}
-      </span>
+      <SplitPill
+        label="GO"
+        score={latestScore ?? null}
+        leftBg={GO_BORDER}
+        leftFg="#FFFFFF"
+        rightBg={GO_BG}
+        rightFg={GO_TEXT}
+        borderColor="#C6DFA6"
+      />
     );
   }
+  // no_go
   return (
-    <span className="text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wide border" style={{ background: PENDING_BG, color: PENDING_TEXT, borderColor: PENDING_BORDER }}>
-      v{versionNumber} PENDING
-    </span>
+    <SplitPill
+      label="NO-GO"
+      score={latestScore ?? null}
+      leftBg="#A32D2D"
+      leftFg="#FFFFFF"
+      rightBg={NOGO_BG}
+      rightFg={NOGO_TEXT}
+      borderColor="#E28582"
+    />
   );
 }
 
@@ -651,10 +748,44 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
   const latest = leaf.latestSubmission;
   const versionNumber = latest?.version_number;
   const hasSubmission = !!latest;
+  const latestDecision: Decision | null = latest ? latest.decision : null;
 
   const nextVersion = (latest?.version_number ?? 0) + 1;
   const showUpload = isOwner && !leaf.locked;
   const showRep = isRep && latest && latest.decision === "pending";
+
+  // Meta line under the title, shown when the leaf is expanded.
+  let metaLine: React.ReactNode = null;
+  if (!latest) {
+    metaLine = <div className="text-xs text-gray-500">No submission yet</div>;
+  } else if (latest.decision === "go") {
+    metaLine = (
+      <div className="text-xs text-gray-500">
+        {latest.uploaded_by}
+        {latest.decided_by ? <> &rarr; {latest.decided_by}</> : null}
+        {" · "}v{latest.version_number}
+        {" · "}
+        {new Date(latest.decided_at ?? latest.uploaded_at).toLocaleString()}
+      </div>
+    );
+  } else if (latest.decision === "no_go") {
+    metaLine = (
+      <div className="text-xs text-gray-500">
+        v{latest.version_number} NO-GO · {new Date(latest.decided_at ?? latest.uploaded_at).toLocaleString()} · needs v{latest.version_number + 1}
+      </div>
+    );
+  } else {
+    // pending
+    const priorNoGoScore = [...leaf.versions]
+      .reverse()
+      .find((v) => v.decision === "no_go" && v.score != null)?.score ?? null;
+    metaLine = (
+      <div className="text-xs text-gray-500">
+        v{latest.version_number} awaiting decision
+        {priorNoGoScore != null && <> · last score {priorNoGoScore}/10</>}
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-gray-100 dark:border-gray-800/70 last:border-b-0">
@@ -669,12 +800,13 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
         >
           {leaf.title}
         </span>
-        <StatusPill decision={decision} hasSubmission={hasSubmission} versionNumber={versionNumber} latestScore={leaf.latestScore} />
+        <StatusPill latestDecision={latestDecision} hasSubmission={hasSubmission} latestScore={leaf.latestScore} />
         <HiOutlineChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
 
       {open && (
         <div className="pb-3" style={{ paddingLeft: `${indent * 20 + 40}px`, paddingRight: 16 }}>
+          <div className="mt-2">{metaLine}</div>
           {leaf.versions.length > 0 && (
             <div className="mt-2">
               <VersionTape versions={leaf.versions} />
@@ -684,7 +816,7 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
           {latest && (
             <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40 p-3 space-y-2">
               <div className="text-xs text-gray-500">
-                v{latest.version_number} by {latest.uploaded_by} · {new Date(latest.uploaded_at).toLocaleString()}
+                Uploaded by {latest.uploaded_by} · {new Date(latest.uploaded_at).toLocaleString()}
               </div>
               {latest.attachments.map((a) => (
                 <AttachmentRow key={a.id} a={a} />
