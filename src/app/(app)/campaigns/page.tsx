@@ -34,6 +34,7 @@ interface Version {
   decided_by: string | null;
   decided_at: string | null;
   feedback: string | null;
+  score: number | null;
   attachments: Attachment[];
 }
 interface Rollup { totalLeaves: number; goLeaves: number; percent: number }
@@ -54,6 +55,7 @@ interface Leaf {
   decision: Decision;
   locked: boolean;
   messages: ThreadMessage[];
+  latestScore: number | null;
 }
 interface ItemNode {
   id: string;
@@ -65,6 +67,7 @@ interface ItemNode {
   decision?: Decision;
   locked?: boolean;
   messages?: ThreadMessage[];
+  latestScore?: number | null;
   rollup: Rollup;
 }
 interface Section {
@@ -95,6 +98,30 @@ const NOGO_TEXT = "#A32D2D";
 const PENDING_BG = "#FFF4C5";
 const PENDING_TEXT = "#854F0B";
 const PENDING_BORDER = "#E9A100";
+const SCORE_INDIGO_BG = "#EEF1FE";
+const SCORE_INDIGO_TEXT = "#4F46E5";
+
+function ScorePill({ score, tone }: { score: number; tone: "go" | "no_go" | "indigo" }) {
+  const styles =
+    tone === "go"
+      ? { background: GO_BG, color: GO_TEXT }
+      : tone === "no_go"
+      ? { background: NOGO_BG, color: NOGO_TEXT }
+      : { background: SCORE_INDIGO_BG, color: SCORE_INDIGO_TEXT };
+  return (
+    <span
+      className="rounded-full"
+      style={{
+        ...styles,
+        fontSize: "10.5px",
+        padding: "2px 6px",
+        fontWeight: 700,
+      }}
+    >
+      {score}/10
+    </span>
+  );
+}
 
 const LINE_ICONS: Record<string, string> = {
   "Florida CHCs": "🌴",
@@ -145,11 +172,14 @@ function Ring({ percent, size = 74, color = "#3B6D11", label }: { percent: numbe
 }
 
 // ─── Status pill ───────────────────────────────────────────────────────
-function StatusPill({ decision, hasSubmission, versionNumber }: { decision: Decision; hasSubmission: boolean; versionNumber?: number }) {
+function StatusPill({ decision, hasSubmission, versionNumber, latestScore }: { decision: Decision; hasSubmission: boolean; versionNumber?: number; latestScore?: number | null }) {
   if (decision === "go") {
     return (
-      <span className="text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wide" style={{ background: GO_BG, color: GO_TEXT }}>
-        GO
+      <span className="inline-flex items-center gap-1">
+        <span className="text-[11px] font-bold px-2 py-1 rounded-full uppercase tracking-wide" style={{ background: GO_BG, color: GO_TEXT }}>
+          GO
+        </span>
+        {latestScore != null && <ScorePill score={latestScore} tone="indigo" />}
       </span>
     );
   }
@@ -209,6 +239,9 @@ function VersionTape({ versions }: { versions: Version[] }) {
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{ background: bg, color: fg, borderColor: border }}>
               v{v.version_number} {v.decision === "go" ? "GO" : v.decision === "no_go" ? "NO-GO" : "…"}
             </span>
+            {v.score != null && v.decision !== "pending" && (
+              <ScorePill score={v.score} tone={v.decision === "go" ? "go" : "no_go"} />
+            )}
             {i < versions.length - 1 && <HiOutlineChevronRight className="w-3 h-3 text-gray-400" />}
           </div>
         );
@@ -374,8 +407,9 @@ function UploadPanel({ nodeId, nextVersion, onSaved }: { nodeId: string; nextVer
 }
 
 // ─── Rep panel ─────────────────────────────────────────────────────────
-function RepPanel({ submissionId, initialFeedback, onDecided }: { submissionId: string; initialFeedback: string | null; onDecided: () => void }) {
+function RepPanel({ submissionId, initialFeedback, initialScore, onDecided }: { submissionId: string; initialFeedback: string | null; initialScore: number | null; onDecided: () => void }) {
   const [feedback, setFeedback] = useState(initialFeedback ?? "");
+  const [score, setScore] = useState<number | null>(initialScore ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -383,7 +417,7 @@ function RepPanel({ submissionId, initialFeedback, onDecided }: { submissionId: 
     setBusy(true);
     setError(null);
     try {
-      await apiPost("/api/campaigns/decisions", { submission_id: submissionId, decision, feedback });
+      await apiPost("/api/campaigns/decisions", { submission_id: submissionId, decision, feedback, score });
       invalidateCache("/api/campaigns");
       onDecided();
     } catch (err) {
@@ -396,6 +430,38 @@ function RepPanel({ submissionId, initialFeedback, onDecided }: { submissionId: 
   return (
     <div className="mt-3 space-y-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/50 p-4">
       <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">Rep decision</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-gray-500 mr-1">Score out of 10 (optional)</span>
+        <div className="flex flex-wrap gap-1">
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
+            const selected = score === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setScore(selected ? null : n)}
+                className="rounded-full text-xs font-semibold w-8 h-8 flex items-center justify-center border transition"
+                style={{
+                  background: selected ? "#4F46E5" : "#FFFFFF",
+                  color: selected ? "#FFFFFF" : "#6B7280",
+                  borderColor: selected ? "#4F46E5" : "#D6D3C7",
+                }}
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
+        {score !== null && (
+          <button
+            type="button"
+            onClick={() => setScore(null)}
+            className="text-[11px] text-indigo-600 hover:underline ml-auto"
+          >
+            Clear
+          </button>
+        )}
+      </div>
       <textarea
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}
@@ -603,7 +669,7 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
         >
           {leaf.title}
         </span>
-        <StatusPill decision={decision} hasSubmission={hasSubmission} versionNumber={versionNumber} />
+        <StatusPill decision={decision} hasSubmission={hasSubmission} versionNumber={versionNumber} latestScore={leaf.latestScore} />
         <HiOutlineChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
 
@@ -640,7 +706,7 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
             onPosted={onChanged}
           />
 
-          {showRep && latest && <RepPanel submissionId={latest.id} initialFeedback={latest.feedback} onDecided={onChanged} />}
+          {showRep && latest && <RepPanel submissionId={latest.id} initialFeedback={latest.feedback} initialScore={latest.score} onDecided={onChanged} />}
           {leaf.locked && (
             <div className="mt-2 text-xs text-green-700 font-semibold">Locked — this leaf is GO.</div>
           )}
@@ -665,6 +731,7 @@ function ItemRow({ item, indent, isOwner, isRep, onChanged }: { item: ItemNode; 
       decision: item.decision ?? "pending",
       locked: !!item.locked,
       messages: item.messages ?? [],
+      latestScore: item.latestScore ?? null,
     };
     return <LeafRow leaf={asLeaf} indent={indent} isOwner={isOwner} isRep={isRep} onChanged={onChanged} />;
   }

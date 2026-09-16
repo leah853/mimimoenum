@@ -35,6 +35,7 @@ interface RawSubmission {
   decided_by: string | null;
   decided_at: string | null;
   feedback: string | null;
+  score: number | null;
 }
 
 interface RawMessage {
@@ -65,6 +66,7 @@ interface Version {
   decided_by: string | null;
   decided_at: string | null;
   feedback: string | null;
+  score: number | null;
   attachments: RawAttachment[];
 }
 
@@ -77,6 +79,7 @@ interface LeafOut {
   decision: "go" | "no_go" | "pending";
   locked: boolean;
   messages: ThreadMessage[];
+  latestScore: number | null;
 }
 
 interface ItemOut {
@@ -89,6 +92,7 @@ interface ItemOut {
   decision?: "go" | "no_go" | "pending";
   locked?: boolean;
   messages?: ThreadMessage[];
+  latestScore?: number | null;
   rollup: { totalLeaves: number; goLeaves: number; percent: number };
 }
 
@@ -164,6 +168,7 @@ export async function GET(request: NextRequest) {
       decided_by: s.decided_by,
       decided_at: s.decided_at,
       feedback: s.feedback,
+      score: s.score ?? null,
       attachments: attachmentsBySub.get(s.id) || [],
     };
     const list = versionsByNode.get(s.node_id) || [];
@@ -187,6 +192,13 @@ export async function GET(request: NextRequest) {
     const versions = versionsByNode.get(node.id) || [];
     const latest = versions.length > 0 ? versions[versions.length - 1] : null;
     const decision: "go" | "no_go" | "pending" = latest ? latest.decision : "pending";
+    let latestScore: number | null = null;
+    for (let i = versions.length - 1; i >= 0; i -= 1) {
+      if (versions[i].decision !== "pending" && versions[i].score != null) {
+        latestScore = versions[i].score;
+        break;
+      }
+    }
     return {
       id: node.id,
       title: node.title,
@@ -196,6 +208,7 @@ export async function GET(request: NextRequest) {
       decision,
       locked: decision === "go",
       messages: messagesByNode.get(node.id) || [],
+      latestScore,
     };
   };
 
@@ -228,6 +241,7 @@ export async function GET(request: NextRequest) {
       decision: leaf.decision,
       locked: leaf.locked,
       messages: leaf.messages,
+      latestScore: leaf.latestScore,
       rollup: {
         totalLeaves: 1,
         goLeaves: leaf.decision === "go" ? 1 : 0,

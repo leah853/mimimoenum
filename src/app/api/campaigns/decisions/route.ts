@@ -27,9 +27,18 @@ export async function POST(request: NextRequest) {
   const submissionId: string | undefined = body.submission_id;
   const decision: "go" | "no_go" | undefined = body.decision;
   const feedback: string | undefined = body.feedback;
+  const rawScore: unknown = body.score;
 
   if (!submissionId) return err("submission_id required");
   if (decision !== "go" && decision !== "no_go") return err("decision must be 'go' or 'no_go'");
+
+  let score: number | null = null;
+  if (rawScore !== undefined && rawScore !== null) {
+    if (typeof rawScore !== "number" || !Number.isInteger(rawScore) || rawScore < 1 || rawScore > 10) {
+      return err("score must be an integer between 1 and 10");
+    }
+    score = rawScore;
+  }
 
   const sb = createServiceClient();
 
@@ -40,6 +49,7 @@ export async function POST(request: NextRequest) {
       decided_by: email,
       decided_at: new Date().toISOString(),
       feedback: feedback ?? null,
+      score,
     })
     .eq("id", submissionId)
     .select()
@@ -49,20 +59,26 @@ export async function POST(request: NextRequest) {
 
   // Mirror the decision's feedback into the thread as a rep message, unless
   // one already exists for this submission.
-  if (feedback && feedback.trim() && updated) {
+  const trimmedFeedback = feedback?.trim() ?? "";
+  if ((trimmedFeedback || score !== null) && updated) {
     const { data: existing } = await sb
       .from("campaign_thread_messages")
       .select("id")
       .eq("submission_id", submissionId)
       .limit(1);
     if (!existing || existing.length === 0) {
-      await sb.from("campaign_thread_messages").insert({
-        node_id: updated.node_id,
-        submission_id: submissionId,
-        author_email: email,
-        author_role: "rep",
-        body: feedback.trim(),
-      });
+      const bodyText = score !== null
+        ? (trimmedFeedback ? `${score}/10 — ${trimmedFeedback}` : `${score}/10`)
+        : trimmedFeedback;
+      if (bodyText) {
+        await sb.from("campaign_thread_messages").insert({
+          node_id: updated.node_id,
+          submission_id: submissionId,
+          author_email: email,
+          author_role: "rep",
+          body: bodyText,
+        });
+      }
     }
   }
 
