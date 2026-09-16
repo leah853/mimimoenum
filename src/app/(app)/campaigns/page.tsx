@@ -504,29 +504,54 @@ function UploadPanel({ nodeId, nextVersion, onSaved }: { nodeId: string; nextVer
 }
 
 // ─── Rep panel ─────────────────────────────────────────────────────────
-function RepPanel({ submissionId, initialFeedback, initialScore, onDecided }: { submissionId: string; initialFeedback: string | null; initialScore: number | null; onDecided: () => void }) {
+function RepPanel({
+  submissionId,
+  initialFeedback,
+  initialScore,
+  initialDecision,
+  versionNumber,
+  onDecided,
+}: {
+  submissionId: string;
+  initialFeedback: string | null;
+  initialScore: number | null;
+  initialDecision: Decision;
+  versionNumber: number;
+  onDecided: () => void;
+}) {
   const [feedback, setFeedback] = useState(initialFeedback ?? "");
   const [score, setScore] = useState<number | null>(initialScore ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const decide = async (decision: "go" | "no_go") => {
+  const isDecided = initialDecision === "go" || initialDecision === "no_go";
+
+  const submit = async (decision?: "go" | "no_go") => {
     setBusy(true);
     setError(null);
     try {
-      await apiPost("/api/campaigns/decisions", { submission_id: submissionId, decision, feedback, score });
+      const payload: Record<string, unknown> = { submission_id: submissionId, feedback, score };
+      if (decision) payload.decision = decision;
+      await apiPost("/api/campaigns/decisions", payload);
       invalidateCache("/api/campaigns");
       onDecided();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Decision failed");
+      setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setBusy(false);
     }
   };
 
+  const headerLabel =
+    initialDecision === "go"
+      ? "Rep decision · GO"
+      : initialDecision === "no_go"
+      ? "Rep decision · NO-GO"
+      : "Rep decision";
+
   return (
     <div className="mt-3 space-y-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/50 p-4">
-      <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">Rep decision</div>
+      <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">{headerLabel}</div>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-500 mr-1">Score out of 10 (optional)</span>
         <div className="flex flex-wrap gap-1">
@@ -567,24 +592,71 @@ function RepPanel({ submissionId, initialFeedback, initialScore, onDecided }: { 
         className="w-full text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent"
       />
       {error && <div className="text-xs text-red-600">{error}</div>}
-      <div className="flex gap-2 justify-end">
-        <button
-          onClick={() => decide("no_go")}
-          disabled={busy}
-          className="text-sm font-semibold px-4 py-2 rounded-lg border-2 disabled:opacity-50"
-          style={{ borderColor: NOGO_TEXT, color: NOGO_TEXT }}
-        >
-          NO-GO
-        </button>
-        <button
-          onClick={() => decide("go")}
-          disabled={busy}
-          className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50"
-          style={{ background: GO_BORDER }}
-        >
-          GO
-        </button>
+      <div className="flex gap-2 justify-end flex-wrap">
+        {initialDecision === "go" ? (
+          <>
+            <button
+              onClick={() => submit("no_go")}
+              disabled={busy}
+              className="text-sm font-semibold px-4 py-2 rounded-lg border-2 disabled:opacity-50"
+              style={{ borderColor: NOGO_TEXT, color: NOGO_TEXT }}
+            >
+              Change to NO-GO
+            </button>
+            <button
+              onClick={() => submit()}
+              disabled={busy}
+              className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50"
+              style={{ background: GO_BORDER }}
+            >
+              {busy ? "Saving…" : "Save score"}
+            </button>
+          </>
+        ) : initialDecision === "no_go" ? (
+          <>
+            <button
+              onClick={() => submit("go")}
+              disabled={busy}
+              className="text-sm font-semibold px-4 py-2 rounded-lg border-2 disabled:opacity-50"
+              style={{ borderColor: GO_BORDER, color: GO_BORDER }}
+            >
+              Change to GO
+            </button>
+            <button
+              onClick={() => submit()}
+              disabled={busy}
+              className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50"
+              style={{ background: NOGO_TEXT }}
+            >
+              {busy ? "Saving…" : "Save score"}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => submit("no_go")}
+              disabled={busy}
+              className="text-sm font-semibold px-4 py-2 rounded-lg border-2 disabled:opacity-50"
+              style={{ borderColor: NOGO_TEXT, color: NOGO_TEXT }}
+            >
+              NO-GO — need v{versionNumber + 1}
+            </button>
+            <button
+              onClick={() => submit("go")}
+              disabled={busy}
+              className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50"
+              style={{ background: GO_BORDER }}
+            >
+              GO
+            </button>
+          </>
+        )}
       </div>
+      {isDecided && (
+        <div className="text-[11px] text-gray-500">
+          Save score updates the score and feedback without changing the decision.
+        </div>
+      )}
     </div>
   );
 }
@@ -752,7 +824,7 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
 
   const nextVersion = (latest?.version_number ?? 0) + 1;
   const showUpload = isOwner && !leaf.locked;
-  const showRep = isRep && latest && latest.decision === "pending";
+  const showRep = isRep && !!latest;
 
   // Meta line under the title, shown when the leaf is expanded.
   let metaLine: React.ReactNode = null;
@@ -813,6 +885,17 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
             </div>
           )}
 
+          {showRep && latest && (
+            <RepPanel
+              submissionId={latest.id}
+              initialFeedback={latest.feedback}
+              initialScore={latest.score}
+              initialDecision={latest.decision}
+              versionNumber={latest.version_number}
+              onDecided={onChanged}
+            />
+          )}
+
           {latest && (
             <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40 p-3 space-y-2">
               <div className="text-xs text-gray-500">
@@ -838,7 +921,6 @@ function LeafRow({ leaf, indent, isOwner, isRep, onChanged }: { leaf: Leaf; inde
             onPosted={onChanged}
           />
 
-          {showRep && latest && <RepPanel submissionId={latest.id} initialFeedback={latest.feedback} initialScore={latest.score} onDecided={onChanged} />}
           {leaf.locked && (
             <div className="mt-2 text-xs text-green-700 font-semibold">Locked — this leaf is GO.</div>
           )}
